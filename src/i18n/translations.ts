@@ -35,6 +35,7 @@ export interface Translations {
 
   boxes: {
     title: string;
+    plinth: string;
   };
 
   groups: {
@@ -90,6 +91,7 @@ const he: Translations = {
 
   boxes: {
     title: 'פיצול לקופסאות',
+    plinth: 'צוקל',
   },
 
   groups: {
@@ -145,6 +147,7 @@ const en: Translations = {
 
   boxes: {
     title: 'Box Breakdown',
+    plinth: 'Plinth',
   },
 
   groups: {

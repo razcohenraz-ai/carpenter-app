@@ -141,8 +141,9 @@ describe("decomposeBoxes", () => {
 
   it("plinthHeight=10 מקטין קופסה יחידה ב-10", () => {
     const boxes = decomposeBoxes(50, 180, 60, undefined, 10);
-    expect(boxes).toHaveLength(1);
-    expect(boxes[0]!.H).toBe(170);
+    const regular = boxes.filter((b) => b.level !== "plinth");
+    expect(regular).toHaveLength(1);
+    expect(regular[0]!.H).toBe(170);
   });
 
   it("plinthHeight=0 לא משנה פיצול גובה", () => {
@@ -169,5 +170,60 @@ describe("decomposeBoxes", () => {
   it("plinthHeight >= lowerDoorH בפיצול → throw", () => {
     expect(() => decomposeBoxes(50, 240, 60, 90, 90)).toThrow();
     expect(() => decomposeBoxes(50, 240, 60, 90, 100)).toThrow();
+  });
+
+  // ── יחידות צוקל ──────────────────────────────────────────────────────────────
+
+  it("W=200, plinth=10 → יחידת צוקל אחת W=200, H=10", () => {
+    const boxes = decomposeBoxes(200, 180, 60, undefined, 10);
+    const plinths = boxes.filter((b) => b.level === "plinth");
+    expect(plinths).toHaveLength(1);
+    expect(plinths[0]!.H).toBe(10);
+    expect(plinths[0]!.W).toBe(200);
+    expect(plinths[0]!.position).toBe("single");
+  });
+
+  it("W=300, plinth=10 → 2 יחידות צוקל של 150 ס\"מ", () => {
+    const boxes = decomposeBoxes(300, 180, 60, undefined, 10);
+    const plinths = boxes.filter((b) => b.level === "plinth");
+    expect(plinths).toHaveLength(2);
+    plinths.forEach((p) => expect(p.H).toBe(10));
+    expect(plinths[0]!.position).toBe("left");
+    expect(plinths[1]!.position).toBe("right");
+    expect(plinths[0]!.W).toBe(150);
+    expect(plinths[1]!.W).toBe(150);
+  });
+
+  it("W=480, plinth=10 → 2 יחידות צוקל של 240", () => {
+    const boxes = decomposeBoxes(480, 180, 60, undefined, 10);
+    const plinths = boxes.filter((b) => b.level === "plinth");
+    expect(plinths).toHaveLength(2);
+    plinths.forEach((p) => {
+      expect(p.H).toBe(10);
+      expect(p.W).toBe(240);
+    });
+  });
+
+  it("W=500, plinth=10 → 3 יחידות צוקל, כל אחת ≤ 240, סכום = 500", () => {
+    const boxes = decomposeBoxes(500, 180, 60, undefined, 10);
+    const plinths = boxes.filter((b) => b.level === "plinth");
+    expect(plinths).toHaveLength(3);
+    plinths.forEach((p) => {
+      expect(p.H).toBe(10);
+      expect(p.W).toBeLessThanOrEqual(240);
+    });
+    expect(roundInternal(plinths.reduce((s, p) => s + p.W, 0))).toBe(500);
+  });
+
+  it("W=200, plinth=0 → אין יחידות צוקל", () => {
+    const boxes = decomposeBoxes(200, 180, 60, undefined, 0);
+    const plinths = boxes.filter((b) => b.level === "plinth");
+    expect(plinths).toHaveLength(0);
+  });
+
+  it("יחידות הצוקל מופיעות אחרי כל הקופסאות הרגילות", () => {
+    const boxes = decomposeBoxes(200, 240, 60, 180, 10);
+    const lastBox = boxes[boxes.length - 1]!;
+    expect(lastBox.level).toBe("plinth");
   });
 });

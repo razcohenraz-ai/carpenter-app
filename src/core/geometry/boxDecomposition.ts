@@ -9,6 +9,9 @@ const MAX_BOX_W = 120;
 /** גובה שמעליו מפצלים לקופסה עליונה ותחתונה, ס"מ */
 const MAX_BOX_H = 200;
 
+/** רוחב מקסימלי ליחידת צוקל בודדת, ס"מ */
+const MAX_PLINTH_W = 240;
+
 /** יחס ברירת מחדל לגובה הקופסה התחתונה בפיצול גובה */
 const DEFAULT_HEIGHT_SPLIT_RATIO = 0.45;
 
@@ -117,10 +120,39 @@ export function decomposeBoxes(
       throw new Error(`plinthHeight (${plinthHeight}) must be less than lower door height (${loH})`);
     }
     const hiH = H - loH;
-    protos.push(...splitWidth(W, loH - plinthHeight, D, "bottom"));
     protos.push(...splitWidth(W, hiH, D, "top"));
+    protos.push(...splitWidth(W, loH - plinthHeight, D, "bottom"));
   } else {
     protos.push(...splitWidth(W, H - plinthHeight, D, "single"));
+  }
+
+  // יחידות צוקל — תמיד בסוף הרשימה, אחרי כל הקופסאות הרגילות
+  if (plinthHeight > 0) {
+    const n = Math.ceil(W / MAX_PLINTH_W);
+    if (n === 1) {
+      protos.push({
+        W, H: plinthHeight, D,
+        label: "צוקל",
+        note: "",
+        position: "single",
+        level: "plinth",
+      });
+    } else {
+      const baseW = Math.floor(W / n * 1000) / 1000;
+      for (let i = 0; i < n; i++) {
+        const pW = i === n - 1 ? roundInternal(W - baseW * (n - 1)) : baseW;
+        const position: BoxPosition =
+          n === 2 ? (i === 0 ? "left" : "right") : (`unit_${i + 1}` as BoxPosition);
+        protos.push({
+          W: pW, H: plinthHeight, D,
+          label: "צוקל",
+          note: `${i + 1}/${n}`,
+          position,
+          level: "plinth",
+          ...(n > 2 ? { unitIndex: i + 1, unitTotal: n } : {}),
+        });
+      }
+    }
   }
 
   return protos.map((p, i): Box => ({

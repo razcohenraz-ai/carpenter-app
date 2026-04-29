@@ -29,7 +29,7 @@ export interface PlinthConfig {
 export type BoxPosition = "single" | "left" | "right" | `unit_${number}`;
 
 /** מיקום אנכי של הקופסה (רלוונטי לארון גבוה בלבד) */
-export type BoxLevel = "single" | "bottom" | "top";
+export type BoxLevel = "single" | "bottom" | "top" | "plinth";
 
 export interface Box {
   id: string;
