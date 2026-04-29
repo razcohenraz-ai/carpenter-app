@@ -131,4 +131,43 @@ describe("decomposeBoxes", () => {
     const bottom = boxes.find((b) => b.level === "bottom")!;
     expect(bottom.H).toBe(Math.round(220 * 0.45));
   });
+
+  // ── צוקל (plinthHeight) ───────────────────────────────────────────────────────
+
+  it("plinthHeight=0 לא משנה גובה קופסה יחידה", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 0);
+    expect(boxes[0]!.H).toBe(180);
+  });
+
+  it("plinthHeight=10 מקטין קופסה יחידה ב-10", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 10);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]!.H).toBe(170);
+  });
+
+  it("plinthHeight=0 לא משנה פיצול גובה", () => {
+    const boxes = decomposeBoxes(50, 240, 60, 180, 0);
+    const bottom = boxes.find((b) => b.level === "bottom")!;
+    const top    = boxes.find((b) => b.level === "top")!;
+    expect(bottom.H).toBe(180);
+    expect(top.H).toBe(60);
+  });
+
+  it("plinthHeight=10, H=240, lowerDoorH=180 — תחתונה=170, עליונה=60", () => {
+    const boxes = decomposeBoxes(50, 240, 60, 180, 10);
+    const bottom = boxes.find((b) => b.level === "bottom")!;
+    const top    = boxes.find((b) => b.level === "top")!;
+    expect(bottom.H).toBe(170);
+    expect(top.H).toBe(60);
+  });
+
+  it("plinthHeight >= H → throw", () => {
+    expect(() => decomposeBoxes(50, 180, 60, undefined, 180)).toThrow();
+    expect(() => decomposeBoxes(50, 180, 60, undefined, 200)).toThrow();
+  });
+
+  it("plinthHeight >= lowerDoorH בפיצול → throw", () => {
+    expect(() => decomposeBoxes(50, 240, 60, 90, 90)).toThrow();
+    expect(() => decomposeBoxes(50, 240, 60, 90, 100)).toThrow();
+  });
 });

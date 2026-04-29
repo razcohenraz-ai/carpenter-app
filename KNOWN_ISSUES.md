@@ -21,7 +21,23 @@
 
 ## 🔴 HIGH — בעיות שמשפיעות על נכונות החישוב
 
-*(כרגע ריק — ISSUE-001 תוקן)*
+### ✅ ISSUE-007: decomposeBoxes לא הפחית צוקל מגובה הקופסה התחתונה *(תוקן 2026-04-29)*
+
+**תוקן ב:**
+- `src/core/geometry/boxDecomposition.ts` — פרמטר `plinthHeight` חדש, הפחתה מהקופסה התחתונה (או היחידה)
+- `src/ui/hooks/useCabinet.ts` — העברת `plinth` ל-`decomposeBoxes`
+
+**הבעיה:** `decomposeBoxes` לא קיבלה את גובה הצוקל, ולכן גובה הקופסה התחתונה היה שגוי — הכיל את גובה הצוקל בפנים, במקום לקבל קופסה שמתחילה מעל הצוקל.
+
+**הצוקל הוא יחידה פיזית נפרדת** שיושבת על הרצפה; הקופסה יושבת מעליה.
+
+**הנוסחה הנכונה:**
+- קופסה יחידה: `H - plinthHeight`
+- פיצול: תחתונה = `lowerDoorH - plinthHeight`, עליונה = `H - lowerDoorH` (לא מושפעת)
+
+**Validation שנוסף:** `plinthHeight >= H` או `plinthHeight >= lowerDoorH` → throw.
+
+**טסטים שנוספו:** 6 (קובץ `boxDecomposition.test.ts` — section "צוקל")
 
 ---
 

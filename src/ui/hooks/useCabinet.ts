@@ -35,7 +35,7 @@ export function useCabinet(): {
     const forceRows: 1 | 2 | 3 | undefined =
       doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const boxes = decomposeBoxes(W, H, D);
+    const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth);
     const cuts = calcCuts(
       'cabinet', W, H, D,
       0,               // shelves

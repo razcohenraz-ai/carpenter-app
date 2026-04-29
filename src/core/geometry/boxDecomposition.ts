@@ -87,11 +87,15 @@ function splitWidth(
  * - רוחב > MAX_BOX_W → מספר מינימלי של קופסאות (כל אחת ≤ MAX_BOX_W)
  * - רוחב ≤ 60 ס"מ → קופסה בודדת
  *
- * @param W          - רוחב כולל, ס"מ
- * @param H          - גובה כולל, ס"מ
- * @param D          - עומק, ס"מ
- * @param lowerDoorH - גובה הקופסה התחתונה בפיצול גובה, ס"מ
- *                     (אופציונלי; ברירת מחדל DEFAULT_HEIGHT_SPLIT_RATIO מ-H)
+ * הצוקל הוא יחידה פיזית נפרדת שיושבת מתחת לקופסה התחתונה (או היחידה).
+ * גובה הקופסה התחתונה מקוצר ב-plinthHeight; הקופסה העליונה לא מושפעת.
+ *
+ * @param W            - רוחב כולל, ס"מ
+ * @param H            - גובה כולל (כולל הצוקל), ס"מ
+ * @param D            - עומק, ס"מ
+ * @param lowerDoorH   - גובה אזור הדלת התחתונה בפיצול גובה, ס"מ
+ *                       (אופציונלי; ברירת מחדל DEFAULT_HEIGHT_SPLIT_RATIO מ-H)
+ * @param plinthHeight - גובה הצוקל, ס"מ (ברירת מחדל 0 = ללא צוקל)
  * @returns מערך קופסאות Box עם id ייחודי, מידות ותפקיד
  */
 export function decomposeBoxes(
@@ -99,16 +103,24 @@ export function decomposeBoxes(
   H: number,
   D: number,
   lowerDoorH?: number,
+  plinthHeight: number = 0,
 ): Box[] {
+  if (plinthHeight > 0 && plinthHeight >= H) {
+    throw new Error(`plinthHeight (${plinthHeight}) must be less than H (${H})`);
+  }
+
   const protos: BoxProto[] = [];
 
   if (H > MAX_BOX_H) {
     const loH = lowerDoorH !== undefined ? lowerDoorH : roundInternal(H * DEFAULT_HEIGHT_SPLIT_RATIO);
+    if (plinthHeight > 0 && plinthHeight >= loH) {
+      throw new Error(`plinthHeight (${plinthHeight}) must be less than lower door height (${loH})`);
+    }
     const hiH = H - loH;
-    protos.push(...splitWidth(W, loH, D, "bottom"));
+    protos.push(...splitWidth(W, loH - plinthHeight, D, "bottom"));
     protos.push(...splitWidth(W, hiH, D, "top"));
   } else {
-    protos.push(...splitWidth(W, H, D, "single"));
+    protos.push(...splitWidth(W, H - plinthHeight, D, "single"));
   }
 
   return protos.map((p, i): Box => ({
