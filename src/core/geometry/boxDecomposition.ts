@@ -21,8 +21,6 @@ interface BoxProto {
   W: number;
   H: number;
   D: number;
-  label: string;
-  note: string;
   position: BoxPosition;
   level: BoxLevel;
   unitIndex?: number;
@@ -35,27 +33,15 @@ function splitWidth(
   D: number,
   heightRole: "top" | "bottom" | "single",
 ): BoxProto[] {
-  const suffix =
-    heightRole === "top" ? "עליונה" : heightRole === "bottom" ? "תחתונה" : "";
-  const label = (part: string) => [part, suffix].filter(Boolean).join(" — ");
-
   if (W <= 60) {
-    return [
-      {
-        W, H, D,
-        label: label("קופסה יחידה"),
-        note: "",
-        position: "single",
-        level: heightRole,
-      },
-    ];
+    return [{ W, H, D, position: "single", level: heightRole }];
   }
 
   if (W <= MAX_BOX_W) {
     const half = roundInternal(W / 2);
     return [
-      { W: half, H, D, label: label("שמאל"), note: "חצי שמאלי", position: "left",  level: heightRole },
-      { W: half, H, D, label: label("ימין"),  note: "חצי ימני",  position: "right", level: heightRole },
+      { W: half, H, D, position: "left",  level: heightRole },
+      { W: half, H, D, position: "right", level: heightRole },
     ];
   }
 
@@ -66,12 +52,9 @@ function splitWidth(
   return Array.from({ length: n }, (_, i): BoxProto => {
     // הקופסה האחרונה מקבלת את השארית — מבטיח סכום = W ללא תלות ב-floating-point
     const bW = i === n - 1 ? roundInternal(W - baseW * (n - 1)) : baseW;
-    const partLabel = n > 2 ? `קופסה ${i + 1}` : i === 0 ? "שמאל" : "ימין";
     const position: BoxPosition = n > 2 ? (`unit_${i + 1}` as BoxPosition) : i === 0 ? "left" : "right";
     return {
       W: bW, H, D,
-      label: label(partLabel),
-      note: `${i + 1}/${n}`,
       position,
       level: heightRole,
       ...(n > 2 ? { unitIndex: i + 1, unitTotal: n } : {}),
@@ -130,13 +113,7 @@ export function decomposeBoxes(
   if (plinthHeight > 0) {
     const n = Math.ceil(W / MAX_PLINTH_W);
     if (n === 1) {
-      protos.push({
-        W, H: plinthHeight, D,
-        label: "צוקל",
-        note: "",
-        position: "single",
-        level: "plinth",
-      });
+      protos.push({ W, H: plinthHeight, D, position: "single", level: "plinth" });
     } else {
       const baseW = Math.floor(W / n * 1000) / 1000;
       for (let i = 0; i < n; i++) {
@@ -145,8 +122,6 @@ export function decomposeBoxes(
           n === 2 ? (i === 0 ? "left" : "right") : (`unit_${i + 1}` as BoxPosition);
         protos.push({
           W: pW, H: plinthHeight, D,
-          label: "צוקל",
-          note: `${i + 1}/${n}`,
           position,
           level: "plinth",
           ...(n > 2 ? { unitIndex: i + 1, unitTotal: n } : {}),
@@ -157,13 +132,11 @@ export function decomposeBoxes(
 
   return protos.map((p, i): Box => ({
     id: `box_${i}`,
-    label: p.label,
     W: p.W,
     H: p.H,
     D: p.D,
     position: p.position,
     level: p.level,
-    ...(p.note ? { note: p.note } : {}),
     ...(p.unitIndex !== undefined ? { unitIndex: p.unitIndex, unitTotal: p.unitTotal } : {}),
   }));
 }

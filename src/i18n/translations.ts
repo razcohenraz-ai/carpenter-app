@@ -36,6 +36,12 @@ export interface Translations {
   boxes: {
     title: string;
     plinth: string;
+    posLeft: string;
+    posRight: string;
+    posSingle: string;
+    posUnit: string;
+    levelTop: string;
+    levelBottom: string;
   };
 
   groups: {
@@ -92,6 +98,12 @@ const he: Translations = {
   boxes: {
     title: 'פיצול לקופסאות',
     plinth: 'צוקל',
+    posLeft: 'שמאל',
+    posRight: 'ימין',
+    posSingle: 'קופסה יחידה',
+    posUnit: 'קופסה',
+    levelTop: 'עליונה',
+    levelBottom: 'תחתונה',
   },
 
   groups: {
@@ -148,6 +160,12 @@ const en: Translations = {
   boxes: {
     title: 'Box Breakdown',
     plinth: 'Plinth',
+    posLeft: 'Left',
+    posRight: 'Right',
+    posSingle: 'Single Box',
+    posUnit: 'Box',
+    levelTop: 'Upper',
+    levelBottom: 'Lower',
   },
 
   groups: {

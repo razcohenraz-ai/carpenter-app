@@ -36,15 +36,13 @@ export interface Box {
   W: number; // cm
   H: number; // cm
   D: number; // cm
-  label: string;
-  note?: string;
   /** מיקום אופקי — "single" | "left" | "right" | "unit_N" */
   position: BoxPosition;
-  /** מיקום אנכי — "single" | "bottom" | "top" */
+  /** מיקום אנכי — "single" | "bottom" | "top" | "plinth" */
   level: BoxLevel;
-  /** לקופסאות unit_N: המספר הסידורי (1-based) */
+  /** לקופסאות unit_N ו-unit plinth: המספר הסידורי (1-based) */
   unitIndex?: number;
-  /** לקופסאות unit_N: סך הקופסאות בשורה זו */
+  /** לקופסאות unit_N ו-unit plinth: סך הקופסאות בשורה זו */
   unitTotal?: number;
 }
 
