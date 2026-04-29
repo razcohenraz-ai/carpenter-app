@@ -1,0 +1,60 @@
+@import './styles/theme.css';
+
+/* --- Reset בסיסי --- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- בסיס גלובלי --- */
+html {
+  direction: rtl;
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* --- טיפוגרפיה בסיסית --- */
+h1, h2, h3, h4, h5, h6 {
+  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* --- טפסים --- */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input[type='number'] {
+  appearance: textfield;
+}
+
+/* --- RTL: תמיכה בהיפוך לכיוון LTR כשמחליפים שפה --- */
+[dir='ltr'] {
+  direction: ltr;
+}
+
+/* --- שורש React --- */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

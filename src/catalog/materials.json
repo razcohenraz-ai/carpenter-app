@@ -1,0 +1,42 @@
+[
+  {
+    "id": "mdf18",
+    "name": "MDF 18mm",
+    "thickness": 18,
+    "pricePerSheet": 120,
+    "sheetW": 244,
+    "sheetH": 122
+  },
+  {
+    "id": "mdf12",
+    "name": "MDF 12mm",
+    "thickness": 12,
+    "pricePerSheet": 90,
+    "sheetW": 244,
+    "sheetH": 122
+  },
+  {
+    "id": "plywood18",
+    "name": "עץ לבן 18mm",
+    "thickness": 18,
+    "pricePerSheet": 180,
+    "sheetW": 244,
+    "sheetH": 122
+  },
+  {
+    "id": "oak18",
+    "name": "אלון 18mm",
+    "thickness": 18,
+    "pricePerSheet": 380,
+    "sheetW": 244,
+    "sheetH": 122
+  },
+  {
+    "id": "melamine18",
+    "name": "מלמין 18mm",
+    "thickness": 18,
+    "pricePerSheet": 160,
+    "sheetW": 244,
+    "sheetH": 122
+  }
+]

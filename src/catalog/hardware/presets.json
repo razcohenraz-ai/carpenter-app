@@ -1,0 +1,30 @@
+{
+  "cabinet": [
+    { "specId": "hinge-35mm",      "name": "ציר כוס 35mm",   "unit": "יח'",   "unitPrice": 4,  "byDoor": 2   },
+    { "specId": "handle",          "name": "ידית",            "unit": "יח'",   "unitPrice": 18, "byDoor": 1   },
+    { "specId": "handle",          "name": "ידית",            "unit": "יח'",   "unitPrice": 18, "byDrawer": 1 },
+    { "specId": "slide-telescopic","name": "מסילה טלסקופית", "unit": "זוג",   "unitPrice": 35, "byDrawer": 2 },
+    { "specId": "back-panel-6mm",  "name": "גב 6mm",          "unit": "לוח",   "unitPrice": 60, "fixed": 1    },
+    { "specId": "cam-lock",        "name": "פלטות הרכבה",     "unit": "קופסה", "unitPrice": 22, "fixed": 1    },
+    { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 2    }
+  ],
+  "shelf": [
+    { "specId": "shelf-pin",       "name": "שידת מדף",        "unit": "יח'",   "unitPrice": 1.5, "byShelf": 4 },
+    { "specId": "back-panel-4mm",  "name": "גב 4mm",          "unit": "לוח",   "unitPrice": 45, "fixed": 1    },
+    { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 1    }
+  ],
+  "table": [
+    { "specId": "leg-screw",       "name": "בורג רגל",        "unit": "יח'",   "unitPrice": 2,  "fixed": 16   },
+    { "specId": "corner-bracket",  "name": "פלטת הרכבה",      "unit": "יח'",   "unitPrice": 4,  "fixed": 8    }
+  ],
+  "drawer_unit": [
+    { "specId": "slide-telescopic","name": "מסילה טלסקופית", "unit": "זוג",   "unitPrice": 35, "byDrawer": 2 },
+    { "specId": "handle",          "name": "ידית",            "unit": "יח'",   "unitPrice": 18, "byDrawer": 1 },
+    { "specId": "back-panel-6mm",  "name": "גב 6mm",          "unit": "לוח",   "unitPrice": 60, "fixed": 1    },
+    { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 2    }
+  ],
+  "custom": [
+    { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 2    },
+    { "specId": "cam-lock",        "name": "פלטות הרכבה",     "unit": "קופסה", "unitPrice": 22, "fixed": 1    }
+  ]
+}
