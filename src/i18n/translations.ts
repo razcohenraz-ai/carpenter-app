@@ -5,6 +5,11 @@ export interface Translations {
   appSubtitle: string;
   langToggle: string;
 
+  sketch: {
+    preview: string;
+    invalidDimensions: string;
+  };
+
   form: {
     title: string;
     width: string;
@@ -67,6 +72,11 @@ const he: Translations = {
   appSubtitle: 'חישוב חיתוכים, דלתות ופרזולים',
   langToggle: 'English',
 
+  sketch: {
+    preview: 'תצוגה מקדימה',
+    invalidDimensions: 'הזן מידות תקינות לתצוגה',
+  },
+
   form: {
     title: 'מידות הארון',
     width: 'רוחב (ס"מ)',
@@ -128,6 +138,11 @@ const en: Translations = {
   appTitle: 'Cabinet Planner',
   appSubtitle: 'Cuts, doors & hardware calculator',
   langToggle: 'עברית',
+
+  sketch: {
+    preview: 'Preview',
+    invalidDimensions: 'Enter valid dimensions to preview',
+  },
 
   form: {
     title: 'Cabinet Dimensions',

@@ -16,6 +16,24 @@
   margin: 0;
 }
 
+/* ── פריסת 2 עמודות: טופס | סקיצה ── */
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.formCol {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── גריד 3×2 ── */
 .grid {
   display: grid;

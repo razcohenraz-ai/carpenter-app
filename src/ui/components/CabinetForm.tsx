@@ -4,6 +4,7 @@ import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS } from '../../catalog';
 import type { MaterialId } from '../../types';
 import BoxesList from './BoxesList';
+import CabinetSketch from './CabinetSketch';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -174,72 +175,78 @@ export default function CabinetForm(): React.JSX.Element {
     <form onSubmit={handleSubmit} className={styles.form} noValidate>
       <h2 className={styles.formTitle}>{t.form.title}</h2>
 
-      <div className={styles.grid}>
+      <div className={styles.twoCol}>
+        <div className={styles.formCol}>
+          <div className={styles.grid}>
 
-        {/* שורה 1: W, H, D */}
-        {numInput('input-W', 'W', t.form.width)}
-        {numInput('input-H', 'H', t.form.height)}
-        {numInput('input-D', 'D', t.form.depth)}
+            {/* שורה 1: W, H, D */}
+            {numInput('input-W', 'W', t.form.width)}
+            {numInput('input-H', 'H', t.form.height)}
+            {numInput('input-D', 'D', t.form.depth)}
 
-        {/* שורה 2: צוקל, דלתות לגובה, חומר */}
-        {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0)}
+            {/* שורה 2: צוקל, דלתות לגובה, חומר */}
+            {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0)}
 
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
-            {t.form.doorsPerColumn}
-          </label>
-          <select
-            id="input-doors-per-col"
-            className={styles.select}
-            value={form.doorsPerColumn}
-            onChange={e =>
-              setForm(p => ({ ...p, doorsPerColumn: e.target.value as DoorsPerColumn }))
-            }
-          >
-            <option value="auto">{t.form.auto}</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-          </select>
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
+                {t.form.doorsPerColumn}
+              </label>
+              <select
+                id="input-doors-per-col"
+                className={styles.select}
+                value={form.doorsPerColumn}
+                onChange={e =>
+                  setForm(p => ({ ...p, doorsPerColumn: e.target.value as DoorsPerColumn }))
+                }
+              >
+                <option value="auto">{t.form.auto}</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-material">
+                {t.form.material}
+              </label>
+              <select
+                id="input-material"
+                className={styles.select}
+                value={form.materialId}
+                onChange={e =>
+                  setForm(p => ({ ...p, materialId: e.target.value as MaterialId }))
+                }
+              >
+                {materialsArray.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* צ'קבוקסים — משתרעים על כל הרוחב */}
+            <div className={styles.checkboxRow}>
+              {checkbox(
+                'input-shell',
+                form.hasShell,
+                t.form.hasShell,
+                v => setForm(p => ({ ...p, hasShell: v })),
+              )}
+              {checkbox(
+                'input-covers-plinth',
+                form.doorCoversPlinth,
+                t.form.doorCoversPlinth,
+                v => setForm(p => ({ ...p, doorCoversPlinth: v })),
+              )}
+            </div>
+
+            {/* שדה מותנה: גובה דלת תחתונה */}
+            {needsLower && numInput('input-lower-door', 'lowerDoorH', lowerLabel)}
+
+          </div>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor="input-material">
-            {t.form.material}
-          </label>
-          <select
-            id="input-material"
-            className={styles.select}
-            value={form.materialId}
-            onChange={e =>
-              setForm(p => ({ ...p, materialId: e.target.value as MaterialId }))
-            }
-          >
-            {materialsArray.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* שורה 3: צ'קבוקסים — משתרעים על כל הרוחב */}
-        <div className={styles.checkboxRow}>
-          {checkbox(
-            'input-shell',
-            form.hasShell,
-            t.form.hasShell,
-            v => setForm(p => ({ ...p, hasShell: v })),
-          )}
-          {checkbox(
-            'input-covers-plinth',
-            form.doorCoversPlinth,
-            t.form.doorCoversPlinth,
-            v => setForm(p => ({ ...p, doorCoversPlinth: v })),
-          )}
-        </div>
-
-        {/* שורה 4 (מותנית): גובה דלת תחתונה */}
-        {needsLower && numInput('input-lower-door', 'lowerDoorH', lowerLabel)}
-
+        <CabinetSketch W={form.W} H={form.H} plinth={form.plinth} />
       </div>
 
       <button type="submit" className={styles.submitBtn}>
