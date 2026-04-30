@@ -1,12 +1,12 @@
 import { decomposeBoxes } from '../../core';
 import type { Box } from '../../types';
 
-const SVG_W = 240;
-const SVG_H = 200;
-const PAD_TOP = 22;
-const PAD_RIGHT = 16;
-const PAD_BOTTOM = 12;
-const PAD_LEFT = 36;
+const SVG_W = 600;
+const SVG_H = 500;
+const PAD_TOP = 55;
+const PAD_RIGHT = 40;
+const PAD_BOTTOM = 30;
+const PAD_LEFT = 90;
 
 export interface SketchLine {
   x1: number;
@@ -116,7 +116,7 @@ export function computeSketchGeometry(
     cabinet: { x: cabX, y: cabY, w: cabW, h: cabH },
     plinthRect,
     splitLines,
-    wLabel: { x: cabX + cabW / 2, y: cabY - 6, text: `${W}` },
-    hLabel: { x: 16, y: cabY + cabH / 2, text: `${H}` },
+    wLabel: { x: cabX + cabW / 2, y: cabY - 8, text: `${W}` },
+    hLabel: { x: PAD_LEFT / 2, y: cabY + cabH / 2, text: `${H}` },
   };
 }
