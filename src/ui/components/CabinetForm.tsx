@@ -246,7 +246,13 @@ export default function CabinetForm(): React.JSX.Element {
           </div>
         </div>
 
-        <CabinetSketch W={form.W} H={form.H} plinth={form.plinth} />
+        <CabinetSketch
+          W={form.W}
+          H={form.H}
+          D={form.D}
+          plinth={form.plinth}
+          {...(needsLower ? { lowerDoorH: form.lowerDoorH } : {})}
+        />
       </div>
 
       <button type="submit" className={styles.submitBtn}>

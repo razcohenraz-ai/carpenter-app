@@ -1,5 +1,5 @@
-const MAX_BOX_H = 200;
-const MAX_BOX_W = 120;
+import { decomposeBoxes } from '../../core';
+import type { Box } from '../../types';
 
 const SVG_W = 240;
 const SVG_H = 200;
@@ -25,15 +25,51 @@ export interface SketchGeometry {
   hLabel: { x: number; y: number; text: string };
 }
 
-export function isValidSketchInput(W: string, H: string, plinth: string): boolean {
+export function isValidSketchInput(
+  W: string,
+  H: string,
+  D: string,
+  plinth: string,
+  lowerDoorH?: string,
+): boolean {
   const w = parseFloat(W);
   const h = parseFloat(H);
+  const d = parseFloat(D);
   const p = parseFloat(plinth);
-  return !isNaN(w) && w > 0 && !isNaN(h) && h > 0 && !isNaN(p) && p >= 0 && p < h;
+
+  if (isNaN(w) || w <= 0) return false;
+  if (isNaN(h) || h <= 0) return false;
+  if (isNaN(d) || d <= 0) return false;
+  if (isNaN(p) || p < 0 || p >= h) return false;
+
+  if (lowerDoorH !== undefined) {
+    const lo = parseFloat(lowerDoorH);
+    // must be a valid positive number, less than H, and greater than plinth
+    // (mirrors the constraint in decomposeBoxes to avoid throwing)
+    if (isNaN(lo) || lo <= 0 || lo >= h || lo <= p) return false;
+  }
+
+  return true;
 }
 
-/** Computes SVG layout geometry. Caller must ensure plinth < H. */
-export function computeSketchGeometry(W: number, H: number, plinth: number): SketchGeometry {
+function positionRank(box: Box): number {
+  if (box.position === 'single' || box.position === 'left') return 0;
+  if (box.position === 'right') return 1;
+  return box.unitIndex ?? 0;
+}
+
+/**
+ * Computes SVG layout geometry by delegating box splitting to decomposeBoxes.
+ * Split line positions therefore exactly match the core's decomposition.
+ * Caller must ensure isValidSketchInput returned true for these inputs.
+ */
+export function computeSketchGeometry(
+  W: number,
+  H: number,
+  D: number,
+  plinth: number,
+  lowerDoorH?: number,
+): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
   const scale = Math.min(drawW / W, drawH / H);
@@ -48,20 +84,30 @@ export function computeSketchGeometry(W: number, H: number, plinth: number): Ske
     ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
     : null;
 
+  const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth);
+
+  // ── horizontal split (tall cabinet has "top" + "bottom" levels) ──────────────
+  const topBoxes = boxes.filter(b => b.level === 'top');
+  const topH = topBoxes[0]?.H ?? 0;
+
+  // ── vertical splits: use one body level as the column reference ───────────────
+  const colLevel = topH > 0 ? 'bottom' : 'single';
+  const colBoxes = boxes
+    .filter(b => b.level === colLevel)
+    .sort((a, b) => positionRank(a) - positionRank(b));
+
   const splitLines: SketchLine[] = [];
 
-  if (H > MAX_BOX_H) {
-    const loH = H * 0.45;
-    const splitY = cabY + (H - loH) * scale;
+  if (topH > 0) {
+    const splitY = cabY + topH * scale;
     splitLines.push({ x1: cabX, y1: splitY, x2: cabX + cabW, y2: splitY });
   }
 
-  if (W > 60) {
-    const n = W <= MAX_BOX_W ? 2 : Math.ceil(W / MAX_BOX_W);
-    for (let i = 1; i < n; i++) {
-      const splitX = cabX + (cabW / n) * i;
-      splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
-    }
+  let cumW = 0;
+  for (let i = 0; i < colBoxes.length - 1; i++) {
+    cumW += colBoxes[i]!.W;
+    const splitX = cabX + cumW * scale;
+    splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
   }
 
   return {

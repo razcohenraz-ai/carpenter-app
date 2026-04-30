@@ -6,13 +6,15 @@ import styles from './CabinetSketch.module.css';
 interface Props {
   W: string;
   H: string;
+  D: string;
   plinth: string;
+  lowerDoorH?: string;
 }
 
-export default function CabinetSketch({ W, H, plinth }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
-  if (!isValidSketchInput(W, H, plinth)) {
+  if (!isValidSketchInput(W, H, D, plinth, lowerDoorH)) {
     return (
       <div className={styles.placeholder}>
         <span className={styles.hint}>{t.sketch.invalidDimensions}</span>
@@ -20,7 +22,8 @@ export default function CabinetSketch({ W, H, plinth }: Props): React.JSX.Elemen
     );
   }
 
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(plinth));
+  const lo = lowerDoorH !== undefined ? parseFloat(lowerDoorH) : undefined;
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo);
 
   return (
     <div className={styles.wrapper}>
