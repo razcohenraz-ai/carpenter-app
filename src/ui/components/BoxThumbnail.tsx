@@ -2,11 +2,11 @@ import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
 import styles from './BoxThumbnail.module.css';
-import type { BodyLevel, InteriorItem } from '../../types/interior';
+import type { InteriorItem } from '../../types/interior';
+import type { Box, BoxPosition } from '../../types/geometry';
 
 interface Props {
-  level: BodyLevel;
-  bodyH: number;
+  box: Box;
   items: InteriorItem[];
   onClick: () => void;
 }
@@ -14,26 +14,37 @@ interface Props {
 const THUMB_W = 70;
 const THUMB_H = 110;
 
-export default function BoxThumbnail({ level, bodyH, items, onClick }: Props): React.JSX.Element {
+export default function BoxThumbnail({ box, items, onClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
-  const levelLabel: Record<BodyLevel, string> = {
+  const levelLabels: Record<string, string> = {
     top:    t.boxes.levelTop,
     middle: t.boxes.levelMiddle,
     bottom: t.boxes.levelBottom,
     single: t.boxes.levelSingle,
   };
 
+  const posLabel = (pos: BoxPosition): string => {
+    if (pos === 'single') return '';
+    if (pos === 'left')  return t.boxes.posLeft;
+    if (pos === 'right') return t.boxes.posRight;
+    return `${t.boxes.posUnit} ${box.unitIndex ?? ''}`.trim();
+  };
+
+  const levelStr = levelLabels[box.level] ?? box.level;
+  const posStr   = posLabel(box.position);
+  const label    = posStr ? `${levelStr} ${posStr}` : levelStr;
+
   return (
     <button className={styles.thumb} onClick={onClick} title={t.interior.editBody}>
       <BoxBodySketch
-        bodyH={bodyH}
+        bodyH={box.H}
         items={items}
         svgWidth={THUMB_W}
         svgHeight={THUMB_H}
         showLabels={false}
       />
-      <span className={styles.label}>{levelLabel[level]}</span>
+      <span className={styles.label}>{label}</span>
     </button>
   );
 }

@@ -3,7 +3,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS } from '../../catalog';
 import type { MaterialId } from '../../types';
-import type { BodyLevel } from '../../types/interior';
+import type { Box } from '../../types/geometry';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import BoxThumbnail from './BoxThumbnail';
@@ -48,13 +48,13 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
 
 export default function CabinetForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { result, calculate, interiorByLevel, setBodyInterior } = useCabinet();
+  const { result, calculate, interiorById, setBoxInterior } = useCabinet();
 
-  const [view, setView]               = useState<'main' | 'editor'>('main');
-  const [editingLevel, setEditingLevel] = useState<BodyLevel>('single');
+  const [view, setView]           = useState<'main' | 'editor'>('main');
+  const [editingBox, setEditingBox] = useState<Box | null>(null);
 
-  function openEditor(level: BodyLevel): void {
-    setEditingLevel(level);
+  function openEditor(box: Box): void {
+    setEditingBox(box);
     setView('editor');
   }
 
@@ -206,16 +206,13 @@ export default function CabinetForm(): React.JSX.Element {
 
   // ── editor view ────────────────────────────────────────────────────────────
 
-  if (view === 'editor' && result) {
-    const box = result.boxes.find(b => b.level === editingLevel);
-    const bodyH = box?.H ?? 0;
+  if (view === 'editor' && editingBox) {
     return (
       <div className={styles.form}>
         <BoxInteriorEditor
-          level={editingLevel}
-          bodyH={bodyH}
-          items={interiorByLevel[editingLevel] ?? []}
-          onChange={items => setBodyInterior(editingLevel, items)}
+          box={editingBox}
+          items={interiorById[editingBox.id] ?? []}
+          onChange={items => setBoxInterior(editingBox.id, items)}
           onBack={() => setView('main')}
         />
       </div>
@@ -223,6 +220,8 @@ export default function CabinetForm(): React.JSX.Element {
   }
 
   // ── main view ──────────────────────────────────────────────────────────────
+
+  const bodyBoxes = result?.boxes.filter(b => b.level !== 'plinth') ?? [];
 
   return (
     <form onSubmit={handleSubmit} className={styles.form} noValidate>
@@ -309,33 +308,22 @@ export default function CabinetForm(): React.JSX.Element {
             doorsPerColumn={form.doorsPerColumn}
             {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
             {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
-            interiorByLevel={result ? interiorByLevel : undefined}
+            interiorById={result ? interiorById : undefined}
           />
 
-          {/* Thumbnails row — one per body level (excluding plinth) */}
-          {result && (() => {
-            const levelHeightMap = new Map<BodyLevel, number>();
-            for (const box of result.boxes) {
-              if (box.level !== 'plinth' && !levelHeightMap.has(box.level as BodyLevel)) {
-                levelHeightMap.set(box.level as BodyLevel, box.H);
-              }
-            }
-            const bodyLevels: BodyLevel[] = (['top', 'middle', 'bottom', 'single'] as BodyLevel[])
-              .filter(l => levelHeightMap.has(l));
-            return bodyLevels.length > 0 ? (
-              <div className={styles.thumbRow}>
-                {bodyLevels.map(level => (
-                  <BoxThumbnail
-                    key={level}
-                    level={level}
-                    bodyH={levelHeightMap.get(level)!}
-                    items={interiorByLevel[level] ?? []}
-                    onClick={() => openEditor(level)}
-                  />
-                ))}
-              </div>
-            ) : null;
-          })()}
+          {/* Thumbnails row — one per non-plinth box */}
+          {bodyBoxes.length > 0 && (
+            <div className={styles.thumbRow}>
+              {bodyBoxes.map(box => (
+                <BoxThumbnail
+                  key={box.id}
+                  box={box}
+                  items={interiorById[box.id] ?? []}
+                  onClick={() => openEditor(box)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

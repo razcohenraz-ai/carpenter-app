@@ -19,6 +19,13 @@ export interface SketchLine {
   y2: number;
 }
 
+export interface BoxSvgRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface SketchGeometry {
   svgWidth: number;
   svgHeight: number;
@@ -32,6 +39,8 @@ export interface SketchGeometry {
   scale: number;
   /** floor height of each body (cm above plinth) — used for interior item y-coords */
   bodyFloors: Partial<Record<BodyLevel, number>>;
+  /** SVG bounding rect for each non-plinth box, keyed by Box.id */
+  boxSvgRects: Record<string, BoxSvgRect>;
 }
 
 export function isValidSketchInput(
@@ -162,6 +171,35 @@ export function computeSketchGeometry(
     }
   }
 
+  // ── Box SVG rects: one per non-plinth box ─────────────────────────────────
+  const boxSvgRects: Record<string, BoxSvgRect> = {};
+  {
+    // Level y-offsets from top of body area (top → down)
+    const levelYOffset: Partial<Record<BoxLevel, number>> = {};
+    let cumLevelH = 0;
+    for (const level of activeLevels) {
+      levelYOffset[level] = cumLevelH;
+      cumLevelH += levelHeightMap.get(level)!;
+    }
+
+    for (const level of activeLevels) {
+      const yOff = levelYOffset[level] ?? 0;
+      const levelBoxes = boxes
+        .filter(b => b.level === level)
+        .sort((a, b) => positionRank(a) - positionRank(b));
+      let cumW = 0;
+      for (const box of levelBoxes) {
+        boxSvgRects[box.id] = {
+          x: cabX + cumW * scale,
+          y: cabY + yOff * scale,
+          w: box.W * scale,
+          h: box.H * scale,
+        };
+        cumW += box.W;
+      }
+    }
+  }
+
   return {
     svgWidth: SVG_W,
     svgHeight: SVG_H,
@@ -173,5 +211,6 @@ export function computeSketchGeometry(
     hLabel: { x: PAD_LEFT / 2, y: cabY + cabH / 2, text: `${H}` },
     scale,
     bodyFloors,
+    boxSvgRects,
   };
 }

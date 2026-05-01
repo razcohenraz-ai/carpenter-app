@@ -25,6 +25,9 @@ export type InteriorItem = ShelfItem | DrawerItem | RodItem;
 
 export type InteriorByLevel = Partial<Record<BodyLevel, InteriorItem[]>>;
 
+/** Interior items keyed by Box.id — the canonical per-box storage. */
+export type InteriorById = Record<string, InteriorItem[]>;
+
 export type InteriorWarning =
   | { kind: 'outOfBounds'; itemId: string }
   | { kind: 'drawerOverlap'; itemIds: [string, string] };

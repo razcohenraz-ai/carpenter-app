@@ -2,7 +2,7 @@ import type { Box } from '../../types/geometry';
 import type {
   BodyLevel,
   InteriorItem,
-  InteriorByLevel,
+  InteriorById,
   ShelfItem,
   DrawerItem,
   RodItem,
@@ -13,6 +13,13 @@ import type {
 
 export function newItemId(): string {
   return Math.random().toString(36).slice(2, 9);
+}
+
+// ── Stable key for cross-recalculation identity ───────────────────────────────
+// Box.id resets on every recalc; stable key encodes structural position.
+
+export function boxStableKey(box: Box): string {
+  return `${box.level}:${box.position}`;
 }
 
 // ── Body floor computation ────────────────────────────────────────────────────
@@ -35,13 +42,14 @@ export function computeBodyFloors(
 }
 
 // ── Init interior from decomposeBoxes result ──────────────────────────────────
+// Returns one entry per non-plinth box, keyed by Box.id.
 // Converts Box.internalShelves (absolute cm from cabinet floor) to ShelfItems
 // with heights relative to each body's own floor.
 
 export function initInteriorFromBoxes(
   boxes: Box[],
   plinthHeight: number,
-): InteriorByLevel {
+): InteriorById {
   const levelHeightMap = new Map<BodyLevel, number>();
   for (const box of boxes) {
     if (box.level === 'plinth') continue;
@@ -50,25 +58,22 @@ export function initInteriorFromBoxes(
   }
 
   const bodyFloors = computeBodyFloors(levelHeightMap);
-  const result: InteriorByLevel = {};
+  const result: InteriorById = {};
 
-  for (const level of levelHeightMap.keys()) {
-    result[level] = [];
-  }
-
-  // Find internalShelves per level (any representative box suffices)
   for (const box of boxes) {
     if (box.level === 'plinth') continue;
-    if (!box.internalShelves || box.internalShelves.length === 0) continue;
     const level = box.level as BodyLevel;
-    if ((result[level]?.length ?? 0) > 0) continue; // already processed
-
     const bodyFloor = bodyFloors.get(level) ?? 0;
-    result[level] = box.internalShelves.map(absH => ({
-      type: 'shelf' as const,
-      id: newItemId(),
-      heightFromFloor: absH - plinthHeight - bodyFloor,
-    } satisfies ShelfItem));
+
+    if (box.internalShelves && box.internalShelves.length > 0) {
+      result[box.id] = box.internalShelves.map(absH => ({
+        type: 'shelf' as const,
+        id: newItemId(),
+        heightFromFloor: absH - plinthHeight - bodyFloor,
+      } satisfies ShelfItem));
+    } else {
+      result[box.id] = [];
+    }
   }
 
   return result;

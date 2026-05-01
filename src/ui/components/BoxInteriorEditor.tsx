@@ -8,11 +8,11 @@ import {
   validateInterior,
 } from '../../core/interior/interiorUtils';
 import styles from './BoxInteriorEditor.module.css';
-import type { BodyLevel, InteriorItem, DrawerItem, InteriorWarning } from '../../types/interior';
+import type { InteriorItem, DrawerItem, InteriorWarning } from '../../types/interior';
+import type { Box, BoxPosition } from '../../types/geometry';
 
 interface Props {
-  level: BodyLevel;
-  bodyH: number;
+  box: Box;
   items: InteriorItem[];
   onChange: (items: InteriorItem[]) => void;
   onBack: () => void;
@@ -21,16 +21,29 @@ interface Props {
 const SKETCH_W = 180;
 const SKETCH_H = 380;
 
-export default function BoxInteriorEditor({ level, bodyH, items, onChange, onBack }: Props): React.JSX.Element {
+export default function BoxInteriorEditor({ box, items, onChange, onBack }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
 
-  const levelLabel: Record<BodyLevel, string> = {
+  const bodyH = box.H;
+
+  const levelLabel: Record<string, string> = {
     top:    t.boxes.levelTop,
     middle: t.boxes.levelMiddle,
     bottom: t.boxes.levelBottom,
     single: t.boxes.levelSingle,
   };
+
+  const posLabel = (pos: BoxPosition): string => {
+    if (pos === 'single') return '';
+    if (pos === 'left')  return t.boxes.posLeft;
+    if (pos === 'right') return t.boxes.posRight;
+    return `${t.boxes.posUnit} ${box.unitIndex ?? ''}`.trim();
+  };
+
+  const levelStr = levelLabel[box.level] ?? box.level;
+  const posStr   = posLabel(box.position);
+  const boxLabel = posStr ? `${levelStr} ${posStr}` : levelStr;
 
   function update(next: InteriorItem[]): void {
     setLocalItems(next);
@@ -96,6 +109,10 @@ export default function BoxInteriorEditor({ level, bodyH, items, onChange, onBac
     return [...new Set(msgs)];
   }
 
+  function onItemMove(id: string, newH: number): void {
+    update(localItems.map(i => i.id === id ? { ...i, heightFromFloor: newH } : i));
+  }
+
   return (
     <div className={styles.editor}>
       {/* Header */}
@@ -104,7 +121,7 @@ export default function BoxInteriorEditor({ level, bodyH, items, onChange, onBac
           ← {t.interior.back}
         </button>
         <h2 className={styles.title}>
-          {t.interior.editBody} — {levelLabel[level]}
+          {t.interior.editBody} — {boxLabel}
           <span className={styles.bodyHint}> ({bodyH} ס"מ)</span>
         </h2>
       </div>
@@ -118,6 +135,7 @@ export default function BoxInteriorEditor({ level, bodyH, items, onChange, onBac
             svgWidth={SKETCH_W}
             svgHeight={SKETCH_H}
             showLabels
+            onItemMove={onItemMove}
           />
         </div>
 

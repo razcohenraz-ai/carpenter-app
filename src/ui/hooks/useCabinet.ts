@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { decomposeBoxes, calcCuts, calcDoors } from '../../core';
-import { initInteriorFromBoxes, filterItemsForHeight } from '../../core/interior/interiorUtils';
+import { initInteriorFromBoxes, boxStableKey, filterItemsForHeight } from '../../core/interior/interiorUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
-import type { BodyLevel, InteriorItem, InteriorByLevel } from '../../types/interior';
+import type { InteriorItem, InteriorById } from '../../types/interior';
 
 export interface CabinetInput {
   W: number;
@@ -24,43 +24,25 @@ export interface CabinetResult {
   doors: DoorCalcResult;
 }
 
-function getLevelHeightMap(boxes: Box[]): Map<BodyLevel, number> {
-  const map = new Map<BodyLevel, number>();
-  for (const box of boxes) {
-    if (box.level === 'plinth') continue;
-    const lvl = box.level as BodyLevel;
-    if (!map.has(lvl)) map.set(lvl, box.H);
-  }
-  return map;
-}
-
-function sameBodyLevels(a: Box[], b: Box[]): boolean {
-  const levelsA = new Set(a.filter(x => x.level !== 'plinth').map(x => x.level));
-  const levelsB = new Set(b.filter(x => x.level !== 'plinth').map(x => x.level));
-  if (levelsA.size !== levelsB.size) return false;
-  for (const l of levelsA) if (!levelsB.has(l)) return false;
-  return true;
-}
-
 export function useCabinet(): {
   result: CabinetResult | null;
   calculate: (input: CabinetInput) => void;
-  interiorByLevel: InteriorByLevel;
-  setBodyInterior: (level: BodyLevel, items: InteriorItem[]) => void;
+  interiorById: InteriorById;
+  setBoxInterior: (boxId: string, items: InteriorItem[]) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
-  const [interiorByLevel, setInteriorByLevel] = useState<InteriorByLevel>({});
+  const [interiorById, setInteriorById] = useState<InteriorById>({});
 
-  const interiorRef = useRef<InteriorByLevel>({});
+  const interiorRef = useRef<InteriorById>({});
   const prevBoxesRef = useRef<Box[] | null>(null);
 
-  function setInterior(v: InteriorByLevel): void {
+  function setInterior(v: InteriorById): void {
     interiorRef.current = v;
-    setInteriorByLevel(v);
+    setInteriorById(v);
   }
 
-  function setBodyInterior(level: BodyLevel, items: InteriorItem[]): void {
-    setInterior({ ...interiorRef.current, [level]: items });
+  function setBoxInterior(boxId: string, items: InteriorItem[]): void {
+    setInterior({ ...interiorRef.current, [boxId]: items });
   }
 
   function calculate(input: CabinetInput): void {
@@ -78,22 +60,37 @@ export function useCabinet(): {
     );
     const doors = calcDoors(W, H, plinth, doorCoversPlinth, lowerDoorH, hasShell, t, forceRows);
 
-    const prev = prevBoxesRef.current;
-    let newInterior: InteriorByLevel;
+    // Build stable-key → {items, H} map from the previous call
+    const prevBoxes = prevBoxesRef.current;
+    const currentInterior = interiorRef.current;
 
-    if (prev === null || !sameBodyLevels(prev, boxes)) {
-      newInterior = initInteriorFromBoxes(boxes, plinth);
-    } else {
-      const oldHeights = getLevelHeightMap(prev);
-      const newHeights = getLevelHeightMap(boxes);
-      const current = interiorRef.current;
-      newInterior = {};
-      for (const [level, newH] of newHeights) {
-        const prevH = oldHeights.get(level) ?? newH;
-        const prevItems = current[level] ?? [];
-        newInterior[level] = prevH === newH
-          ? prevItems
-          : filterItemsForHeight(prevItems, newH);
+    const stableKeyMap = new Map<string, { items: InteriorItem[]; H: number }>();
+    if (prevBoxes) {
+      for (const box of prevBoxes) {
+        if (box.level === 'plinth') continue;
+        stableKeyMap.set(boxStableKey(box), {
+          items: currentInterior[box.id] ?? [],
+          H: box.H,
+        });
+      }
+    }
+
+    // Build new interior keyed by new box IDs, preserving items via stable keys
+    const baseline = initInteriorFromBoxes(boxes, plinth);
+    const newInterior: InteriorById = {};
+
+    for (const box of boxes) {
+      if (box.level === 'plinth') continue;
+      const prev = stableKeyMap.get(boxStableKey(box));
+      if (prev === undefined) {
+        // New structural position — use baseline (internalShelves → shelves)
+        newInterior[box.id] = baseline[box.id] ?? [];
+      } else if (prev.H === box.H) {
+        // Same height — keep items unchanged
+        newInterior[box.id] = prev.items;
+      } else {
+        // Height changed — drop items that no longer fit
+        newInterior[box.id] = filterItemsForHeight(prev.items, box.H);
       }
     }
 
@@ -102,5 +99,5 @@ export function useCabinet(): {
     setResult({ boxes, cuts, doors });
   }
 
-  return { result, calculate, interiorByLevel, setBodyInterior };
+  return { result, calculate, interiorById, setBoxInterior };
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeBodyFloors,
   initInteriorFromBoxes,
+  boxStableKey,
   defaultShelfPlacement,
   defaultDrawerPlacement,
   defaultRodPlacement,
@@ -39,14 +40,14 @@ describe('computeBodyFloors', () => {
 // ── initInteriorFromBoxes ────────────────────────────────────────────────────
 
 describe('initInteriorFromBoxes', () => {
-  it('no internalShelves → empty arrays per level', () => {
+  it('no internalShelves → empty array per box', () => {
     const boxes: Box[] = [
       { id: 'b0', W: 60, H: 100, D: 60, position: 'single', level: 'top' },
       { id: 'b1', W: 60, H: 80,  D: 60, position: 'single', level: 'bottom' },
     ];
     const result = initInteriorFromBoxes(boxes, 0);
-    expect(result.top).toEqual([]);
-    expect(result.bottom).toEqual([]);
+    expect(result['b0']).toEqual([]);
+    expect(result['b1']).toEqual([]);
   });
 
   it('plinth boxes are ignored', () => {
@@ -55,28 +56,25 @@ describe('initInteriorFromBoxes', () => {
       { id: 'b1', W: 60, H: 10,  D: 60, position: 'single', level: 'plinth' },
     ];
     const result = initInteriorFromBoxes(boxes, 10);
-    expect(result.single).toEqual([]);
-    // plinth is not a BodyLevel key — must not appear in result
-    expect(Object.keys(result)).not.toContain('plinth');
+    expect(result['b0']).toEqual([]);
+    expect(Object.keys(result)).not.toContain('b1');
   });
 
   it('converts internalShelves to body-relative ShelfItems', () => {
-    // H=240, plinth=5, loDoor=170, midDoor=50
-    // top body H=70, bottom body H=165
-    // top internalShelves=[220] (absolute)
-    // top body floor (above plinth) = 165; bodyRelative = 220 - 5 - 165 = 50
+    // top body H=70, bottom body H=165, plinth=5
+    // top body floor = 165; bodyRelative = 220 - 5 - 165 = 50
     const boxes: Box[] = [
       { id: 'b0', W: 60, H: 70,  D: 60, position: 'single', level: 'top', internalShelves: [220] },
       { id: 'b1', W: 60, H: 165, D: 60, position: 'single', level: 'bottom' },
       { id: 'b2', W: 60, H: 5,   D: 60, position: 'single', level: 'plinth' },
     ];
     const result = initInteriorFromBoxes(boxes, 5);
-    expect(result.top).toHaveLength(1);
-    expect(result.top![0]!.type).toBe('shelf');
-    expect((result.top![0] as { heightFromFloor: number }).heightFromFloor).toBeCloseTo(50);
+    expect(result['b0']).toHaveLength(1);
+    expect(result['b0']![0]!.type).toBe('shelf');
+    expect((result['b0']![0] as { heightFromFloor: number }).heightFromFloor).toBeCloseTo(50);
   });
 
-  it('multi-column: internalShelves only processed once per level', () => {
+  it('multi-column: each box gets its own entry', () => {
     const boxes: Box[] = [
       { id: 'b0', W: 80, H: 70, D: 60, position: 'left',  level: 'top', internalShelves: [220] },
       { id: 'b1', W: 80, H: 70, D: 60, position: 'right', level: 'top', internalShelves: [220] },
@@ -84,7 +82,45 @@ describe('initInteriorFromBoxes', () => {
       { id: 'b3', W: 60, H: 5,   D: 60, position: 'single', level: 'plinth' },
     ];
     const result = initInteriorFromBoxes(boxes, 5);
-    expect(result.top).toHaveLength(1); // not 2
+    expect(result['b0']).toHaveLength(1);
+    expect(result['b1']).toHaveLength(1);
+    expect(result['b2']).toEqual([]);
+    expect(Object.keys(result)).not.toContain('b3');
+  });
+
+  it('7 boxes → 7 entries (no plinth)', () => {
+    // Simulate 7 body boxes + 2 plinth boxes
+    const boxes: Box[] = [
+      { id: 'b0', W: 80, H: 110, D: 60, position: 'left',   level: 'bottom' },
+      { id: 'b1', W: 80, H: 110, D: 60, position: 'right',  level: 'bottom' },
+      { id: 'b2', W: 80, H: 80,  D: 60, position: 'left',   level: 'middle' },
+      { id: 'b3', W: 80, H: 80,  D: 60, position: 'right',  level: 'middle' },
+      { id: 'b4', W: 80, H: 30,  D: 60, position: 'left',   level: 'top' },
+      { id: 'b5', W: 80, H: 30,  D: 60, position: 'right',  level: 'top' },
+      { id: 'b6', W: 160, H: 30, D: 60, position: 'single', level: 'top' }, // extra
+      { id: 'p0', W: 80, H: 10,  D: 60, position: 'left',   level: 'plinth' },
+      { id: 'p1', W: 80, H: 10,  D: 60, position: 'right',  level: 'plinth' },
+    ];
+    const result = initInteriorFromBoxes(boxes, 10);
+    const bodyKeys = Object.keys(result);
+    expect(bodyKeys).toHaveLength(7);
+    expect(bodyKeys).not.toContain('p0');
+    expect(bodyKeys).not.toContain('p1');
+  });
+});
+
+// ── boxStableKey ──────────────────────────────────────────────────────────────
+
+describe('boxStableKey', () => {
+  it('encodes level and position', () => {
+    const box: Box = { id: 'b0', W: 60, H: 100, D: 60, position: 'left', level: 'bottom' };
+    expect(boxStableKey(box)).toBe('bottom:left');
+  });
+
+  it('two boxes same structure → same key regardless of id', () => {
+    const a: Box = { id: 'box_0', W: 60, H: 100, D: 60, position: 'right', level: 'top' };
+    const b: Box = { id: 'box_5', W: 60, H: 100, D: 60, position: 'right', level: 'top' };
+    expect(boxStableKey(a)).toBe(boxStableKey(b));
   });
 });
 
