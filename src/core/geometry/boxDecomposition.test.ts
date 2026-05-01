@@ -20,7 +20,7 @@ describe("decomposeBoxes", () => {
 
   // ── פיצול לשתיים ─────────────────────────────────────────────────────────────
 
-  it("60 < W ≤ 120 מפצל לשתי קופסאות שוות", () => {
+  it("60 < W ≤ 100 מפצל לשתי קופסאות שוות", () => {
     const boxes = decomposeBoxes(80, 180, 60);
     expect(boxes).toHaveLength(2);
     expect(boxes[0]!.position).toBe("left");
@@ -29,11 +29,11 @@ describe("decomposeBoxes", () => {
     expect(boxes[1]!.W).toBe(40);
   });
 
-  it("W=120 (גבול עליון לפיצול שתיים) — שתי קופסאות של 60", () => {
-    const boxes = decomposeBoxes(120, 180, 60);
+  it("W=100 (גבול עליון לפיצול שתיים) — שתי קופסאות של 50", () => {
+    const boxes = decomposeBoxes(100, 180, 60);
     expect(boxes).toHaveLength(2);
-    expect(boxes[0]!.W).toBe(60);
-    expect(boxes[1]!.W).toBe(60);
+    expect(boxes[0]!.W).toBe(50);
+    expect(boxes[1]!.W).toBe(50);
   });
 
   // ── פיצול לשלוש ומעלה ────────────────────────────────────────────────────────
@@ -41,13 +41,13 @@ describe("decomposeBoxes", () => {
   it("W=150 מפצל ל-2 קופסאות של 75 ס\"מ", () => {
     const boxes = decomposeBoxes(150, 180, 60);
     expect(boxes).toHaveLength(2);
-    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(120));
+    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(100));
   });
 
-  it("W=250 מפצל ל-3 קופסאות, כל אחת ≤ 120", () => {
+  it("W=250 מפצל ל-3 קופסאות, כל אחת ≤ 100", () => {
     const boxes = decomposeBoxes(250, 180, 60);
     expect(boxes).toHaveLength(3);
-    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(120));
+    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(100));
   });
 
   it("סכום רוחבי הקופסאות שווה לרוחב הכולל", () => {
@@ -115,7 +115,7 @@ describe("decomposeBoxes", () => {
     expect(boxes).toHaveLength(3);
     const sum = boxes.reduce((s, b) => s + b.W, 0);
     expect(roundInternal(sum)).toBe(250);
-    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(120));
+    boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(100));
   });
 
   // ── תיקון ISSUE-002: lowerDoorH=0 לא מתבלבל עם undefined ──────────────────
@@ -273,7 +273,7 @@ describe("decomposeBoxes", () => {
     expect(sum).toBe(240); // 80 + 80 + 75 + 5 = 240
   });
 
-  it("doorsPerColumn=3, W>120: מספר נכון של קופסאות", () => {
+  it("doorsPerColumn=3, W>100: מספר נכון של קופסאות", () => {
     // W=160 → 2 עמודות; 3 קומות גוף + צוקל → 2×3 + 1 = 7
     const boxes = decomposeBoxes(160, 240, 60, 80, 5, 3, 80);
     expect(boxes).toHaveLength(7);
@@ -370,7 +370,7 @@ describe("decomposeBoxes", () => {
     }
   });
 
-  it("W>120 עם איחוד: כל קופסאות הגוף המאוחד מקבלות internalShelves", () => {
+  it("W>100 עם איחוד: כל קופסאות הגוף המאוחד מקבלות internalShelves", () => {
     // W=160 → 2 עמודות; top+mid מאוחדים → 2 קופסאות עם internalShelves
     const boxes = decomposeBoxes(160, 240, 60, 170, 5, 3, 50);
     const mergedBoxes = boxes.filter(b => b.level === "top");
