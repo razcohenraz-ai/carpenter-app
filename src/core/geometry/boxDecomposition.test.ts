@@ -298,4 +298,83 @@ describe("decomposeBoxes", () => {
     const boxes = decomposeBoxes(50, 180, 60, undefined, 0, "auto");
     expect(boxes.every(b => b.level === "single")).toBe(true);
   });
+
+  // ── doorsPerColumn=3: איחוד גופים קטנים ──────────────────────────────────────
+
+  it("ללא איחוד כשכל הגופים >= 60 ס\"מ", () => {
+    // topH=80, middleH=80, bottomH=70 (loDoor-plinth=80-10)
+    const boxes = decomposeBoxes(50, 240, 60, 80, 10, 3, 80);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body).toHaveLength(3);
+    expect(body.some(b => b.level === "top")).toBe(true);
+    expect(body.some(b => b.level === "middle")).toBe(true);
+    expect(body.some(b => b.level === "bottom")).toBe(true);
+    expect(body.every(b => !b.internalShelves || b.internalShelves.length === 0)).toBe(true);
+  });
+
+  it("topH<60 → מאחד top+middle, 2 גופים, מדף ב-220", () => {
+    // H=240, plinth=5, loDoor=170, midDoor=50
+    // top=20, mid=50, bot=165 → top(20)<60 → merge top+mid=70
+    const boxes = decomposeBoxes(50, 240, 60, 170, 5, 3, 50);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body).toHaveLength(2);
+    const upper = body.find(b => b.level === "top")!;
+    expect(upper.H).toBe(70);   // 20+50
+    expect(upper.internalShelves).toEqual([220]); // loDoor+midDoor=170+50 (sorted asc)
+    const lower = body.find(b => b.level === "bottom")!;
+    expect(lower.H).toBe(165);
+    expect(lower.internalShelves).toBeUndefined();
+  });
+
+  it("middleH<60 אבל topH>=60 → מאחד middle+bottom, 2 גופים, מדף ב-80", () => {
+    // H=240, plinth=5, loDoor=80, midDoor=30
+    // top=130, mid=30<60, bot=75
+    // top-down: top(130)>=60 skip; mid(30)<60 → merge mid+bot=105
+    const boxes = decomposeBoxes(50, 240, 60, 80, 5, 3, 30);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body).toHaveLength(2);
+    const upper = body.find(b => b.level === "top")!;
+    expect(upper.H).toBe(130);
+    expect(upper.internalShelves).toBeUndefined();
+    const lower = body.find(b => b.level === "middle")!; // level של הגוף המאוחד = middle (upper.level בשלב האיחוד)
+    expect(lower.H).toBe(105); // 30+75
+    expect(lower.internalShelves).toEqual([80]); // loDoor=80
+  });
+
+  it("top+middle שניהם <60, מאוחד>=60 → 2 גופים, מדף ב-220", () => {
+    // כמו הבדיקה הראשונה אבל מ-middleH קטן
+    const boxes = decomposeBoxes(50, 240, 60, 170, 5, 3, 50);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body).toHaveLength(2);
+    expect(body.find(b => b.level === "top")!.internalShelves).toEqual([220]);
+  });
+
+  it("top+middle שניהם <60, מאוחד גם <60 → גוף יחיד עם 2 מדפים", () => {
+    // H=200, plinth=10, loDoor=170, midDoor=20
+    // top=10, mid=20, bot=160 → top(10)<60 → merge(30)<60 → merge all(190)
+    // shelves sorted asc: [170, 190]
+    const boxes = decomposeBoxes(50, 200, 60, 170, 10, 3, 20);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body).toHaveLength(1);
+    expect(body[0]!.level).toBe("single");
+    expect(body[0]!.H).toBe(190);
+    expect(body[0]!.internalShelves).toEqual([170, 190]); // loDoor=170, loDoor+midDoor=190
+  });
+
+  it("גוף יחיד לאחר איחוד: internalShelves מסודרים בסדר עולה (מרצפה)", () => {
+    const boxes = decomposeBoxes(50, 200, 60, 170, 10, 3, 20);
+    const single = boxes.find(b => b.level === "single")!;
+    const shelves = single.internalShelves!;
+    for (let i = 0; i < shelves.length - 1; i++) {
+      expect(shelves[i]!).toBeLessThan(shelves[i + 1]!);
+    }
+  });
+
+  it("W>120 עם איחוד: כל קופסאות הגוף המאוחד מקבלות internalShelves", () => {
+    // W=160 → 2 עמודות; top+mid מאוחדים → 2 קופסאות עם internalShelves
+    const boxes = decomposeBoxes(160, 240, 60, 170, 5, 3, 50);
+    const mergedBoxes = boxes.filter(b => b.level === "top");
+    expect(mergedBoxes).toHaveLength(2); // W=160 → 2 עמודות
+    mergedBoxes.forEach(b => expect(b.internalShelves).toEqual([220]));
+  });
 });

@@ -130,4 +130,37 @@ describe('computeSketchGeometry', () => {
     const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
     expect(horiz).toHaveLength(1);
   });
+
+  it('ללא איחוד: internalShelfLines ריק', () => {
+    // all bodies >= 60cm
+    const g = computeSketchGeometry(60, 240, Dn, 0, 80, 3, 80);
+    expect(g.internalShelfLines).toHaveLength(0);
+  });
+
+  it('איחוד top+middle: קו פיצול אחד + קו מדף פנימי אחד', () => {
+    // H=240, plinth=5, loDoor=170, midDoor=50
+    // top=20<60 → merge with middle; 2 bodies: 1 split line + 1 internal shelf
+    const g = computeSketchGeometry(60, 240, 60, 5, 170, 3, 50);
+    const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
+    expect(horiz).toHaveLength(1);         // קו בין 2 הגופים
+    expect(g.internalShelfLines).toHaveLength(1); // מדף בתוך הגוף המאוחד
+  });
+
+  it('איחוד כל 3 גופים: אין קווי פיצול, 2 קווי מדף פנימי', () => {
+    // H=200, plinth=10, loDoor=170, midDoor=20
+    // top=10, mid=20 → merge all → single body with 2 shelves
+    const g = computeSketchGeometry(60, 200, 60, 10, 170, 3, 20);
+    const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
+    expect(horiz).toHaveLength(0);          // גוף יחיד — אין פיצולים
+    expect(g.internalShelfLines).toHaveLength(2); // 2 מדפים פנימיים
+  });
+
+  it('מיקום קו המדף הפנימי תואם לגובה המוחלט', () => {
+    // H=240, plinth=5, loDoor=170, midDoor=50 → shelf at h=220 (absolute from floor)
+    // SVG y = cabY + (H - 220) * scale = cabY + 20 * scale
+    const g = computeSketchGeometry(60, 240, 60, 5, 170, 3, 50);
+    const shelf = g.internalShelfLines[0]!;
+    const expectedY = g.cabinet.y + (240 - 220) * (g.cabinet.h / 240);
+    expect(shelf.y1).toBeCloseTo(expectedY, 1);
+  });
 });

@@ -44,6 +44,8 @@ export interface Box {
   unitIndex?: number;
   /** לקופסאות unit_N ו-unit plinth: סך הקופסאות בשורה זו */
   unitTotal?: number;
+  /** גבהים מוחלטים מרצפת הארון (ס"מ) של מדפים פנימיים בגוף מאוחד */
+  internalShelves?: number[];
 }
 
 // ── Door calculation result ───────────────────────────────────────────────────

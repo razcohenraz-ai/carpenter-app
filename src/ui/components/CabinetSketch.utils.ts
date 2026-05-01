@@ -24,6 +24,7 @@ export interface SketchGeometry {
   cabinet: { x: number; y: number; w: number; h: number };
   plinthRect: { x: number; y: number; w: number; h: number } | null;
   splitLines: SketchLine[];
+  internalShelfLines: SketchLine[];
   wLabel: { x: number; y: number; text: string };
   hLabel: { x: number; y: number; text: string };
 }
@@ -130,12 +131,29 @@ export function computeSketchGeometry(
     splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
   }
 
+  // ── Internal shelf lines (absolute heights from floor, merged bodies only) ──
+  const internalShelfHeights = new Set<number>();
+  for (const box of boxes) {
+    if (box.internalShelves) {
+      for (const sh of box.internalShelves) {
+        internalShelfHeights.add(sh);
+      }
+    }
+  }
+  const internalShelfLines: SketchLine[] = [...internalShelfHeights].map(sh => ({
+    x1: cabX,
+    y1: cabY + (H - sh) * scale,
+    x2: cabX + cabW,
+    y2: cabY + (H - sh) * scale,
+  }));
+
   return {
     svgWidth: SVG_W,
     svgHeight: SVG_H,
     cabinet: { x: cabX, y: cabY, w: cabW, h: cabH },
     plinthRect,
     splitLines,
+    internalShelfLines,
     wLabel: { x: cabX + cabW / 2, y: cabY - 8, text: `${W}` },
     hLabel: { x: PAD_LEFT / 2, y: cabY + cabH / 2, text: `${H}` },
   };

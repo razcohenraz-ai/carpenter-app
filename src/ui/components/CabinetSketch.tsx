@@ -74,6 +74,18 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
           />
         ))}
 
+        {/* Internal shelf lines (merged bodies) */}
+        {geo.internalShelfLines.map((line, i) => (
+          <line
+            key={`shelf_${i}`}
+            x1={line.x1}
+            y1={line.y1}
+            x2={line.x2}
+            y2={line.y2}
+            className={styles.splitLine}
+          />
+        ))}
+
         {/* Width label */}
         <text
           x={geo.wLabel.x}
