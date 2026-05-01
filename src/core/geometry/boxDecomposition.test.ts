@@ -5,35 +5,41 @@ import { roundInternal } from "../utils/round";
 describe("decomposeBoxes", () => {
   // ── קופסה יחידה ─────────────────────────────────────────────────────────────
 
-  it("W≤60 מחזיר קופסה בודדת עם position=single", () => {
+  it("W≤100 מחזיר קופסה בודדת עם position=single", () => {
     const boxes = decomposeBoxes(50, 180, 60);
     expect(boxes).toHaveLength(1);
     expect(boxes[0]!.position).toBe("single");
     expect(boxes[0]!.W).toBe(50);
   });
 
-  it("W=60 (גבול תחתון) — עדיין קופסה בודדת", () => {
+  it("W=60 — קופסה בודדת (מתחת לסף 100)", () => {
     const boxes = decomposeBoxes(60, 180, 60);
     expect(boxes).toHaveLength(1);
     expect(boxes[0]!.position).toBe("single");
   });
 
+  it("W=80 — קופסה בודדת (מתחת לסף 100)", () => {
+    const boxes = decomposeBoxes(80, 180, 60);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]!.position).toBe("single");
+    expect(boxes[0]!.W).toBe(80);
+  });
+
+  it("W=100 (גבול עליון לגוף בודד) — קופסה בודדת", () => {
+    const boxes = decomposeBoxes(100, 180, 60);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]!.position).toBe("single");
+    expect(boxes[0]!.W).toBe(100);
+  });
+
   // ── פיצול לשתיים ─────────────────────────────────────────────────────────────
 
-  it("60 < W ≤ 100 מפצל לשתי קופסאות שוות", () => {
-    const boxes = decomposeBoxes(80, 180, 60);
+  it("W=101 (ראשון מעל סף) — מפצל ל-2 קופסאות left+right", () => {
+    const boxes = decomposeBoxes(101, 180, 60);
     expect(boxes).toHaveLength(2);
     expect(boxes[0]!.position).toBe("left");
     expect(boxes[1]!.position).toBe("right");
-    expect(boxes[0]!.W).toBe(40);
-    expect(boxes[1]!.W).toBe(40);
-  });
-
-  it("W=100 (גבול עליון לפיצול שתיים) — שתי קופסאות של 50", () => {
-    const boxes = decomposeBoxes(100, 180, 60);
-    expect(boxes).toHaveLength(2);
-    expect(boxes[0]!.W).toBe(50);
-    expect(boxes[1]!.W).toBe(50);
+    expect(boxes[0]!.W + boxes[1]!.W).toBeCloseTo(101, 3);
   });
 
   // ── פיצול לשלוש ומעלה ────────────────────────────────────────────────────────

@@ -68,8 +68,8 @@ describe('computeSketchGeometry', () => {
     expect(computeSketchGeometry(60, 180, Dn, 0).splitLines).toHaveLength(0);
   });
 
-  it('adds one vertical split line for 60 < W <= 120', () => {
-    const lines = computeSketchGeometry(100, 180, Dn, 0).splitLines;
+  it('adds one vertical split line for 100 < W <= 200', () => {
+    const lines = computeSketchGeometry(150, 180, Dn, 0).splitLines;
     expect(lines).toHaveLength(1);
     const [line] = lines;
     expect(line!.x1).toBeCloseTo(line!.x2);
@@ -83,7 +83,7 @@ describe('computeSketchGeometry', () => {
   });
 
   it('adds both split lines for wide-tall cabinet', () => {
-    expect(computeSketchGeometry(100, 220, Dn, 0).splitLines).toHaveLength(2);
+    expect(computeSketchGeometry(150, 220, Dn, 0).splitLines).toHaveLength(2);
   });
 
   it('adds multiple vertical splits for W > 120', () => {

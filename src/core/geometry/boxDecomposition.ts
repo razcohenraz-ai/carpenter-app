@@ -37,16 +37,8 @@ function splitWidth(
   D: number,
   heightRole: "top" | "middle" | "bottom" | "single",
 ): BoxProto[] {
-  if (W <= 60) {
-    return [{ W, H, D, position: "single", level: heightRole }];
-  }
-
   if (W <= MAX_BOX_W) {
-    const half = roundInternal(W / 2);
-    return [
-      { W: half, H, D, position: "left",  level: heightRole },
-      { W: half, H, D, position: "right", level: heightRole },
-    ];
+    return [{ W, H, D, position: "single", level: heightRole }];
   }
 
   const n = Math.ceil(W / MAX_BOX_W);
