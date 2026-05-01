@@ -25,8 +25,10 @@ export interface Translations {
     auto: string;
     lowerDoorHeight: string;
     lowerDoorHeightMulti: string;
+    middleDoorHeight: string;
     errorInvalid: string;
     errorMustBeLessThanH: string;
+    errorSumTooLarge: string;
   };
 
   results: {
@@ -46,6 +48,7 @@ export interface Translations {
     posSingle: string;
     posUnit: string;
     levelTop: string;
+    levelMiddle: string;
     levelBottom: string;
   };
 
@@ -90,10 +93,12 @@ const he: Translations = {
     doorCoversPlinth: 'דלת מכסה צוקל',
     doorsPerColumn: 'דלתות לגובה',
     auto: 'אוטומטי',
-    lowerDoorHeight: 'גובה דלת תחתונה (ס"מ)',
-    lowerDoorHeightMulti: 'גובה דלת תחתונה — כל מפלס (ס"מ)',
+    lowerDoorHeight: 'גובה קומה תחתונה (ס"מ)',
+    lowerDoorHeightMulti: 'גובה קומה תחתונה (ס"מ)',
+    middleDoorHeight: 'גובה קומה אמצעית (ס"מ)',
     errorInvalid: 'יש להזין מספר חיובי',
     errorMustBeLessThanH: 'חייב להיות קטן מגובה הארון',
+    errorSumTooLarge: 'סכום הקומות חייב להיות קטן מגובה הארון',
   },
 
   results: {
@@ -113,6 +118,7 @@ const he: Translations = {
     posSingle: 'קופסה יחידה',
     posUnit: 'קופסה',
     levelTop: 'עליונה',
+    levelMiddle: 'אמצעית',
     levelBottom: 'תחתונה',
   },
 
@@ -157,10 +163,12 @@ const en: Translations = {
     doorCoversPlinth: 'Door Covers Plinth',
     doorsPerColumn: 'Doors Per Column',
     auto: 'Auto',
-    lowerDoorHeight: 'Lower Door Height (cm)',
-    lowerDoorHeightMulti: 'Lower Door Height — per level (cm)',
+    lowerDoorHeight: 'Lower Section Height (cm)',
+    lowerDoorHeightMulti: 'Lower Section Height (cm)',
+    middleDoorHeight: 'Middle Section Height (cm)',
     errorInvalid: 'Must be a positive number',
     errorMustBeLessThanH: 'Must be less than cabinet height',
+    errorSumTooLarge: 'Sections sum must be less than cabinet height',
   },
 
   results: {
@@ -180,6 +188,7 @@ const en: Translations = {
     posSingle: 'Single Box',
     posUnit: 'Box',
     levelTop: 'Upper',
+    levelMiddle: 'Middle',
     levelBottom: 'Lower',
   },
 

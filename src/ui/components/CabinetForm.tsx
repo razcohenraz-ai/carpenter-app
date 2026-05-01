@@ -15,6 +15,7 @@ interface FormState {
   D: string;
   plinth: string;
   lowerDoorH: string;
+  middleDoorH: string;
   hasShell: boolean;
   doorCoversPlinth: boolean;
   materialId: MaterialId;
@@ -27,9 +28,10 @@ interface FormErrors {
   D: string;
   plinth: string;
   lowerDoorH: string;
+  middleDoorH: string;
 }
 
-const NO_ERRORS: FormErrors = { W: '', H: '', D: '', plinth: '', lowerDoorH: '' };
+const NO_ERRORS: FormErrors = { W: '', H: '', D: '', plinth: '', lowerDoorH: '', middleDoorH: '' };
 const materialsArray = Object.values(MATERIALS);
 
 function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
@@ -47,7 +49,7 @@ export default function CabinetForm(): React.JSX.Element {
 
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
-    plinth: '10', lowerDoorH: '110',
+    plinth: '10', lowerDoorH: '110', middleDoorH: '80',
     hasShell: true, doorCoversPlinth: false,
     materialId: 'mdf18', doorsPerColumn: 'auto',
   });
@@ -61,14 +63,16 @@ export default function CabinetForm(): React.JSX.Element {
     else if (field === 'H') setForm(p => ({ ...p, H: value }));
     else if (field === 'D') setForm(p => ({ ...p, D: value }));
     else if (field === 'plinth') setForm(p => ({ ...p, plinth: value }));
-    else setForm(p => ({ ...p, lowerDoorH: value }));
+    else if (field === 'lowerDoorH') setForm(p => ({ ...p, lowerDoorH: value }));
+    else setForm(p => ({ ...p, middleDoorH: value }));
 
     if (errors[field]) {
       if (field === 'W') setErrors(p => ({ ...p, W: '' }));
       else if (field === 'H') setErrors(p => ({ ...p, H: '' }));
       else if (field === 'D') setErrors(p => ({ ...p, D: '' }));
       else if (field === 'plinth') setErrors(p => ({ ...p, plinth: '' }));
-      else setErrors(p => ({ ...p, lowerDoorH: '' }));
+      else if (field === 'lowerDoorH') setErrors(p => ({ ...p, lowerDoorH: '' }));
+      else setErrors(p => ({ ...p, middleDoorH: '' }));
     }
   }
 
@@ -80,11 +84,19 @@ export default function CabinetForm(): React.JSX.Element {
     const D      = parseFloat(form.D);
     const plinth = parseFloat(form.plinth);
     const loDoor = parseFloat(form.lowerDoorH);
-    const needsLo = showLowerDoor(form.doorsPerColumn, form.H);
+    const midDoor = parseFloat(form.middleDoorH);
+    const needsLo  = showLowerDoor(form.doorsPerColumn, form.H);
+    const needsMid = form.doorsPerColumn === '3';
 
     const loDoorErr = needsLo
       ? (isNaN(loDoor) || loDoor <= 0 ? t.form.errorInvalid
          : (!isNaN(H) && loDoor >= H ? t.form.errorMustBeLessThanH : ''))
+      : '';
+
+    const midDoorErr = needsMid
+      ? (isNaN(midDoor) || midDoor <= 0 ? t.form.errorInvalid
+         : (!isNaN(H) && !isNaN(loDoor) && loDoor + midDoor >= H
+            ? t.form.errorSumTooLarge : ''))
       : '';
 
     const newErrors: FormErrors = {
@@ -93,6 +105,7 @@ export default function CabinetForm(): React.JSX.Element {
       D:        isNaN(D)      || D      <= 0 ? t.form.errorInvalid : '',
       plinth:   isNaN(plinth) || plinth  < 0 ? t.form.errorInvalid : '',
       lowerDoorH: loDoorErr,
+      middleDoorH: midDoorErr,
     };
 
     setErrors(newErrors);
@@ -110,14 +123,16 @@ export default function CabinetForm(): React.JSX.Element {
       plinth,
       doorCoversPlinth: form.doorCoversPlinth,
       lowerDoorH: needsLo ? loDoor : undefined,
+      middleDoorH: needsMid ? midDoor : undefined,
       doorsPerColumn,
     });
   }
 
   // ── derived values ─────────────────────────────────────────────────────────
 
-  const needsLower = showLowerDoor(form.doorsPerColumn, form.H);
-  const lowerLabel = form.doorsPerColumn === '3'
+  const needsLower  = showLowerDoor(form.doorsPerColumn, form.H);
+  const needsMiddle = form.doorsPerColumn === '3';
+  const lowerLabel  = form.doorsPerColumn === '3'
     ? t.form.lowerDoorHeightMulti
     : t.form.lowerDoorHeight;
   const totalPieces = result?.cuts.reduce((sum, c) => sum + c.qty, 0) ?? 0;
@@ -249,8 +264,9 @@ export default function CabinetForm(): React.JSX.Element {
               )}
             </div>
 
-            {/* שדה מותנה: גובה דלת תחתונה */}
-            {needsLower && numInput('input-lower-door', 'lowerDoorH', lowerLabel, 0.1, 'height')}
+            {/* שדות מותנים: גובה קומות */}
+            {needsLower  && numInput('input-lower-door',  'lowerDoorH',  lowerLabel,              0.1, 'height')}
+            {needsMiddle && numInput('input-middle-door', 'middleDoorH', t.form.middleDoorHeight, 0.1, 'height')}
 
           </div>
         </div>
@@ -260,7 +276,9 @@ export default function CabinetForm(): React.JSX.Element {
           H={form.H}
           D={form.D}
           plinth={form.plinth}
-          {...(needsLower ? { lowerDoorH: form.lowerDoorH } : {})}
+          doorsPerColumn={form.doorsPerColumn}
+          {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
+          {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
         />
       </div>
 

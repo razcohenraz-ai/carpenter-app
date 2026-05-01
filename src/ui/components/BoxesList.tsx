@@ -27,6 +27,7 @@ function buildLabel(box: Box, t: Translations): string {
 
   const levelLabel =
     level === 'top'    ? t.boxes.levelTop    :
+    level === 'middle' ? t.boxes.levelMiddle :
     level === 'bottom' ? t.boxes.levelBottom :
     '';
 

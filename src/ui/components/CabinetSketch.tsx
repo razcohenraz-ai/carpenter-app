@@ -9,12 +9,14 @@ interface Props {
   D: string;
   plinth: string;
   lowerDoorH?: string;
+  doorsPerColumn?: string;
+  middleDoorH?: string;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
-  if (!isValidSketchInput(W, H, D, plinth, lowerDoorH)) {
+  if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
     return (
       <div className={styles.placeholder}>
         <span className={styles.hint}>{t.sketch.invalidDimensions}</span>
@@ -22,8 +24,13 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH }: Props): R
     );
   }
 
-  const lo = lowerDoorH !== undefined ? parseFloat(lowerDoorH) : undefined;
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo);
+  const lo  = lowerDoorH  !== undefined ? parseFloat(lowerDoorH)  : undefined;
+  const mid = middleDoorH !== undefined ? parseFloat(middleDoorH) : undefined;
+  const dpc: 'auto' | 1 | 2 | 3 =
+    doorsPerColumn === '1' ? 1 :
+    doorsPerColumn === '2' ? 2 :
+    doorsPerColumn === '3' ? 3 : 'auto';
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid);
 
   return (
     <div className={styles.wrapper}>

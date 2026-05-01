@@ -12,6 +12,7 @@ export interface CabinetInput {
   plinth: number;
   doorCoversPlinth: boolean;
   lowerDoorH: number | undefined;
+  middleDoorH: number | undefined;
   doorsPerColumn: 'auto' | 1 | 2 | 3;
 }
 
@@ -28,14 +29,14 @@ export function useCabinet(): {
   const [result, setResult] = useState<CabinetResult | null>(null);
 
   function calculate(input: CabinetInput): void {
-    const { W, H, D, hasShell, materialId, plinth, doorCoversPlinth, lowerDoorH, doorsPerColumn } = input;
+    const { W, H, D, hasShell, materialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn } = input;
     const material = getMaterial(materialId);
     const t = material.thickness / 10; // mm → cm
 
     const forceRows: 1 | 2 | 3 | undefined =
       doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth);
+    const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
     const cuts = calcCuts(
       'cabinet', W, H, D,
       0,               // shelves

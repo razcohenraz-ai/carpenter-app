@@ -101,4 +101,33 @@ describe('computeSketchGeometry', () => {
     const splitFraction = (horizLine!.y1 - g.cabinet.y) / g.cabinet.h;
     expect(splitFraction).toBeCloseTo(40 / 220, 3);
   });
+
+  it('doorsPerColumn=3 מייצר 2 קווים אופקיים', () => {
+    // H=240, lowerDoorH=80, middleDoorH=80 → top=80, middle=80, bottom=80
+    const g = computeSketchGeometry(60, 240, Dn, 0, 80, 3, 80);
+    const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
+    expect(horiz).toHaveLength(2);
+  });
+
+  it('doorsPerColumn=3: הקו האופקי הראשון ב-top/H מהחלק העליון', () => {
+    // H=240, lowerDoorH=80, middleDoorH=80 → topH=80; first split at 80/240 from top
+    const g = computeSketchGeometry(60, 240, Dn, 0, 80, 3, 80);
+    const horiz = g.splitLines
+      .filter(l => Math.abs(l.y1 - l.y2) < 0.01)
+      .sort((a, b) => a.y1 - b.y1);
+    const firstFrac = (horiz[0]!.y1 - g.cabinet.y) / g.cabinet.h;
+    expect(firstFrac).toBeCloseTo(80 / 240, 3);
+  });
+
+  it('doorsPerColumn=1: אין קווים אופקיים גם כש-H>200', () => {
+    const g = computeSketchGeometry(60, 240, Dn, 0, undefined, 1);
+    const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
+    expect(horiz).toHaveLength(0);
+  });
+
+  it('doorsPerColumn=2: קו אופקי אחד גם כש-H<=200', () => {
+    const g = computeSketchGeometry(60, 180, Dn, 0, 90, 2);
+    const horiz = g.splitLines.filter(l => Math.abs(l.y1 - l.y2) < 0.01);
+    expect(horiz).toHaveLength(1);
+  });
 });

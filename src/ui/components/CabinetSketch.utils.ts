@@ -1,5 +1,5 @@
 import { decomposeBoxes } from '../../core';
-import type { Box } from '../../types';
+import type { Box, BoxLevel } from '../../types';
 
 const SVG_W = 600;
 const SVG_H = 500;
@@ -7,6 +7,9 @@ const PAD_TOP = 55;
 const PAD_RIGHT = 40;
 const PAD_BOTTOM = 30;
 const PAD_LEFT = 90;
+
+// Ordered from top to bottom for split-line calculation
+const LEVEL_ORDER: BoxLevel[] = ['top', 'middle', 'bottom', 'single'];
 
 export interface SketchLine {
   x1: number;
@@ -31,6 +34,8 @@ export function isValidSketchInput(
   D: string,
   plinth: string,
   lowerDoorH?: string,
+  doorsPerColumn?: string,
+  middleDoorH?: string,
 ): boolean {
   const w = parseFloat(W);
   const h = parseFloat(H);
@@ -44,9 +49,13 @@ export function isValidSketchInput(
 
   if (lowerDoorH !== undefined) {
     const lo = parseFloat(lowerDoorH);
-    // must be a valid positive number, less than H, and greater than plinth
-    // (mirrors the constraint in decomposeBoxes to avoid throwing)
     if (isNaN(lo) || lo <= 0 || lo >= h || lo <= p) return false;
+
+    if (doorsPerColumn === '3' && middleDoorH !== undefined) {
+      const mid = parseFloat(middleDoorH);
+      if (isNaN(mid) || mid <= 0) return false;
+      if (lo + mid >= h) return false;
+    }
   }
 
   return true;
@@ -69,6 +78,8 @@ export function computeSketchGeometry(
   D: number,
   plinth: number,
   lowerDoorH?: number,
+  doorsPerColumn: 'auto' | 1 | 2 | 3 = 'auto',
+  middleDoorH?: number,
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
@@ -84,24 +95,33 @@ export function computeSketchGeometry(
     ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
     : null;
 
-  const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth);
+  const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
 
-  // ── horizontal split (tall cabinet has "top" + "bottom" levels) ──────────────
-  const topBoxes = boxes.filter(b => b.level === 'top');
-  const topH = topBoxes[0]?.H ?? 0;
+  // ── Build level → H map (body boxes only) ────────────────────────────────────
+  const levelHeightMap = new Map<BoxLevel, number>();
+  for (const box of boxes) {
+    if (box.level !== 'plinth' && !levelHeightMap.has(box.level)) {
+      levelHeightMap.set(box.level, box.H);
+    }
+  }
 
-  // ── vertical splits: use one body level as the column reference ───────────────
-  const colLevel = topH > 0 ? 'bottom' : 'single';
+  // Active body levels sorted top → bottom
+  const activeLevels = LEVEL_ORDER.filter(l => levelHeightMap.has(l));
+
+  // ── Horizontal split lines between adjacent levels ────────────────────────────
+  const splitLines: SketchLine[] = [];
+  let cumH = 0;
+  for (let i = 0; i < activeLevels.length - 1; i++) {
+    cumH += levelHeightMap.get(activeLevels[i]!)!;
+    const splitY = cabY + cumH * scale;
+    splitLines.push({ x1: cabX, y1: splitY, x2: cabX + cabW, y2: splitY });
+  }
+
+  // ── Vertical split lines: use the bottom-most body level as column reference ──
+  const colLevel = activeLevels[activeLevels.length - 1] ?? 'single';
   const colBoxes = boxes
     .filter(b => b.level === colLevel)
     .sort((a, b) => positionRank(a) - positionRank(b));
-
-  const splitLines: SketchLine[] = [];
-
-  if (topH > 0) {
-    const splitY = cabY + topH * scale;
-    splitLines.push({ x1: cabX, y1: splitY, x2: cabX + cabW, y2: splitY });
-  }
 
   let cumW = 0;
   for (let i = 0; i < colBoxes.length - 1; i++) {

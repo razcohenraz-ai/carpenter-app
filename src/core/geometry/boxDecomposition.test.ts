@@ -226,4 +226,76 @@ describe("decomposeBoxes", () => {
     const lastBox = boxes[boxes.length - 1]!;
     expect(lastBox.level).toBe("plinth");
   });
+
+  // ── doorsPerColumn: כפיית מספר קומות ────────────────────────────────────────
+
+  it("doorsPerColumn=1: קומה אחת גם כש-H>200", () => {
+    const boxes = decomposeBoxes(50, 240, 60, undefined, 0, 1);
+    const body = boxes.filter(b => b.level !== "plinth");
+    expect(body.every(b => b.level === "single")).toBe(true);
+    expect(body).toHaveLength(1);
+  });
+
+  it("doorsPerColumn=2: 2 קומות גם כש-H<=200", () => {
+    const boxes = decomposeBoxes(50, 180, 60, 90, 0, 2);
+    const top    = boxes.find(b => b.level === "top");
+    const bottom = boxes.find(b => b.level === "bottom");
+    expect(top).toBeDefined();
+    expect(bottom).toBeDefined();
+    expect(top!.H).toBe(90);
+    expect(bottom!.H).toBe(90);
+  });
+
+  it("doorsPerColumn=3: 3 קומות top+middle+bottom", () => {
+    const boxes = decomposeBoxes(160, 240, 60, 80, 5, 3, 80);
+    const top    = boxes.find(b => b.level === "top");
+    const middle = boxes.find(b => b.level === "middle");
+    const bottom = boxes.find(b => b.level === "bottom");
+    const plinth = boxes.find(b => b.level === "plinth");
+    expect(top).toBeDefined();
+    expect(middle).toBeDefined();
+    expect(bottom).toBeDefined();
+    expect(plinth).toBeDefined();
+    expect(top!.H).toBe(80);     // 240 - 80 - 80 = 80
+    expect(middle!.H).toBe(80);  // middleDoorH
+    expect(bottom!.H).toBe(75);  // lowerDoorH - plinth = 80 - 5
+    expect(plinth!.H).toBe(5);
+  });
+
+  it("doorsPerColumn=3: סכום גבהים = H הכולל", () => {
+    const boxes = decomposeBoxes(160, 240, 60, 80, 5, 3, 80);
+    // W=160>120 → 2 עמודות לכל קומה; סכום ה-H הייחודי לכל level צריך להיות H
+    const uniqueLevelH = new Map<string, number>();
+    for (const b of boxes) {
+      if (!uniqueLevelH.has(b.level)) uniqueLevelH.set(b.level, b.H);
+    }
+    const sum = [...uniqueLevelH.values()].reduce((s, h) => s + h, 0);
+    expect(sum).toBe(240); // 80 + 80 + 75 + 5 = 240
+  });
+
+  it("doorsPerColumn=3, W>120: מספר נכון של קופסאות", () => {
+    // W=160 → 2 עמודות; 3 קומות גוף + צוקל → 2×3 + 1 = 7
+    const boxes = decomposeBoxes(160, 240, 60, 80, 5, 3, 80);
+    expect(boxes).toHaveLength(7);
+  });
+
+  it("doorsPerColumn=3: throw כש-lowerDoorH+middleDoorH >= H", () => {
+    expect(() => decomposeBoxes(50, 240, 60, 120, 0, 3, 120)).toThrow();
+    expect(() => decomposeBoxes(50, 240, 60, 100, 0, 3, 150)).toThrow();
+  });
+
+  it("doorsPerColumn=3: throw כש-middleDoorH חסר", () => {
+    expect(() => decomposeBoxes(50, 240, 60, 80, 0, 3, undefined)).toThrow();
+  });
+
+  it("doorsPerColumn='auto': התנהגות קיימת נשמרת (H>200 → 2 קומות)", () => {
+    const boxes = decomposeBoxes(50, 220, 60, undefined, 0, "auto");
+    expect(boxes.some(b => b.level === "top")).toBe(true);
+    expect(boxes.some(b => b.level === "bottom")).toBe(true);
+  });
+
+  it("doorsPerColumn='auto': התנהגות קיימת נשמרת (H<=200 → קומה אחת)", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 0, "auto");
+    expect(boxes.every(b => b.level === "single")).toBe(true);
+  });
 });
