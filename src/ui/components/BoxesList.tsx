@@ -2,6 +2,7 @@ import React from 'react';
 import type { Box } from '../../types';
 import type { Translations } from '../../i18n/translations';
 import { useTranslation } from '../hooks/useTranslation';
+import DimensionValue from './DimensionValue';
 import styles from './BoxesList.module.css';
 
 interface BoxesListProps {
@@ -44,7 +45,11 @@ export default function BoxesList({ boxes }: BoxesListProps): React.JSX.Element 
             <span className={styles.index}>{i + 1}</span>
             <span className={styles.label}>{buildLabel(box, t)}</span>
             <span className={styles.dims}>
-              {box.W} × {box.H} × {box.D}
+              <DimensionValue value={box.W} axis="width" />
+              {' × '}
+              <DimensionValue value={box.H} axis="height" />
+              {' × '}
+              <DimensionValue value={box.D} axis="depth" />
               <span className={styles.unit}> {t.form.unitCm}</span>
             </span>
             {box.unitIndex !== undefined && (

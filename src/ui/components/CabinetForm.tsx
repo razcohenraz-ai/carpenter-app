@@ -129,14 +129,23 @@ export default function CabinetForm(): React.JSX.Element {
     field: keyof FormErrors,
     label: string,
     min = 0.1,
+    axis?: 'width' | 'height' | 'depth',
   ): React.JSX.Element {
     const err = errors[field];
+    const axisKey = axis ? axis.charAt(0).toUpperCase() + axis.slice(1) : '';
+    const labelClass = axis
+      ? `${styles.fieldLabel} ${styles[`label${axisKey}`]}`
+      : styles.fieldLabel;
+    const borderClass = !err && axis ? styles[`border${axisKey}`] : '';
+    const inputClass = [styles.input, err ? styles.inputError : borderClass]
+      .filter(Boolean)
+      .join(' ');
     return (
       <div className={styles.field}>
-        <label className={styles.fieldLabel} htmlFor={id}>{label}</label>
+        <label className={labelClass} htmlFor={id}>{label}</label>
         <input
           id={id}
-          className={`${styles.input}${err ? ` ${styles.inputError}` : ''}`}
+          className={inputClass}
           type="number"
           value={form[field]}
           step={0.1}
@@ -180,12 +189,12 @@ export default function CabinetForm(): React.JSX.Element {
           <div className={styles.grid}>
 
             {/* שורה 1: W, H, D */}
-            {numInput('input-W', 'W', t.form.width)}
-            {numInput('input-H', 'H', t.form.height)}
-            {numInput('input-D', 'D', t.form.depth)}
+            {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
+            {numInput('input-H', 'H', t.form.height, 0.1, 'height')}
+            {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
 
             {/* שורה 2: צוקל, דלתות לגובה, חומר */}
-            {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0)}
+            {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height')}
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
@@ -241,7 +250,7 @@ export default function CabinetForm(): React.JSX.Element {
             </div>
 
             {/* שדה מותנה: גובה דלת תחתונה */}
-            {needsLower && numInput('input-lower-door', 'lowerDoorH', lowerLabel)}
+            {needsLower && numInput('input-lower-door', 'lowerDoorH', lowerLabel, 0.1, 'height')}
 
           </div>
         </div>

@@ -45,6 +45,10 @@
   font-family: var(--font-family);
 }
 
+.dimLabelWidth  { fill: var(--color-width); }
+.dimLabelHeight { fill: var(--color-height); }
+.dimLabelDepth  { fill: var(--color-depth); }
+
 /* ── Placeholder (invalid input) ── */
 
 .placeholder {

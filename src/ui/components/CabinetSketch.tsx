@@ -71,7 +71,7 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH }: Props): R
         <text
           x={geo.wLabel.x}
           y={geo.wLabel.y}
-          className={styles.dimLabel}
+          className={`${styles.dimLabel} ${styles.dimLabelWidth}`}
           textAnchor="middle"
           dominantBaseline="auto"
         >
@@ -82,7 +82,7 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH }: Props): R
         <text
           x={geo.hLabel.x}
           y={geo.hLabel.y}
-          className={styles.dimLabel}
+          className={`${styles.dimLabel} ${styles.dimLabelHeight}`}
           textAnchor="middle"
           dominantBaseline="middle"
           transform={`rotate(-90, ${geo.hLabel.x}, ${geo.hLabel.y})`}
