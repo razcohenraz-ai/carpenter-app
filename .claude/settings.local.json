@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm --prefix C:/Projects/carpenter-app install --save-dev vitest)",
+      "Bash(npx vitest *)",
+      "Bash(npm test *)",
+      "Bash(npx vite *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'refactor\\(types\\): split Box.role into position+level *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git *)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")"
+    ]
+  }
+}

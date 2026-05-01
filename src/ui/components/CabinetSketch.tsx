@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
 import styles from './CabinetSketch.module.css';
+import type { InteriorByLevel, BodyLevel } from '../../types/interior';
 
 interface Props {
   W: string;
@@ -11,9 +12,10 @@ interface Props {
   lowerDoorH?: string;
   doorsPerColumn?: string;
   middleDoorH?: string;
+  interiorByLevel?: InteriorByLevel | undefined;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorByLevel }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -74,8 +76,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
           />
         ))}
 
-        {/* Internal shelf lines (merged bodies) */}
-        {geo.internalShelfLines.map((line, i) => (
+        {/* Internal shelf lines — only when no explicit interior state */}
+        {!interiorByLevel && geo.internalShelfLines.map((line, i) => (
           <line
             key={`shelf_${i}`}
             x1={line.x1}
@@ -85,6 +87,60 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             className={styles.splitLine}
           />
         ))}
+
+        {/* Interior items per body level */}
+        {interiorByLevel && (Object.keys(interiorByLevel) as BodyLevel[]).map(level => {
+          const items = interiorByLevel[level] ?? [];
+          const bodyFloor = geo.bodyFloors[level] ?? 0;
+          const Hn = parseFloat(H);
+          const pn = parseFloat(plinth);
+          const toSvgY = (h: number) =>
+            geo.cabinet.y + (Hn - pn - bodyFloor - h) * geo.scale;
+
+          return items.map(item => {
+            if (item.type === 'shelf') {
+              const y = toSvgY(item.heightFromFloor);
+              return (
+                <line
+                  key={item.id}
+                  x1={geo.cabinet.x}
+                  y1={y}
+                  x2={geo.cabinet.x + geo.cabinet.w}
+                  y2={y}
+                  className={styles.shelfLine}
+                />
+              );
+            }
+            if (item.type === 'rod') {
+              const y = toSvgY(item.heightFromFloor);
+              return (
+                <line
+                  key={item.id}
+                  x1={geo.cabinet.x}
+                  y1={y}
+                  x2={geo.cabinet.x + geo.cabinet.w}
+                  y2={y}
+                  className={styles.rodLine}
+                />
+              );
+            }
+            if (item.type === 'drawer') {
+              const yBottom = toSvgY(item.heightFromFloor);
+              const yTop    = toSvgY(item.heightFromFloor + item.drawerHeight);
+              return (
+                <rect
+                  key={item.id}
+                  x={geo.cabinet.x + 2}
+                  y={yTop}
+                  width={geo.cabinet.w - 4}
+                  height={yBottom - yTop}
+                  className={styles.drawerRect}
+                />
+              );
+            }
+            return null;
+          });
+        })}
 
         {/* Width label */}
         <text

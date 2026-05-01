@@ -3,8 +3,11 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS } from '../../catalog';
 import type { MaterialId } from '../../types';
+import type { BodyLevel } from '../../types/interior';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
+import BoxThumbnail from './BoxThumbnail';
+import BoxInteriorEditor from './BoxInteriorEditor';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -45,7 +48,15 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
 
 export default function CabinetForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { result, calculate } = useCabinet();
+  const { result, calculate, interiorByLevel, setBodyInterior } = useCabinet();
+
+  const [view, setView]               = useState<'main' | 'editor'>('main');
+  const [editingLevel, setEditingLevel] = useState<BodyLevel>('single');
+
+  function openEditor(level: BodyLevel): void {
+    setEditingLevel(level);
+    setView('editor');
+  }
 
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
@@ -193,7 +204,25 @@ export default function CabinetForm(): React.JSX.Element {
     );
   }
 
-  // ── render ─────────────────────────────────────────────────────────────────
+  // ── editor view ────────────────────────────────────────────────────────────
+
+  if (view === 'editor' && result) {
+    const box = result.boxes.find(b => b.level === editingLevel);
+    const bodyH = box?.H ?? 0;
+    return (
+      <div className={styles.form}>
+        <BoxInteriorEditor
+          level={editingLevel}
+          bodyH={bodyH}
+          items={interiorByLevel[editingLevel] ?? []}
+          onChange={items => setBodyInterior(editingLevel, items)}
+          onBack={() => setView('main')}
+        />
+      </div>
+    );
+  }
+
+  // ── main view ──────────────────────────────────────────────────────────────
 
   return (
     <form onSubmit={handleSubmit} className={styles.form} noValidate>
@@ -271,15 +300,43 @@ export default function CabinetForm(): React.JSX.Element {
           </div>
         </div>
 
-        <CabinetSketch
-          W={form.W}
-          H={form.H}
-          D={form.D}
-          plinth={form.plinth}
-          doorsPerColumn={form.doorsPerColumn}
-          {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
-          {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
-        />
+        <div className={styles.sketchStack}>
+          <CabinetSketch
+            W={form.W}
+            H={form.H}
+            D={form.D}
+            plinth={form.plinth}
+            doorsPerColumn={form.doorsPerColumn}
+            {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
+            {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
+            interiorByLevel={result ? interiorByLevel : undefined}
+          />
+
+          {/* Thumbnails row — one per body level (excluding plinth) */}
+          {result && (() => {
+            const levelHeightMap = new Map<BodyLevel, number>();
+            for (const box of result.boxes) {
+              if (box.level !== 'plinth' && !levelHeightMap.has(box.level as BodyLevel)) {
+                levelHeightMap.set(box.level as BodyLevel, box.H);
+              }
+            }
+            const bodyLevels: BodyLevel[] = (['top', 'middle', 'bottom', 'single'] as BodyLevel[])
+              .filter(l => levelHeightMap.has(l));
+            return bodyLevels.length > 0 ? (
+              <div className={styles.thumbRow}>
+                {bodyLevels.map(level => (
+                  <BoxThumbnail
+                    key={level}
+                    level={level}
+                    bodyH={levelHeightMap.get(level)!}
+                    items={interiorByLevel[level] ?? []}
+                    onClick={() => openEditor(level)}
+                  />
+                ))}
+              </div>
+            ) : null;
+          })()}
+        </div>
       </div>
 
       <button type="submit" className={styles.submitBtn}>

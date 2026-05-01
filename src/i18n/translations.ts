@@ -50,6 +50,23 @@ export interface Translations {
     levelTop: string;
     levelMiddle: string;
     levelBottom: string;
+    levelSingle: string;
+  };
+
+  interior: {
+    shelf: string;
+    drawer: string;
+    rod: string;
+    addShelf: string;
+    addDrawer: string;
+    addRod: string;
+    heightFromFloor: string;
+    drawerHeight: string;
+    editBody: string;
+    back: string;
+    noItems: string;
+    warnOutOfBounds: string;
+    warnDrawerOverlap: string;
   };
 
   groups: {
@@ -120,6 +137,23 @@ const he: Translations = {
     levelTop: 'עליונה',
     levelMiddle: 'אמצעית',
     levelBottom: 'תחתונה',
+    levelSingle: 'גוף יחיד',
+  },
+
+  interior: {
+    shelf: 'מדף',
+    drawer: 'מגירה',
+    rod: 'מוט תליה',
+    addShelf: '+ מדף',
+    addDrawer: '+ מגירה',
+    addRod: '+ מוט תליה',
+    heightFromFloor: 'גובה מרצפה (ס"מ)',
+    drawerHeight: 'גובה מגירה (ס"מ)',
+    editBody: 'עריכת פנים גוף',
+    back: 'חזרה',
+    noItems: 'אין פריטים פנימיים',
+    warnOutOfBounds: 'חורג מגבולות הגוף',
+    warnDrawerOverlap: 'מגירות חופפות',
   },
 
   groups: {
@@ -190,6 +224,23 @@ const en: Translations = {
     levelTop: 'Upper',
     levelMiddle: 'Middle',
     levelBottom: 'Lower',
+    levelSingle: 'Single Body',
+  },
+
+  interior: {
+    shelf: 'Shelf',
+    drawer: 'Drawer',
+    rod: 'Hanging Rod',
+    addShelf: '+ Shelf',
+    addDrawer: '+ Drawer',
+    addRod: '+ Hanging Rod',
+    heightFromFloor: 'Height from floor (cm)',
+    drawerHeight: 'Drawer height (cm)',
+    editBody: 'Edit Body Interior',
+    back: 'Back',
+    noItems: 'No interior items',
+    warnOutOfBounds: 'Exceeds body bounds',
+    warnDrawerOverlap: 'Overlapping drawers',
   },
 
   groups: {

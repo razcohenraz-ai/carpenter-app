@@ -1,5 +1,5 @@
 import type { Dimensions, ShellConfig, PlinthConfig } from "./geometry";
-import type { InteriorConfig } from "./interior";
+import type { InteriorByLevel } from "./interior";
 import type { MaterialId } from "./materials";
 import type { FurnitureType } from "./hardware";
 
@@ -22,12 +22,8 @@ export interface CabinetUnit {
   /** Material used for doors (may differ) */
   doorMaterialId: MaterialId;
 
-  /**
-   * Interior config per decomposed box.
-   * Key = Box.id from decomposeBoxes().
-   * If a box id is absent, defaultInteriorConfig() is used.
-   */
-  boxInteriors: Record<string, InteriorConfig>;
+  /** Interior items per body level. */
+  interiorByLevel: InteriorByLevel;
 
   /**
    * Manual override for where a tall cabinet splits into upper/lower.

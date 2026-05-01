@@ -1,0 +1,32 @@
+.svg {
+  display: block;
+}
+
+.bodyRect {
+  fill: var(--color-surface);
+  stroke: var(--color-primary);
+  stroke-width: 1.5;
+}
+
+.shelfLine {
+  stroke: var(--color-height);
+  stroke-width: 1.5;
+}
+
+.rodLine {
+  stroke: var(--color-depth);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.drawerRect {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+}
+
+.label {
+  font-size: 8px;
+  fill: var(--color-text-muted);
+  font-family: var(--font-family);
+}

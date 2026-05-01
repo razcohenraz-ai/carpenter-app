@@ -1,5 +1,6 @@
 import { decomposeBoxes } from '../../core';
 import type { Box, BoxLevel } from '../../types';
+import type { BodyLevel } from '../../types/interior';
 
 const SVG_W = 600;
 const SVG_H = 500;
@@ -27,6 +28,10 @@ export interface SketchGeometry {
   internalShelfLines: SketchLine[];
   wLabel: { x: number; y: number; text: string };
   hLabel: { x: number; y: number; text: string };
+  /** px per cm — used for rendering interior items */
+  scale: number;
+  /** floor height of each body (cm above plinth) — used for interior item y-coords */
+  bodyFloors: Partial<Record<BodyLevel, number>>;
 }
 
 export function isValidSketchInput(
@@ -147,6 +152,16 @@ export function computeSketchGeometry(
     y2: cabY + (H - sh) * scale,
   }));
 
+  // ── Body floors: cumulative cm above plinth, bottom-to-top ──────────────────
+  const bodyFloors: Partial<Record<BodyLevel, number>> = {};
+  {
+    let cum = 0;
+    for (const level of [...activeLevels].reverse() as BodyLevel[]) {
+      bodyFloors[level] = cum;
+      cum += levelHeightMap.get(level)!;
+    }
+  }
+
   return {
     svgWidth: SVG_W,
     svgHeight: SVG_H,
@@ -156,5 +171,7 @@ export function computeSketchGeometry(
     internalShelfLines,
     wLabel: { x: cabX + cabW / 2, y: cabY - 8, text: `${W}` },
     hLabel: { x: PAD_LEFT / 2, y: cabY + cabH / 2, text: `${H}` },
+    scale,
+    bodyFloors,
   };
 }

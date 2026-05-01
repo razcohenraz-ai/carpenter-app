@@ -152,6 +152,21 @@
 .borderHeight:focus { outline: none; border-color: var(--color-height); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-height) 15%, transparent); }
 .borderDepth:focus  { outline: none; border-color: var(--color-depth);  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-depth)  15%, transparent); }
 
+/* ── עמודת סקיצה + מיניאטורות ── */
+.sketchStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.thumbRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}
+
 /* ── תוצאת חישוב ── */
 .summary {
   background: var(--color-surface-raised);
