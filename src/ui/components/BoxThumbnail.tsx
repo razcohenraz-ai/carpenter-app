@@ -8,13 +8,15 @@ import type { Box, BoxPosition } from '../../types/geometry';
 interface Props {
   box: Box;
   items: InteriorItem[];
+  svgWidth?: number;
+  svgHeight?: number;
   onClick: () => void;
 }
 
-const THUMB_W = 70;
-const THUMB_H = 110;
+const DEFAULT_W = 70;
+const DEFAULT_H = 110;
 
-export default function BoxThumbnail({ box, items, onClick }: Props): React.JSX.Element {
+export default function BoxThumbnail({ box, items, svgWidth = DEFAULT_W, svgHeight = DEFAULT_H, onClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   const levelLabels: Record<string, string> = {
@@ -40,8 +42,8 @@ export default function BoxThumbnail({ box, items, onClick }: Props): React.JSX.
       <BoxBodySketch
         bodyH={box.H}
         items={items}
-        svgWidth={THUMB_W}
-        svgHeight={THUMB_H}
+        svgWidth={svgWidth}
+        svgHeight={svgHeight}
         showLabels={false}
       />
       <span className={styles.label}>{label}</span>

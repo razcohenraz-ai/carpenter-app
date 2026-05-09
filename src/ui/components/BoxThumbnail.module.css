@@ -21,3 +21,10 @@
   color: var(--color-text-secondary);
   text-align: center;
 }
+
+.dims {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
