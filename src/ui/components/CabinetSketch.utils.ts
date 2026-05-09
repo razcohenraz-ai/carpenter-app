@@ -2,6 +2,7 @@ import { decomposeBoxes } from '../../core';
 import type { Box, BoxLevel } from '../../types';
 import type { BodyLevel } from '../../types/interior';
 
+
 const SVG_W = 600;
 const SVG_H = 500;
 const PAD_TOP = 55;
@@ -41,6 +42,8 @@ export interface SketchGeometry {
   bodyFloors: Partial<Record<BodyLevel, number>>;
   /** SVG bounding rect for each non-plinth box, keyed by Box.id */
   boxSvgRects: Record<string, BoxSvgRect>;
+  /** All decomposed boxes (including plinth) — for door fronts rendering */
+  boxes: Box[];
 }
 
 export function isValidSketchInput(
@@ -212,5 +215,6 @@ export function computeSketchGeometry(
     scale,
     bodyFloors,
     boxSvgRects,
+    boxes,
   };
 }

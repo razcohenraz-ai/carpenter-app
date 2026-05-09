@@ -121,6 +121,23 @@ export function defaultShelfPlacement(
   existingItems: InteriorItem[],
   bodyH: number,
 ): ShelfItem {
+  // Shelves-only body: evenly divide the available space
+  if (existingItems.every(i => i.type === 'shelf')) {
+    const positions = existingItems.map(i => i.heightFromFloor).sort((a, b) => a - b);
+    const boundaries = [0, ...positions, bodyH];
+    let bestLo = 0, bestHi = bodyH;
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const lo = boundaries[i]!;
+      const hi = boundaries[i + 1]!;
+      if (hi - lo >= bestHi - bestLo) { // >= prefers higher segment on ties
+        bestLo = lo;
+        bestHi = hi;
+      }
+    }
+    return { type: 'shelf', id: newItemId(), heightFromFloor: (bestLo + bestHi) / 2 };
+  }
+
+  // Mixed body: bisect the largest free segment (respects drawers and rods)
   const segs = computeFreeSegments(existingItems, bodyH);
   const best = segs.length
     ? segs.reduce((a, b) => (b.hi - b.lo) > (a.hi - a.lo) ? b : a)
@@ -146,8 +163,28 @@ export function defaultDrawerPlacement(
   return { type: 'drawer', id: newItemId(), heightFromFloor, drawerHeight: drawerH };
 }
 
-export function defaultRodPlacement(bodyH: number): RodItem {
-  return { type: 'rod', id: newItemId(), heightFromFloor: Math.max(0, bodyH - 10) };
+export function defaultRodPlacement(
+  bodyH: number,
+  existingItems: InteriorItem[] = [],
+): RodItem {
+  const rods = existingItems
+    .filter(i => i.type === 'rod')
+    .map(i => i.heightFromFloor)
+    .sort((a, b) => a - b);
+
+  if (rods.length === 0) {
+    return { type: 'rod', id: newItemId(), heightFromFloor: Math.max(0, bodyH - 10) };
+  }
+
+  // Subsequent rods: bisect the largest gap between floor (0) and existing rod heights
+  const boundaries = [0, ...rods];
+  let bestLo = 0, bestHi = rods[0]!;
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const lo = boundaries[i]!;
+    const hi = boundaries[i + 1]!;
+    if (hi - lo > bestHi - bestLo) { bestLo = lo; bestHi = hi; }
+  }
+  return { type: 'rod', id: newItemId(), heightFromFloor: (bestLo + bestHi) / 2 };
 }
 
 // ── Validation (warnings, never blocking) ────────────────────────────────────

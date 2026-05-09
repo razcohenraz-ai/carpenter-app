@@ -1,0 +1,59 @@
+.svg {
+  display: block;
+}
+
+.doorRect {
+  fill: var(--color-surface);
+  stroke: var(--color-fronts);
+  stroke-width: 1.5;
+}
+
+.noDoorRect {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-border);
+  stroke-width: 1;
+  stroke-dasharray: 5 3;
+}
+
+.hinge {
+  fill: var(--color-primary);
+  stroke: none;
+}
+
+.hingeManual {
+  fill: var(--color-depth);
+}
+
+.hingeWarn {
+  fill: var(--color-warning);
+}
+
+.label {
+  font-size: 8px;
+  fill: var(--color-text-muted);
+  font-family: var(--font-family);
+}
+
+.dimLine {
+  stroke: var(--color-text-muted);
+  stroke-width: 0.75;
+}
+
+.dimLabel {
+  font-size: 7px;
+  fill: var(--color-text-muted);
+  font-family: var(--font-family);
+}
+
+.dimThicknessRect {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-text-muted);
+  stroke-width: 0.75;
+}
+
+.skirtLine {
+  stroke: var(--color-fronts);
+  stroke-width: 0.75;
+  stroke-dasharray: 4 3;
+  opacity: 0.65;
+}

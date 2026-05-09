@@ -52,7 +52,7 @@ export default function BoxInteriorEditor({ box, items, onChange, onBack }: Prop
 
   function addShelf(): void { update([...localItems, defaultShelfPlacement(localItems, bodyH)]); }
   function addDrawer(): void { update([...localItems, defaultDrawerPlacement(localItems, bodyH)]); }
-  function addRod(): void { update([...localItems, defaultRodPlacement(bodyH)]); }
+  function addRod(): void { update([...localItems, defaultRodPlacement(bodyH, localItems)]); }
 
   function deleteItem(id: string): void {
     update(localItems.filter(i => i.id !== id));

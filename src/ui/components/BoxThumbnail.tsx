@@ -45,6 +45,9 @@ export default function BoxThumbnail({ box, items, onClick }: Props): React.JSX.
         showLabels={false}
       />
       <span className={styles.label}>{label}</span>
+      <span className={styles.dims}>
+        {box.W.toFixed(1)} × {box.H.toFixed(1)} × {box.D.toFixed(1)}
+      </span>
     </button>
   );
 }

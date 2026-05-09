@@ -69,6 +69,31 @@ export interface Translations {
     warnDrawerOverlap: string;
   };
 
+  doors: {
+    bodies: string;
+    fronts: string;
+    editFront: string;
+    noFront: string;
+    hasDoor: string;
+    hingeSide: string;
+    hingeRight: string;
+    hingeLeft: string;
+    hingeCount: string;
+    hingeCountAuto: string;
+    hingePos: string;
+    hingeManualBadge: string;
+    resetAuto: string;
+    hingeWarnNoPos: string;
+    hingeWarnTooClose: (gap: number) => string;
+    hingeWarnSmallDoor: (h: number) => string;
+    preview: string;
+    thickness: string;
+    thicknessOverride: string;
+    clearThickness: string;
+    warnThicknessLow: (cm: number) => string;
+    warnThicknessHigh: (cm: number) => string;
+  };
+
   groups: {
     shell: string;
     body: string;
@@ -76,6 +101,7 @@ export interface Translations {
     door: string;
     drawer: string;
   };
+
 
   columns: {
     part: string;
@@ -154,6 +180,31 @@ const he: Translations = {
     noItems: 'אין פריטים פנימיים',
     warnOutOfBounds: 'חורג מגבולות הגוף',
     warnDrawerOverlap: 'מגירות חופפות',
+  },
+
+  doors: {
+    bodies:           'גופים',
+    fronts:           'חזיתות',
+    editFront:        'עריכת חזית',
+    noFront:          'ללא חזית',
+    hasDoor:          'יש חזית',
+    hingeSide:        'צד צירים',
+    hingeRight:       'ימין',
+    hingeLeft:        'שמאל',
+    hingeCount:       'מספר צירים',
+    hingeCountAuto:   'אוטומטי',
+    hingePos:         'מיקום (ס"מ)',
+    hingeManualBadge: 'ידני',
+    resetAuto:        'אוטומטי',
+    hingeWarnNoPos:   'לא נמצא מיקום אוטומטי לציר ללא התנגשות. ניתן להזיז ידנית.',
+    hingeWarnTooClose: (gap: number) => `מרחק בין צירים ${gap} ס"מ — פחות מהמומלץ (25 ס"מ). עלול לגרום ללחץ יתר על הלוח. ניתן להזיז ידנית.`,
+    hingeWarnSmallDoor: (h: number) => `חזית בגובה ${h} ס"מ — קטנה מהמינימום ל-2 צירים. הוצב ציר בודד במרכז. ניתן לשנות ידנית.`,
+    preview:            'תצוגת חזיתות',
+    thickness:          'עובי',
+    thicknessOverride:  'עובי חזית (חומר)',
+    clearThickness:     'איפוס לברירת מחדל',
+    warnThicknessLow:   (cm: number) => `עובי ${cm} ס"מ — דק מהמינימום המומלץ (1.5 ס"מ)`,
+    warnThicknessHigh:  (cm: number) => `עובי ${cm} ס"מ — עבה מהמקסימום המומלץ (2.5 ס"מ)`,
   },
 
   groups: {
@@ -241,6 +292,31 @@ const en: Translations = {
     noItems: 'No interior items',
     warnOutOfBounds: 'Exceeds body bounds',
     warnDrawerOverlap: 'Overlapping drawers',
+  },
+
+  doors: {
+    bodies:           'Bodies',
+    fronts:           'Fronts',
+    editFront:        'Edit Front',
+    noFront:          'No Front',
+    hasDoor:          'Has Front',
+    hingeSide:        'Hinge Side',
+    hingeRight:       'Right',
+    hingeLeft:        'Left',
+    hingeCount:       'Hinge Count',
+    hingeCountAuto:   'Auto',
+    hingePos:         'Position (cm)',
+    hingeManualBadge: 'Manual',
+    resetAuto:        'Auto',
+    hingeWarnNoPos:   'No auto position found without conflict. Move manually.',
+    hingeWarnTooClose: (gap: number) => `Hinge gap ${gap} cm — less than recommended (25 cm). May cause excess stress on the panel. Can be adjusted manually.`,
+    hingeWarnSmallDoor: (h: number) => `Door height ${h} cm — below minimum for 2 hinges. Single hinge placed at center. Can be adjusted manually.`,
+    preview:            'Fronts Preview',
+    thickness:          'Thickness',
+    thicknessOverride:  'Front Thickness (Material)',
+    clearThickness:     'Reset to Default',
+    warnThicknessLow:   (cm: number) => `Thickness ${cm} cm — below recommended minimum (1.5 cm)`,
+    warnThicknessHigh:  (cm: number) => `Thickness ${cm} cm — above recommended maximum (2.5 cm)`,
   },
 
   groups: {

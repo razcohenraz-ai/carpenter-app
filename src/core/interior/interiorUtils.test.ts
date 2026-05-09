@@ -192,6 +192,22 @@ describe('defaultRodPlacement', () => {
     const rod = defaultRodPlacement(5);
     expect(rod.heightFromFloor).toBe(0); // max(0, 5-10) = 0
   });
+
+  it('second rod: center between first rod and floor', () => {
+    const first = defaultRodPlacement(100);
+    // first at 90
+    const second = defaultRodPlacement(100, [first]);
+    // largest gap between {0, 90} is [0,90] → center = 45
+    expect(second.heightFromFloor).toBeCloseTo(45);
+  });
+
+  it('third rod: bisects largest remaining gap', () => {
+    const first  = defaultRodPlacement(100);          // 90
+    const second = defaultRodPlacement(100, [first]);  // 45
+    const third  = defaultRodPlacement(100, [first, second]);
+    // gaps between {0, 45, 90}: [0,45]=45 and [45,90]=45 → bisect first = 22.5
+    expect(third.heightFromFloor).toBeCloseTo(22.5);
+  });
 });
 
 // ── validateInterior ──────────────────────────────────────────────────────────

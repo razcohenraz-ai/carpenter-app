@@ -6,8 +6,11 @@ import type { MaterialId } from '../../types';
 import type { Box } from '../../types/geometry';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
+import CabinetFrontsSketch from './CabinetFrontsSketch';
 import BoxThumbnail from './BoxThumbnail';
 import BoxInteriorEditor from './BoxInteriorEditor';
+import DoorThumbnail from './DoorThumbnail';
+import DoorEditor from './DoorEditor';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -48,14 +51,27 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
 
 export default function CabinetForm(): React.JSX.Element {
   const { t } = useTranslation();
-  const { result, calculate, interiorById, setBoxInterior } = useCabinet();
+  const {
+    result, calculate,
+    interiorById, setBoxInterior,
+    doorsById, displayNumbers,
+    setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
+    setDoorThickness, setCoversSkirt,
+  } = useCabinet();
 
-  const [view, setView]           = useState<'main' | 'editor'>('main');
-  const [editingBox, setEditingBox] = useState<Box | null>(null);
+  const [view, setView]               = useState<'main' | 'editor' | 'doorEditor'>('main');
+  const [editingBox, setEditingBox]   = useState<Box | null>(null);
+  const [editingDoorId, setEditingDoorId] = useState<string | null>(null);
+  const [sketchMode, setSketchMode]   = useState<'bodies' | 'fronts'>('bodies');
 
   function openEditor(box: Box): void {
     setEditingBox(box);
     setView('editor');
+  }
+
+  function openDoorEditor(boxId: string): void {
+    setEditingDoorId(boxId);
+    setView('doorEditor');
   }
 
   const [form, setForm] = useState<FormState>({
@@ -73,7 +89,17 @@ export default function CabinetForm(): React.JSX.Element {
     if (field === 'W') setForm(p => ({ ...p, W: value }));
     else if (field === 'H') setForm(p => ({ ...p, H: value }));
     else if (field === 'D') setForm(p => ({ ...p, D: value }));
-    else if (field === 'plinth') setForm(p => ({ ...p, plinth: value }));
+    else if (field === 'plinth') {
+      const p = parseFloat(value);
+      setForm(prev => {
+        const base = { ...prev, plinth: value };
+        if ((isNaN(p) || p <= 0) && prev.doorCoversPlinth) {
+          return { ...base, doorCoversPlinth: false };
+        }
+        return base;
+      });
+      if (isNaN(p) || p <= 0) setCoversSkirt(false);
+    }
     else if (field === 'lowerDoorH') setForm(p => ({ ...p, lowerDoorH: value }));
     else setForm(p => ({ ...p, middleDoorH: value }));
 
@@ -189,14 +215,20 @@ export default function CabinetForm(): React.JSX.Element {
     checked: boolean,
     label: string,
     onChange: (v: boolean) => void,
+    disabled?: boolean,
   ): React.JSX.Element {
     return (
-      <label className={styles.checkboxLabel} htmlFor={id}>
+      <label
+        className={styles.checkboxLabel}
+        htmlFor={id}
+        style={disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}}
+      >
         <input
           id={id}
           type="checkbox"
           className={styles.checkbox}
           checked={checked}
+          disabled={disabled}
           onChange={e => onChange(e.target.checked)}
         />
         {label}
@@ -204,7 +236,7 @@ export default function CabinetForm(): React.JSX.Element {
     );
   }
 
-  // ── editor view ────────────────────────────────────────────────────────────
+  // ── editor views ───────────────────────────────────────────────────────────
 
   if (view === 'editor' && editingBox) {
     return (
@@ -217,6 +249,30 @@ export default function CabinetForm(): React.JSX.Element {
         />
       </div>
     );
+  }
+
+  if (view === 'doorEditor' && editingDoorId) {
+    const door = doorsById[editingDoorId];
+    if (door) {
+      return (
+        <div className={styles.form}>
+          <DoorEditor
+            door={door}
+            interiorItems={interiorById[editingDoorId] ?? []}
+            displayNumber={displayNumbers.get(editingDoorId) ?? ''}
+            globalMaterialId={form.materialId}
+            plinthHeight={parseFloat(form.plinth) || 0}
+            onHingeSide={side => setDoorHingeSide(editingDoorId, side)}
+            onHingeCount={count => setDoorHingeCount(editingDoorId, count)}
+            onHingeManual={(hingeId, pos) => setHingeManual(editingDoorId, hingeId, pos)}
+            onResetAuto={hingeId => resetHingeToAuto(editingDoorId, hingeId)}
+            onHasDoor={v => setDoorHasDoor(editingDoorId, v)}
+            onThickness={matId => setDoorThickness(editingDoorId, matId)}
+            onBack={() => setView('main')}
+          />
+        </div>
+      );
+    }
   }
 
   // ── main view ──────────────────────────────────────────────────────────────
@@ -288,7 +344,11 @@ export default function CabinetForm(): React.JSX.Element {
                 'input-covers-plinth',
                 form.doorCoversPlinth,
                 t.form.doorCoversPlinth,
-                v => setForm(p => ({ ...p, doorCoversPlinth: v })),
+                v => {
+                  setForm(p => ({ ...p, doorCoversPlinth: v }));
+                  setCoversSkirt(v);
+                },
+                parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
               )}
             </div>
 
@@ -300,19 +360,54 @@ export default function CabinetForm(): React.JSX.Element {
         </div>
 
         <div className={styles.sketchStack}>
-          <CabinetSketch
-            W={form.W}
-            H={form.H}
-            D={form.D}
-            plinth={form.plinth}
-            doorsPerColumn={form.doorsPerColumn}
-            {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
-            {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
-            interiorById={result ? interiorById : undefined}
-          />
+          {/* Mode toggle — shown only after first calculation */}
+          {result && (
+            <div className={styles.modeToggle}>
+              <button
+                type="button"
+                className={`${styles.modeBtn} ${styles.modeBtnBodies} ${sketchMode === 'bodies' ? styles.modeBtnActive : ''}`}
+                onClick={() => setSketchMode('bodies')}
+              >
+                {t.doors.bodies}
+              </button>
+              <button
+                type="button"
+                className={`${styles.modeBtn} ${styles.modeBtnFronts} ${sketchMode === 'fronts' ? styles.modeBtnActive : ''}`}
+                onClick={() => setSketchMode('fronts')}
+              >
+                {t.doors.fronts}
+              </button>
+            </div>
+          )}
 
-          {/* Thumbnails row — one per non-plinth box */}
-          {bodyBoxes.length > 0 && (
+          {/* Main sketch */}
+          {sketchMode === 'bodies' || !result ? (
+            <CabinetSketch
+              W={form.W}
+              H={form.H}
+              D={form.D}
+              plinth={form.plinth}
+              doorsPerColumn={form.doorsPerColumn}
+              {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
+              {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
+              interiorById={result ? interiorById : undefined}
+            />
+          ) : (
+            <CabinetFrontsSketch
+              W={form.W}
+              H={form.H}
+              D={form.D}
+              plinth={form.plinth}
+              doorsPerColumn={form.doorsPerColumn}
+              {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
+              {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
+              doorsById={doorsById}
+              displayNumbers={displayNumbers}
+            />
+          )}
+
+          {/* Thumbnails row */}
+          {bodyBoxes.length > 0 && sketchMode === 'bodies' && (
             <div className={styles.thumbRow}>
               {bodyBoxes.map(box => (
                 <BoxThumbnail
@@ -322,6 +417,25 @@ export default function CabinetForm(): React.JSX.Element {
                   onClick={() => openEditor(box)}
                 />
               ))}
+            </div>
+          )}
+
+          {bodyBoxes.length > 0 && sketchMode === 'fronts' && result && (
+            <div className={styles.thumbRow}>
+              {bodyBoxes.map(box => {
+                const door = doorsById[box.id];
+                if (!door) return null;
+                return (
+                  <DoorThumbnail
+                    key={box.id}
+                    door={door}
+                    displayNumber={displayNumbers.get(box.id) ?? ''}
+                    globalMaterialId={form.materialId}
+                    plinthHeight={parseFloat(form.plinth) || 0}
+                    onClick={() => openDoorEditor(box.id)}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

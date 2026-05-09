@@ -160,6 +160,43 @@
   align-items: center;
 }
 
+/* ── Toggle: גופים / חזיתות ── */
+.modeToggle {
+  display: flex;
+  gap: 0;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  align-self: center;
+}
+
+.modeBtn {
+  background: var(--color-surface);
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.modeBtnBodies {
+  color: var(--color-primary);
+}
+
+.modeBtnFronts {
+  color: var(--color-fronts);
+}
+
+.modeBtn + .modeBtn {
+  border-inline-start: var(--border-width) solid var(--color-border);
+}
+
+.modeBtnActive {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
 .thumbRow {
   display: flex;
   flex-wrap: wrap;
