@@ -30,3 +30,18 @@
   fill: var(--color-text-muted);
   font-family: var(--font-family);
 }
+
+.dimLine {
+  stroke-width: 0.75;
+  fill: none;
+}
+
+.dimLabel {
+  font-size: 7px;
+  font-family: var(--font-family);
+}
+
+.dimDepthRect {
+  fill: var(--color-surface-raised);
+  stroke-width: 0.75;
+}

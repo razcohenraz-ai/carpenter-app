@@ -131,10 +131,13 @@ export default function BoxInteriorEditor({ box, items, onChange, onBack }: Prop
         <div className={styles.sketchCol}>
           <BoxBodySketch
             bodyH={bodyH}
+            bodyW={box.W}
+            bodyD={box.D}
             items={localItems}
             svgWidth={SKETCH_W}
             svgHeight={SKETCH_H}
             showLabels
+            showDimensions
             onItemMove={onItemMove}
           />
         </div>

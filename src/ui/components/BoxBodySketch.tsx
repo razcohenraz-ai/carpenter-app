@@ -4,10 +4,13 @@ import styles from './BoxBodySketch.module.css';
 
 interface Props {
   bodyH: number;           // cm
+  bodyW?: number;          // cm — required when showDimensions
+  bodyD?: number;          // cm — required when showDimensions
   items: InteriorItem[];
   svgWidth: number;
   svgHeight: number;
   showLabels?: boolean;
+  showDimensions?: boolean;
   onItemMove?: (id: string, newH: number) => void;
 }
 
@@ -21,7 +24,9 @@ interface DragState {
   currentH: number;
 }
 
-const PAD = 8;
+const PAD           = 8;
+const DIM_PAD_TOP   = 24;
+const DIM_PAD_RIGHT = 44;
 
 function computeDragBounds(
   item: InteriorItem,
@@ -49,17 +54,20 @@ function computeDragBounds(
 }
 
 export default function BoxBodySketch({
-  bodyH, items, svgWidth, svgHeight, showLabels = false, onItemMove,
+  bodyH, bodyW, bodyD, items, svgWidth, svgHeight,
+  showLabels = false, showDimensions = false, onItemMove,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
 
-  const drawW = svgWidth  - PAD * 2;
-  const drawH = svgHeight - PAD * 2;
+  const padTop   = showDimensions ? DIM_PAD_TOP   : PAD;
+  const padRight = showDimensions ? DIM_PAD_RIGHT : PAD;
+  const drawW = svgWidth  - PAD      - padRight;
+  const drawH = svgHeight - padTop   - PAD;
   const scale = drawH / Math.max(bodyH, 1);
 
   const bX = PAD;
-  const bY = PAD;
+  const bY = padTop;
   const bW = drawW;
   const bH = drawH;
 
@@ -221,6 +229,58 @@ export default function BoxBodySketch({
 
         return null;
       })}
+
+      {showDimensions && (() => {
+        const wArrowY  = bY - 10;
+        const hArrowX  = bX + bW + 12;
+        const hTextX   = hArrowX + 10;
+        const dRectX   = bX + bW + 28;
+        const dRectY   = bY + 4;
+        return (
+          <g>
+            {/* Width arrow */}
+            <line x1={bX} y1={wArrowY} x2={bX + bW} y2={wArrowY}
+              className={styles.dimLine} stroke="var(--color-width)" />
+            <line x1={bX}      y1={wArrowY - 4} x2={bX}      y2={wArrowY + 4}
+              className={styles.dimLine} stroke="var(--color-width)" />
+            <line x1={bX + bW} y1={wArrowY - 4} x2={bX + bW} y2={wArrowY + 4}
+              className={styles.dimLine} stroke="var(--color-width)" />
+            <text x={bX + bW / 2} y={wArrowY - 3}
+              textAnchor="middle" dominantBaseline="auto"
+              className={styles.dimLabel} fill="var(--color-width)">
+              {bodyW?.toFixed(1)}
+            </text>
+
+            {/* Height arrow */}
+            <line x1={hArrowX} y1={bY} x2={hArrowX} y2={bY + bH}
+              className={styles.dimLine} stroke="var(--color-height)" />
+            <line x1={hArrowX - 4} y1={bY}      x2={hArrowX + 4} y2={bY}
+              className={styles.dimLine} stroke="var(--color-height)" />
+            <line x1={hArrowX - 4} y1={bY + bH} x2={hArrowX + 4} y2={bY + bH}
+              className={styles.dimLine} stroke="var(--color-height)" />
+            <text
+              x={hTextX} y={bY + bH / 2}
+              textAnchor="middle" dominantBaseline="middle"
+              transform={`rotate(-90,${hTextX},${bY + bH / 2})`}
+              className={styles.dimLabel} fill="var(--color-height)">
+              {bodyH.toFixed(1)}
+            </text>
+
+            {/* Depth indicator */}
+            {bodyD !== undefined && (
+              <>
+                <rect x={dRectX} y={dRectY} width={6} height={16}
+                  className={styles.dimDepthRect} stroke="var(--color-depth)" />
+                <text x={dRectX + 3} y={dRectY + 24}
+                  textAnchor="middle"
+                  className={styles.dimLabel} fill="var(--color-depth)">
+                  {bodyD.toFixed(1)}
+                </text>
+              </>
+            )}
+          </g>
+        );
+      })()}
     </svg>
   );
 }
