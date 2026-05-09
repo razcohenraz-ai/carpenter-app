@@ -11,6 +11,7 @@ import BoxThumbnail from './BoxThumbnail';
 import BoxInteriorEditor from './BoxInteriorEditor';
 import DoorThumbnail from './DoorThumbnail';
 import DoorEditor from './DoorEditor';
+import DoorsList from './DoorsList';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -473,7 +474,16 @@ export default function CabinetForm(): React.JSX.Element {
           <p className={styles.summary}>
             {t.results.summary(result.boxes.length, totalPieces)}
           </p>
-          <BoxesList boxes={result.boxes} />
+          {sketchMode === 'bodies'
+            ? <BoxesList boxes={result.boxes} />
+            : <DoorsList
+                bodyBoxes={bodyBoxes}
+                doorsById={doorsById}
+                displayNumbers={displayNumbers}
+                globalMaterialId={form.materialId}
+                plinthHeight={parseFloat(form.plinth) || 0}
+              />
+          }
         </>
       )}
     </form>

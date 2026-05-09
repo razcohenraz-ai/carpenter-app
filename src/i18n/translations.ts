@@ -92,6 +92,8 @@ export interface Translations {
     clearThickness: string;
     warnThicknessLow: (cm: number) => string;
     warnThicknessHigh: (cm: number) => string;
+    listTitle: string;
+    front: string;
   };
 
   groups: {
@@ -205,6 +207,8 @@ const he: Translations = {
     clearThickness:     'איפוס לברירת מחדל',
     warnThicknessLow:   (cm: number) => `עובי ${cm} ס"מ — דק מהמינימום המומלץ (1.5 ס"מ)`,
     warnThicknessHigh:  (cm: number) => `עובי ${cm} ס"מ — עבה מהמקסימום המומלץ (2.5 ס"מ)`,
+    listTitle:          'פיצול לחזיתות',
+    front:              'חזית',
   },
 
   groups: {
@@ -317,6 +321,8 @@ const en: Translations = {
     clearThickness:     'Reset to Default',
     warnThicknessLow:   (cm: number) => `Thickness ${cm} cm — below recommended minimum (1.5 cm)`,
     warnThicknessHigh:  (cm: number) => `Thickness ${cm} cm — above recommended maximum (2.5 cm)`,
+    listTitle:          'Fronts Breakdown',
+    front:              'Front',
   },
 
   groups: {
