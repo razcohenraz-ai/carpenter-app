@@ -41,7 +41,3 @@
   font-family: var(--font-family);
 }
 
-.dimDepthRect {
-  fill: var(--color-surface-raised);
-  stroke-width: 0.75;
-}

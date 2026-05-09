@@ -25,7 +25,7 @@ interface DragState {
 }
 
 const PAD           = 8;
-const DIM_PAD_TOP   = 24;
+const DIM_PAD_TOP   = 30;
 const DIM_PAD_RIGHT = 44;
 
 function computeDragBounds(
@@ -231,11 +231,25 @@ export default function BoxBodySketch({
       })}
 
       {showDimensions && (() => {
-        const wArrowY  = bY - 10;
-        const hArrowX  = bX + bW + 12;
-        const hTextX   = hArrowX + 10;
-        const dRectX   = bX + bW + 28;
-        const dRectY   = bY + 4;
+        const wArrowY = bY - 10;
+        const hArrowX = bX + bW + 12;
+        const hTextX  = hArrowX + 10;
+
+        // Depth arrow: 30° above horizontal from top-right corner of box
+        const L      = 40;
+        const cos30  = Math.sqrt(3) / 2;  // ≈ 0.866
+        const sin30  = 0.5;
+        const dx0    = bX + bW;
+        const dy0    = bY;
+        const dx1    = dx0 + L * cos30;   // ≈ dx0 + 34.6
+        const dy1    = dy0 - L * sin30;   // ≈ dy0 − 20  (up in SVG = −y)
+        // Arrowhead: two lines symmetric about the reversed arrow direction (150°)
+        const HL     = 8;
+        const hd1x   = dx1 + HL * (-0.5);   // direction 120°
+        const hd1y   = dy1 + HL * 0.866;
+        const hd2x   = dx1 + HL * (-1);     // direction 180°
+        const hd2y   = dy1;
+
         return (
           <g>
             {/* Width arrow */}
@@ -266,17 +280,21 @@ export default function BoxBodySketch({
               {bodyH.toFixed(1)}
             </text>
 
-            {/* Depth indicator */}
+            {/* Depth arrow — diagonal 30° from top-right corner */}
             {bodyD !== undefined && (
-              <>
-                <rect x={dRectX} y={dRectY} width={6} height={16}
-                  className={styles.dimDepthRect} stroke="var(--color-depth)" />
-                <text x={dRectX + 3} y={dRectY + 24}
-                  textAnchor="middle"
+              <g>
+                <line x1={dx0} y1={dy0} x2={dx1} y2={dy1}
+                  className={styles.dimLine} stroke="var(--color-depth)" />
+                <line x1={dx1} y1={dy1} x2={hd1x} y2={hd1y}
+                  className={styles.dimLine} stroke="var(--color-depth)" />
+                <line x1={dx1} y1={dy1} x2={hd2x} y2={hd2y}
+                  className={styles.dimLine} stroke="var(--color-depth)" />
+                <text x={dx1 + 3} y={dy1 - 3}
+                  textAnchor="start" dominantBaseline="auto"
                   className={styles.dimLabel} fill="var(--color-depth)">
                   {bodyD.toFixed(1)}
                 </text>
-              </>
+              </g>
             )}
           </g>
         );
