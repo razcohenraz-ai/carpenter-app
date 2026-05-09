@@ -42,7 +42,8 @@ interface FormState {
   middleDoorH: string;
   hasShell: boolean;
   doorCoversPlinth: boolean;
-  materialId: MaterialId;
+  bodyMaterialId: MaterialId;
+  frontMaterialId: MaterialId;
   doorsPerColumn: DoorsPerColumn;
 }
 
@@ -96,7 +97,7 @@ export default function CabinetForm(): React.JSX.Element {
     W: '240', H: '220', D: '60',
     plinth: '10', lowerDoorH: '110', middleDoorH: '80',
     hasShell: true, doorCoversPlinth: false,
-    materialId: 'mdf18', doorsPerColumn: 'auto',
+    bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
   });
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
@@ -174,7 +175,7 @@ export default function CabinetForm(): React.JSX.Element {
     calculate({
       W, H, D,
       hasShell: form.hasShell,
-      materialId: form.materialId,
+      bodyMaterialId: form.bodyMaterialId,
       plinth,
       doorCoversPlinth: form.doorCoversPlinth,
       lowerDoorH: needsLo ? loDoor : undefined,
@@ -278,7 +279,7 @@ export default function CabinetForm(): React.JSX.Element {
             door={door}
             interiorItems={interiorById[editingDoorId] ?? []}
             displayNumber={displayNumbers.get(editingDoorId) ?? ''}
-            globalMaterialId={form.materialId}
+            globalMaterialId={form.frontMaterialId}
             plinthHeight={parseFloat(form.plinth) || 0}
             onHingeSide={side => setDoorHingeSide(editingDoorId, side)}
             onHingeCount={count => setDoorHingeCount(editingDoorId, count)}
@@ -334,15 +335,33 @@ export default function CabinetForm(): React.JSX.Element {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-material">
-                {t.form.material}
+              <label className={styles.fieldLabel} htmlFor="input-body-material">
+                {t.form.bodyMaterial}
               </label>
               <select
-                id="input-material"
+                id="input-body-material"
                 className={styles.select}
-                value={form.materialId}
+                value={form.bodyMaterialId}
                 onChange={e =>
-                  setForm(p => ({ ...p, materialId: e.target.value as MaterialId }))
+                  setForm(p => ({ ...p, bodyMaterialId: e.target.value as MaterialId }))
+                }
+              >
+                {materialsArray.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-front-material">
+                {t.form.frontMaterial}
+              </label>
+              <select
+                id="input-front-material"
+                className={styles.select}
+                value={form.frontMaterialId}
+                onChange={e =>
+                  setForm(p => ({ ...p, frontMaterialId: e.target.value as MaterialId }))
                 }
               >
                 {materialsArray.map(m => (
@@ -454,7 +473,7 @@ export default function CabinetForm(): React.JSX.Element {
                     key={box.id}
                     door={door}
                     displayNumber={displayNumbers.get(box.id) ?? ''}
-                    globalMaterialId={form.materialId}
+                    globalMaterialId={form.frontMaterialId}
                     plinthHeight={parseFloat(form.plinth) || 0}
                     onClick={() => openDoorEditor(box.id)}
                   />
@@ -480,7 +499,7 @@ export default function CabinetForm(): React.JSX.Element {
                 bodyBoxes={bodyBoxes}
                 doorsById={doorsById}
                 displayNumbers={displayNumbers}
-                globalMaterialId={form.materialId}
+                globalMaterialId={form.frontMaterialId}
                 plinthHeight={parseFloat(form.plinth) || 0}
               />
           }

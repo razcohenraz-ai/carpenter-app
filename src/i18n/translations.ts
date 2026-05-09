@@ -16,7 +16,8 @@ export interface Translations {
     height: string;
     depth: string;
     hasShell: string;
-    material: string;
+    bodyMaterial: string;
+    frontMaterial: string;
     calculate: string;
     unitCm: string;
     plinthHeight: string;
@@ -131,7 +132,8 @@ const he: Translations = {
     height: 'גובה (ס"מ)',
     depth: 'עומק (ס"מ)',
     hasShell: 'מעטפת חיצונית',
-    material: 'חומר',
+    bodyMaterial:  'חומר גופים',
+    frontMaterial: 'חומר חזיתות',
     calculate: 'חשב',
     unitCm: 'ס"מ',
     plinthHeight: 'גובה צוקל (ס"מ)',
@@ -245,7 +247,8 @@ const en: Translations = {
     height: 'Height (cm)',
     depth: 'Depth (cm)',
     hasShell: 'Outer shell',
-    material: 'Material',
+    bodyMaterial:  'Body Material',
+    frontMaterial: 'Front Material',
     calculate: 'Calculate',
     unitCm: 'cm',
     plinthHeight: 'Plinth Height (cm)',

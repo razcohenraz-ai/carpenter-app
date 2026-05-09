@@ -21,7 +21,7 @@ export interface CabinetInput {
   H: number;
   D: number;
   hasShell: boolean;
-  materialId: MaterialId;
+  bodyMaterialId: MaterialId;
   plinth: number;
   doorCoversPlinth: boolean;
   lowerDoorH: number | undefined;
@@ -192,8 +192,8 @@ export function useCabinet(): {
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
-    const { W, H, D, hasShell, materialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn } = input;
-    const material = getMaterial(materialId);
+    const { W, H, D, hasShell, bodyMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn } = input;
+    const material = getMaterial(bodyMaterialId);
     const t = material.thickness / 10;
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
