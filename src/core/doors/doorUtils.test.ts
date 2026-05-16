@@ -650,6 +650,17 @@ describe('getDoorHeight', () => {
   it('gap=2mm, hasBottomGap=false, 88.2cm box → 88.0 (bug scenario)', () => {
     expect(getDoorHeight(88.2, 2, false)).toBeCloseTo(88.0);
   });
+
+  // hasTopGap=false — גוף תחתון/אמצעי: ה-gap האמצעי בבעלות הגוף שמעליו
+  it('gap=2mm, hasBottomGap=false, hasTopGap=false: bottom box with plinth → boxH unchanged', () => {
+    expect(getDoorHeight(170, 2, false, false)).toBeCloseTo(170.0);
+  });
+  it('gap=2mm, hasBottomGap=true, hasTopGap=false: middle box, no plinth → boxH − 0.2 (bottom only)', () => {
+    expect(getDoorHeight(80, 2, true, false)).toBeCloseTo(79.8);
+  });
+  it('gap=2mm, hasBottomGap=true, hasTopGap=true: top box (default) → boxH − 0.4', () => {
+    expect(getDoorHeight(58.2, 2, true, true)).toBeCloseTo(57.8);
+  });
 });
 
 // ── getDoorWidth ──────────────────────────────────────────────────────────────

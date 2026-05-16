@@ -339,7 +339,8 @@ export function useCabinet(): {
       const coversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
       const isBottomMost = box.level === 'bottom' || box.level === 'single';
       const hasBottomGap = !(isBottomMost && plinth > 0 && !coversSkirt);
-      const panelH = getDoorHeight(box.H, doorGapMm, hasBottomGap);
+      const hasTopGap = box.level === 'top' || box.level === 'single';
+      const panelH = getDoorHeight(box.H, doorGapMm, hasBottomGap, hasTopGap);
 
       const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
       const frontW = getDoorWidth(box.W, numFronts, doorGapMm);

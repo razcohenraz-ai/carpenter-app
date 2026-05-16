@@ -15,6 +15,7 @@
 
 ### תוקן
 - מעטפת תקרה (hasEnvelopeTop) לא הקטינה את גובה הגוף העליון/היחיד — box.H נשאר ללא שינוי וגובה הדלת חושב בנפרד עם ניכוי. עכשיו decomposeBoxes מקבלת envelopeTopH ומחסירה ישירות מ-box.H, וה-effectiveBoxH הכפול הוסר מ-useCabinet
+- רווח תחתון כפול בחזית תחתונה ב-doorsPerColumn>1: getDoorHeight תמיד ניכה "top gap" מהגוף התחתון/האמצעי, אבל ה-gap האמצעי כבר נוכה כ-"bottom gap" של הגוף שמעליו. נוסף פרמטר hasTopGap — false לגופים bottom/middle, true לגופים top/single
 
 ---
 

@@ -167,21 +167,26 @@ export function calcCuts(
     const lowerBoxH = d.rows === 1 ? (H - plinth) - topReduction : d.lowerH - plinth;
     // Bottom/single-row door rests on the plinth — no lower clearance needed.
     const lowerHasBottomGap = !(plinth > 0 && !doorCoversPlinth);
+    // Single box owns its top gap; bottom box of a multi-row split does not
+    // (the box above already owns the shared boundary gap).
+    const lowerHasTopGap = d.rows === 1;
     const doorName = d.rows === 1 ? "דלת" : "דלת תחתונה";
     cuts.push({
       name: doorName,
       qty: frontsPerRow,
       w: frontW_mm,
-      h: cm(getDoorHeight(lowerBoxH, doorGapMm, lowerHasBottomGap)),
+      h: cm(getDoorHeight(lowerBoxH, doorGapMm, lowerHasBottomGap, lowerHasTopGap)),
       group: "door",
     });
     if (d.rows >= 2 && d.upperH !== null) {
       const upperBoxH = (H - d.lowerH) - (d.rows === 2 ? topReduction : 0);
+      // Top box (rows=2) owns its top gap; middle box (rows=3) does not.
+      const upperHasTopGap = d.rows === 2;
       cuts.push({
         name: d.rows === 3 ? "דלת אמצעית" : "דלת עליונה",
         qty: frontsPerRow,
         w: frontW_mm,
-        h: cm(getDoorHeight(upperBoxH, doorGapMm)),
+        h: cm(getDoorHeight(upperBoxH, doorGapMm, true, upperHasTopGap)),
         group: "door",
       });
     }

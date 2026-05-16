@@ -269,12 +269,13 @@ export function getDoorWidth(innerW: number, numCols: number, gapMm: number): nu
   return (innerW - (numCols + 1) * gapCm) / numCols;
 }
 
-// hasBottomGap=true (default): top + bottom clearance (2 × gapCm).
-// hasBottomGap=false: top clearance only (1 × gapCm) — used when the door
-// bottom rests on a plinth and the plinth itself provides the lower clearance.
-export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true): number {
+// hasTopGap: gap between box top and front top. False for 'bottom'/'middle' boxes —
+//   the box above already owns the shared boundary gap (prevents double-counting).
+// hasBottomGap: gap between front bottom and box bottom. False when the front
+//   rests directly on a plinth (no clearance needed below).
+export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true, hasTopGap = true): number {
   const gapCm = gapMm / 10;
-  return boxH - gapCm - (hasBottomGap ? gapCm : 0);
+  return boxH - (hasTopGap ? gapCm : 0) - (hasBottomGap ? gapCm : 0);
 }
 
 // ── Effective door thickness ──────────────────────────────────────────────────
