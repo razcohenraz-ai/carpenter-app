@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
-import { MATERIALS } from '../../catalog';
+import { MATERIALS, getMaterial } from '../../catalog';
 import type { MaterialId } from '../../types';
 import type { Box } from '../../types/geometry';
 import { makeDoorId } from '../../core/doors/doorUtils';
@@ -78,8 +78,9 @@ export default function CabinetForm(): React.JSX.Element {
   const {
     result, calculate,
     interiorById, setBoxInterior,
+    cellInteriorById, addPartition, removePartition, setCellItems,
     doorsById, displayNumbers, numFrontsPerBox,
-    partitionsById, setBoxPartitions,
+    partitionsById,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
   } = useCabinet();
@@ -300,7 +301,11 @@ export default function CabinetForm(): React.JSX.Element {
           onBack={() => setView('main')}
           numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
           hasPartitions={partitionsById.get(editingBox.id) ?? false}
-          onTogglePartitions={() => setBoxPartitions(editingBox.id, !(partitionsById.get(editingBox.id) ?? false))}
+          onAddPartition={() => addPartition(editingBox.id)}
+          onRemovePartition={() => removePartition(editingBox.id)}
+          cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
+          onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
+          tBody={getMaterial(form.bodyMaterialId).thickness / 10}
         />
       </div>
     );

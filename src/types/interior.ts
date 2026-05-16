@@ -28,6 +28,10 @@ export type InteriorByLevel = Partial<Record<BodyLevel, InteriorItem[]>>;
 /** Interior items keyed by Box.id — the canonical per-box storage. */
 export type InteriorById = Record<string, InteriorItem[]>;
 
+/** Cell items for boxes with an internal partition.
+ *  Key = Box.id, value = array of two cell item arrays: [rightCell, leftCell]. */
+export type CellInteriorById = Record<string, InteriorItem[][]>;
+
 export type InteriorWarning =
   | { kind: 'outOfBounds'; itemId: string }
   | { kind: 'drawerOverlap'; itemIds: [string, string] };

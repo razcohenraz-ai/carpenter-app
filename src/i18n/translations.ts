@@ -69,6 +69,15 @@ export interface Translations {
     addRod: string;
     addPartitions: string;
     removePartitions: string;
+    addPartition: string;
+    removePartition: string;
+    cellRight: string;
+    cellLeft: string;
+    partitionWarnAdd: (shelves: number, drawers: number, rods: number) => string;
+    partitionWarnRemove: (a: number, b: number) => string;
+    partitionConfirmAdd: string;
+    partitionConfirmRemove: string;
+    cancel: string;
     heightFromFloor: string;
     drawerHeight: string;
     editBody: string;
@@ -196,6 +205,15 @@ const he: Translations = {
     addRod: '+ מוט תליה',
     addPartitions: '+ מחיצות',
     removePartitions: 'הסר מחיצות',
+    addPartition: '+ הוסף מחיצה',
+    removePartition: 'הסר מחיצה',
+    cellRight: 'תא ימני',
+    cellLeft: 'תא שמאלי',
+    partitionWarnAdd: (s, d, r) => `הוספת מחיצה תמחק את כל הפריטים הקיימים (${s} מדפים, ${d} מגירות, ${r} מוטות). האם להמשיך?`,
+    partitionWarnRemove: (a, b) => `הסרת המחיצה תמחק ${a} פריטים בתא ימני ו-${b} פריטים בתא שמאלי. האם להמשיך?`,
+    partitionConfirmAdd: 'הוסף ומחק פריטים',
+    partitionConfirmRemove: 'הסר ומחק',
+    cancel: 'ביטול',
     heightFromFloor: 'גובה מרצפה (ס"מ)',
     drawerHeight: 'גובה מגירה (ס"מ)',
     editBody: 'עריכת פנים גוף',
@@ -322,6 +340,15 @@ const en: Translations = {
     addRod: '+ Hanging Rod',
     addPartitions: '+ Partitions',
     removePartitions: 'Remove Partitions',
+    addPartition: '+ Add Partition',
+    removePartition: 'Remove Partition',
+    cellRight: 'Right cell',
+    cellLeft: 'Left cell',
+    partitionWarnAdd: (s, d, r) => `Adding a partition will delete all existing items (${s} shelves, ${d} drawers, ${r} rods). Continue?`,
+    partitionWarnRemove: (a, b) => `Removing the partition will delete ${a} items in the right cell and ${b} in the left cell. Continue?`,
+    partitionConfirmAdd: 'Add & Delete Items',
+    partitionConfirmRemove: 'Remove & Delete',
+    cancel: 'Cancel',
     heightFromFloor: 'Height from floor (cm)',
     drawerHeight: 'Drawer height (cm)',
     editBody: 'Edit Body Interior',

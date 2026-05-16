@@ -17,7 +17,7 @@ import {
 import { newItemId } from '../../core/interior/interiorUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
-import type { InteriorItem, InteriorById } from '../../types/interior';
+import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
 import type { Door, DoorById, Hinge } from '../../types/doors';
 
 // ── Partition helpers ─────────────────────────────────────────────────────────
@@ -85,6 +85,10 @@ export function useCabinet(): {
   calculate: (input: CabinetInput) => void;
   interiorById: InteriorById;
   setBoxInterior: (boxId: string, items: InteriorItem[]) => void;
+  cellInteriorById: CellInteriorById;
+  addPartition: (boxId: string) => void;
+  removePartition: (boxId: string) => void;
+  setCellItems: (boxId: string, cellIndex: number, items: InteriorItem[]) => void;
   doorsById: DoorById;
   displayNumbers: Map<string, string>;
   numFrontsPerBox: Map<string, number>;
@@ -100,12 +104,14 @@ export function useCabinet(): {
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
+  const [cellInteriorById, setCellInteriorById] = useState<CellInteriorById>({});
   const [doorsById, setDoorsById] = useState<DoorById>({});
   const [displayNumbers, setDisplayNumbers] = useState<Map<string, string>>(new Map());
   const [numFrontsPerBox, setNumFrontsPerBox] = useState<Map<string, number>>(new Map());
   const [partitionsById, setPartitionsById] = useState<Map<string, boolean>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
+  const cellInteriorRef = useRef<CellInteriorById>({});
   const doorsRef    = useRef<DoorById>({});
   const prevBoxesRef = useRef<Box[] | null>(null);
   const plinthRef = useRef<number>(0);
@@ -157,6 +163,53 @@ export function useCabinet(): {
     const boxes = prevBoxesRef.current ?? [];
     const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
     setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
+  }
+
+  function addPartition(boxId: string): void {
+    const newMap = new Map(partitionsRef.current);
+    newMap.set(boxId, true);
+    partitionsRef.current = newMap;
+    setPartitionsById(new Map(newMap));
+
+    // Clear regular items for this box
+    const newInterior = { ...interiorRef.current };
+    delete newInterior[boxId];
+    interiorRef.current = newInterior;
+    setInteriorById(newInterior);
+
+    // Initialize empty cell items (2 cells: right=0, left=1)
+    const newCellInterior = { ...cellInteriorRef.current, [boxId]: [[], []] as InteriorItem[][] };
+    cellInteriorRef.current = newCellInterior;
+    setCellInteriorById(newCellInterior);
+
+    const boxes = prevBoxesRef.current ?? [];
+    const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
+    setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
+  }
+
+  function removePartition(boxId: string): void {
+    const newMap = new Map(partitionsRef.current);
+    newMap.delete(boxId);
+    partitionsRef.current = newMap;
+    setPartitionsById(new Map(newMap));
+
+    // Clear cell items for this box
+    const newCellInterior = { ...cellInteriorRef.current };
+    delete newCellInterior[boxId];
+    cellInteriorRef.current = newCellInterior;
+    setCellInteriorById(newCellInterior);
+
+    const boxes = prevBoxesRef.current ?? [];
+    const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
+    setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
+  }
+
+  function setCellItems(boxId: string, cellIndex: number, items: InteriorItem[]): void {
+    const current = cellInteriorRef.current[boxId] ?? [[], []];
+    const updated: InteriorItem[][] = current.map((c, i) => i === cellIndex ? items : c);
+    const newCellInterior = { ...cellInteriorRef.current, [boxId]: updated };
+    cellInteriorRef.current = newCellInterior;
+    setCellInteriorById(newCellInterior);
   }
 
   // ── Door mutations ────────────────────────────────────────────────────────
@@ -391,6 +444,24 @@ export function useCabinet(): {
     }
     partitionsRef.current = newPartitionsMap;
     setPartitionsById(new Map(newPartitionsMap));
+
+    // ── Cell interior preservation ─────────────────────────────────────────
+    const stableCellMap = new Map<string, InteriorItem[][]>();
+    if (prevBoxes) {
+      for (const box of prevBoxes) {
+        if (box.level === 'plinth') continue;
+        const cellItems = cellInteriorRef.current[box.id];
+        if (cellItems) stableCellMap.set(boxStableKey(box), cellItems);
+      }
+    }
+    const newCellInteriorById: CellInteriorById = {};
+    for (const box of bodyBoxes) {
+      if (!newPartitionsMap.get(box.id)) continue;
+      newCellInteriorById[box.id] = stableCellMap.get(boxStableKey(box)) ?? [[], []];
+    }
+    cellInteriorRef.current = newCellInteriorById;
+    setCellInteriorById(newCellInteriorById);
+
     tBodyRef.current = tBody;
     baseCutsRef.current = cuts;
 
@@ -406,6 +477,7 @@ export function useCabinet(): {
   return {
     result, calculate,
     interiorById, setBoxInterior,
+    cellInteriorById, addPartition, removePartition, setCellItems,
     doorsById, displayNumbers, numFrontsPerBox,
     partitionsById, setBoxPartitions,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
