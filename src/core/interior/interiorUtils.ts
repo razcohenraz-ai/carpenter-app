@@ -189,27 +189,91 @@ export function defaultRodPlacement(
 
 // ── Equal shelf distribution ──────────────────────────────────────────────────
 // Shelves with isManuallyPositioned=true stay put.
-// All other shelves are spread evenly: position[i] = containerH × (i+1) / (N+1).
-// Non-shelf items are never touched.
+// Auto shelves are distributed evenly inside the largest free zone.
+// Free zones are computed by subtracting physical zones of drawers, rods and
+// manual shelves from [0, containerH]. Non-shelf items are never moved.
+
+interface Zone { lo: number; hi: number }
+
+function computeFreeZones(
+  blockers: InteriorItem[],
+  containerH: number,
+  shelfThickness: number,
+): Zone[] {
+  const occupied: Zone[] = [];
+  for (const item of blockers) {
+    if (item.type === 'drawer') {
+      occupied.push({ lo: item.heightFromFloor, hi: item.heightFromFloor + item.drawerHeight });
+    } else if (item.type === 'rod') {
+      occupied.push({ lo: item.heightFromFloor - 1.5, hi: item.heightFromFloor + 1.5 });
+    } else if (item.type === 'shelf') {
+      // Manual shelf: physical zone [pos, pos + thickness]
+      occupied.push({ lo: item.heightFromFloor, hi: item.heightFromFloor + shelfThickness });
+    }
+  }
+
+  // Clamp to [0, containerH] and drop zero/negative-width zones
+  const clamped = occupied
+    .map(z => ({ lo: Math.max(0, z.lo), hi: Math.min(containerH, z.hi) }))
+    .filter(z => z.hi > z.lo)
+    .sort((a, b) => a.lo - b.lo);
+
+  // Merge overlapping intervals
+  const merged: Zone[] = [];
+  for (const z of clamped) {
+    const last = merged[merged.length - 1];
+    if (!last || z.lo >= last.hi) {
+      merged.push({ lo: z.lo, hi: z.hi });
+    } else {
+      last.hi = Math.max(last.hi, z.hi);
+    }
+  }
+
+  // Gaps between merged intervals are the free zones
+  const free: Zone[] = [];
+  let cursor = 0;
+  for (const occ of merged) {
+    if (occ.lo > cursor) free.push({ lo: cursor, hi: occ.lo });
+    cursor = occ.hi;
+  }
+  if (cursor < containerH) free.push({ lo: cursor, hi: containerH });
+
+  // Fallback: if everything is occupied, treat the full container as free
+  return free.length > 0 ? free : [{ lo: 0, hi: containerH }];
+}
 
 export function redistributeShelves(
   items: InteriorItem[],
   containerH: number,
+  shelfThickness = 1.8,
 ): InteriorItem[] {
-  const shelves = items.filter((i): i is ShelfItem => i.type === 'shelf');
-  const others  = items.filter(i => i.type !== 'shelf');
-
-  const manual = shelves.filter(s => s.isManuallyPositioned === true);
-  const auto   = shelves.filter(s => s.isManuallyPositioned !== true);
+  const manual = items.filter(
+    (i): i is ShelfItem => i.type === 'shelf' && i.isManuallyPositioned === true,
+  );
+  const auto = items.filter(
+    (i): i is ShelfItem => i.type === 'shelf' && i.isManuallyPositioned !== true,
+  );
+  const others = items.filter(i => i.type !== 'shelf');
 
   if (auto.length === 0) return items;
 
-  // Sort by current position to minimise visual jumps on redistribution.
+  // Blockers: drawers, rods, and manual shelves
+  const freeZones = computeFreeZones([...others, ...manual], containerH, shelfThickness);
+
+  // Pick the largest free zone; on equal size prefer the higher zone (larger lo)
+  const largestZone = freeZones.reduce((best, z) =>
+    (z.hi - z.lo) > (best.hi - best.lo) ||
+    ((z.hi - z.lo) === (best.hi - best.lo) && z.lo > best.lo)
+      ? z : best,
+  );
+
+  // Sort auto shelves by current position to minimise visual jumps
   const sorted = [...auto].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
   const N = sorted.length;
+  const { lo, hi } = largestZone;
   const redistributed = sorted.map((s, i) => ({
     ...s,
-    heightFromFloor: containerH * (i + 1) / (N + 1),
+    heightFromFloor: lo + (hi - lo) * (i + 1) / (N + 1),
   }));
 
   return [...others, ...manual, ...redistributed];

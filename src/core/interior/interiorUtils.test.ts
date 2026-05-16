@@ -294,7 +294,9 @@ describe('addShelfRedistributed', () => {
     expect(positions[2]).toBeCloseTo(135);
   });
 
-  it('ה: manual shelf stays, auto shelves redistribute around it', () => {
+  it('ה: manual shelf stays, auto shelves redistribute in largest free zone above it', () => {
+    // Manual shelf at 50 occupies [50, 51.8]. Free zones: [0,50] and [51.8,180].
+    // Largest zone: [51.8, 180] (size 128.2). Two auto shelves divide it evenly.
     const initial: InteriorItem[] = [
       { type: 'shelf', id: 'a', heightFromFloor: 50, isManuallyPositioned: true },
       { type: 'shelf', id: 'b', heightFromFloor: 120, isManuallyPositioned: false },
@@ -308,8 +310,8 @@ describe('addShelfRedistributed', () => {
       .map(i => i.heightFromFloor)
       .sort((a, b) => a - b);
     expect(autoPositions).toHaveLength(2);
-    expect(autoPositions[0]).toBeCloseTo(60);
-    expect(autoPositions[1]).toBeCloseTo(120);
+    expect(autoPositions[0]).toBeCloseTo(51.8 + 128.2 / 3);  // ≈ 94.5
+    expect(autoPositions[1]).toBeCloseTo(51.8 + 128.2 * 2 / 3); // ≈ 137.3
   });
 
   it('ח: drawer stays put when shelf added', () => {
@@ -318,6 +320,65 @@ describe('addShelfRedistributed', () => {
     const foundDrawer = result.find(i => i.id === 'dr')!;
     expect(foundDrawer.type).toBe('drawer');
     expect(foundDrawer.heightFromFloor).toBe(30);
+  });
+});
+
+describe('redistributeShelves — free-zone awareness', () => {
+  it('bug: shelf no longer lands inside drawer (body 88.2, drawer at 34.1 h20)', () => {
+    // Drawer zone [34.1, 54.1]. Free zones: [0,34.1] and [54.1,88.2] — equal size.
+    // Tiebreaker: prefer higher zone → [54.1, 88.2]. Shelf at center = 71.15.
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 34.1, drawerHeight: 20 };
+    const result = addShelfRedistributed([drawer], 88.2);
+    const shelf = result.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeGreaterThanOrEqual(54.1);
+    expect(shelf.heightFromFloor).toBeCloseTo((54.1 + 88.2) / 2); // 71.15
+  });
+
+  it('ד: rod at 170 → shelf lands in large zone [0, 168.5]', () => {
+    // Rod zone [168.5, 171.5]. Largest free zone [0, 168.5].
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 170 };
+    const result = addShelfRedistributed([rod], 180);
+    const shelf = result.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeCloseTo(168.5 / 2); // 84.25
+  });
+
+  it('drawer + shelf → redistribution moves shelf above drawer', () => {
+    // Body 180, drawer at [60,80]. Free zones: [0,60] and [80,180].
+    // Largest: [80,180]. One auto shelf → center = 130.
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const shelf: InteriorItem  = { type: 'shelf',  id: 's', heightFromFloor: 90 };
+    const result = redistributeShelves([drawer, shelf], 180);
+    const found = result.find(i => i.id === 's')!;
+    expect(found.heightFromFloor).toBeCloseTo(130);
+  });
+
+  it('no blockers → same even distribution as before', () => {
+    let items = addShelfRedistributed([], 180);
+    items = addShelfRedistributed(items, 180);
+    items = addShelfRedistributed(items, 180);
+    const positions = items
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(45);
+    expect(positions[1]).toBeCloseTo(90);
+    expect(positions[2]).toBeCloseTo(135);
+  });
+
+  it('two drawers → shelves land in largest gap between them', () => {
+    // Body 200. Drawers at [10,30] and [150,170]. Gaps: [0,10], [30,150], [170,200].
+    // Largest: [30,150] (size 120). Two shelves: 30+40=70 and 30+80=110.
+    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
+    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 150, drawerHeight: 20 };
+    let items: InteriorItem[] = [d1, d2];
+    items = addShelfRedistributed(items, 200);
+    items = addShelfRedistributed(items, 200);
+    const positions = items
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(70);
+    expect(positions[1]).toBeCloseTo(110);
   });
 });
 
