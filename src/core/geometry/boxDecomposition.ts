@@ -79,6 +79,7 @@ export function decomposeBoxes(
   plinthHeight: number = 0,
   doorsPerColumn: "auto" | 1 | 2 | 3 = "auto",
   middleDoorH?: number,
+  envelopeTopH: number = 0,
 ): Box[] {
   if (plinthHeight > 0 && plinthHeight >= H) {
     throw new Error(`plinthHeight (${plinthHeight}) must be less than H (${H})`);
@@ -224,7 +225,7 @@ export function decomposeBoxes(
   return protos.map((p, i): Box => ({
     id: `box_${i}`,
     W: p.W,
-    H: p.H,
+    H: (envelopeTopH > 0 && (p.level === 'top' || p.level === 'single')) ? p.H - envelopeTopH : p.H,
     D: p.D,
     position: p.position,
     level: p.level,

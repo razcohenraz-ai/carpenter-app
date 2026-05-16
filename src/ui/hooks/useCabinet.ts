@@ -273,7 +273,8 @@ export function useCabinet(): {
     const innerW = hasShell ? W - 2 * tFront : W;
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+    const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
+    const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
     const cuts  = calcCuts('cabinet', innerW, H, D, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
 
@@ -336,11 +337,9 @@ export function useCabinet(): {
 
     for (const box of bodyBoxes) {
       const coversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
-      const isTopLevel = box.level === 'top' || box.level === 'single';
-      const effectiveBoxH = (hasEnvelopeTop && hasShell && isTopLevel) ? box.H - tFront : box.H;
       const isBottomMost = box.level === 'bottom' || box.level === 'single';
       const hasBottomGap = !(isBottomMost && plinth > 0 && !coversSkirt);
-      const panelH = getDoorHeight(effectiveBoxH, doorGapMm, hasBottomGap);
+      const panelH = getDoorHeight(box.H, doorGapMm, hasBottomGap);
 
       const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
       const frontW = getDoorWidth(box.W, numFronts, doorGapMm);

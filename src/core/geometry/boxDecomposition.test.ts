@@ -383,4 +383,50 @@ describe("decomposeBoxes", () => {
     expect(mergedBoxes).toHaveLength(2); // W=160 → 2 עמודות
     mergedBoxes.forEach(b => expect(b.internalShelves).toEqual([220]));
   });
+
+  // ── מעטפת תקרה (envelopeTopH) ────────────────────────────────────────────────
+
+  it("envelopeTopH=0 (ברירת מחדל) — לא משנה גובה שום גוף", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 0, "auto", undefined, 0);
+    expect(boxes[0]!.H).toBe(180);
+  });
+
+  it("קופסה בודדת (single) עם envelopeTopH=1.8 — גובהה יורד ב-1.8", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 0, "auto", undefined, 1.8);
+    const single = boxes.find(b => b.level === "single")!;
+    expect(single.H).toBeCloseTo(178.2, 5);
+  });
+
+  it("פיצול 2 קומות: גוף עליון (top) מוקטן, תחתון (bottom) לא מושפע", () => {
+    // H=240, lowerDoorH=100 → top=140, bottom=100
+    const boxes = decomposeBoxes(50, 240, 60, 100, 0, "auto", undefined, 1.8);
+    const top    = boxes.find(b => b.level === "top")!;
+    const bottom = boxes.find(b => b.level === "bottom")!;
+    expect(top.H).toBeCloseTo(138.2, 5);  // 140 - 1.8
+    expect(bottom.H).toBe(100);           // לא מושפע
+  });
+
+  it("פיצול 3 קומות: רק top מוקטן, middle ו-bottom לא מושפעים", () => {
+    // H=240, plinth=5, lo=80, mid=80 → top=80, mid=80, bot=75
+    const boxes = decomposeBoxes(50, 240, 60, 80, 5, 3, 80, 1.8);
+    const top    = boxes.find(b => b.level === "top")!;
+    const mid    = boxes.find(b => b.level === "middle")!;
+    const bottom = boxes.find(b => b.level === "bottom")!;
+    expect(top.H).toBeCloseTo(78.2, 5);   // 80 - 1.8
+    expect(mid.H).toBe(80);               // לא מושפע
+    expect(bottom.H).toBe(75);            // לא מושפע
+  });
+
+  it("צוקל לא מושפע מ-envelopeTopH", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 10, "auto", undefined, 1.8);
+    const plinth = boxes.find(b => b.level === "plinth")!;
+    expect(plinth.H).toBe(10);
+  });
+
+  it("W>100 עם envelopeTopH: שתי קופסאות single מוקטנות יחד", () => {
+    const boxes = decomposeBoxes(150, 180, 60, undefined, 0, "auto", undefined, 1.8);
+    const singles = boxes.filter(b => b.level === "single");
+    expect(singles).toHaveLength(2);
+    singles.forEach(b => expect(b.H).toBeCloseTo(178.2, 5));
+  });
 });
