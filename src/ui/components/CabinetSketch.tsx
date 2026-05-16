@@ -2,8 +2,7 @@ import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
 import styles from './CabinetSketch.module.css';
-import type { InteriorById } from '../../types/interior';
-import type { DrawerItem } from '../../types/interior';
+import type { InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 
 interface Props {
   W: string;
@@ -14,12 +13,14 @@ interface Props {
   doorsPerColumn?: string;
   middleDoorH?: string;
   interiorById?: InteriorById | undefined;
+  cellInteriorById?: CellInteriorById;
+  partitionsById?: Map<string, boolean>;
   hasShell?: boolean;
   frontMaterialThickness?: number;
   hasEnvelopeTop?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, hasShell, frontMaterialThickness, hasEnvelopeTop }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -174,6 +175,54 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             }
             return null;
           });
+        })}
+
+        {/* Cell interior items for partitioned boxes */}
+        {cellInteriorById && partitionsById && Object.entries(cellInteriorById).map(([boxId, cells]) => {
+          if (!partitionsById.get(boxId)) return null;
+          const rect = geo.boxSvgRects[boxId];
+          if (!rect) return null;
+
+          const partitionX = rect.x + rect.w / 2;
+          const toSvgY = (h: number) => rect.y + rect.h - h * geo.scale;
+
+          return (
+            <g key={`${boxId}-cells`}>
+              <line
+                x1={partitionX} y1={rect.y}
+                x2={partitionX} y2={rect.y + rect.h}
+                className={styles.partitionLine}
+              />
+              {cells.flatMap((cellItems, ci) => {
+                const xLeft  = ci === 0 ? partitionX : rect.x;
+                const xRight = ci === 0 ? rect.x + rect.w : partitionX;
+                return cellItems.map(item => {
+                  if (item.type === 'shelf') {
+                    const y = toSvgY(item.heightFromFloor);
+                    return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.shelfLine} />;
+                  }
+                  if (item.type === 'rod') {
+                    const y = toSvgY(item.heightFromFloor);
+                    return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.rodLine} />;
+                  }
+                  if (item.type === 'drawer') {
+                    const yBottom = toSvgY(item.heightFromFloor);
+                    const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
+                    return (
+                      <rect
+                        key={item.id}
+                        x={xLeft + 2} y={yTop}
+                        width={xRight - xLeft - 4}
+                        height={yBottom - yTop}
+                        className={styles.drawerRect}
+                      />
+                    );
+                  }
+                  return null;
+                });
+              })}
+            </g>
+          );
         })}
 
         {/* Width label */}

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
 import {
-  defaultShelfPlacement,
+  addShelfRedistributed,
+  redistributeShelves,
   defaultDrawerPlacement,
   defaultRodPlacement,
   validateInterior,
@@ -25,8 +26,10 @@ interface Props {
   tBody: number;
 }
 
-const SKETCH_W = 180;
-const SKETCH_H = 380;
+const SKETCH_W      = 180;
+const SKETCH_H      = 380;
+const CELL_SKETCH_W = 130;
+const CELL_SKETCH_H = 260;
 
 export default function BoxInteriorEditor({
   box, items, onChange, onBack, numFronts, hasPartitions,
@@ -68,18 +71,24 @@ export default function BoxInteriorEditor({
     onChange(next);
   }
 
-  function addShelf(): void { update([...localItems, defaultShelfPlacement(localItems, bodyH)]); }
+  function addShelf(): void { update(addShelfRedistributed(localItems, bodyH)); }
   function addDrawer(): void { update([...localItems, defaultDrawerPlacement(localItems, bodyH)]); }
   function addRod(): void { update([...localItems, defaultRodPlacement(bodyH, localItems)]); }
 
   function deleteItem(id: string): void {
-    update(localItems.filter(i => i.id !== id));
+    const filtered = localItems.filter(i => i.id !== id);
+    const wasShelf = localItems.some(i => i.id === id && i.type === 'shelf');
+    update(wasShelf ? redistributeShelves(filtered, bodyH) : filtered);
   }
 
   function updateHeight(id: string, raw: string): void {
     const h = parseFloat(raw);
     if (isNaN(h)) return;
-    update(localItems.map(i => i.id === id ? { ...i, heightFromFloor: h } : i));
+    update(localItems.map(i => {
+      if (i.id !== id) return i;
+      if (i.type === 'shelf') return { ...i, heightFromFloor: h, isManuallyPositioned: true };
+      return { ...i, heightFromFloor: h };
+    }));
   }
 
   function updateDrawerH(id: string, raw: string): void {
@@ -91,7 +100,11 @@ export default function BoxInteriorEditor({
   }
 
   function onItemMove(id: string, newH: number): void {
-    update(localItems.map(i => i.id === id ? { ...i, heightFromFloor: newH } : i));
+    update(localItems.map(i => {
+      if (i.id !== id) return i;
+      if (i.type === 'shelf') return { ...i, heightFromFloor: newH, isManuallyPositioned: true };
+      return { ...i, heightFromFloor: newH };
+    }));
   }
 
   // ── cell item helpers ─────────────────────────────────────────────────────
@@ -104,7 +117,7 @@ export default function BoxInteriorEditor({
 
   function addCellShelf(ci: number): void {
     const c = localCellItems[ci] ?? [];
-    updateCell(ci, [...c, defaultShelfPlacement(c, bodyH)]);
+    updateCell(ci, addShelfRedistributed(c, bodyH));
   }
   function addCellDrawer(ci: number): void {
     const c = localCellItems[ci] ?? [];
@@ -116,15 +129,20 @@ export default function BoxInteriorEditor({
   }
 
   function deleteCellItem(ci: number, id: string): void {
-    updateCell(ci, (localCellItems[ci] ?? []).filter(i => i.id !== id));
+    const current = localCellItems[ci] ?? [];
+    const filtered = current.filter(i => i.id !== id);
+    const wasShelf = current.some(i => i.id === id && i.type === 'shelf');
+    updateCell(ci, wasShelf ? redistributeShelves(filtered, bodyH) : filtered);
   }
 
   function updateCellHeight(ci: number, id: string, raw: string): void {
     const h = parseFloat(raw);
     if (isNaN(h)) return;
-    updateCell(ci, (localCellItems[ci] ?? []).map(i =>
-      i.id === id ? { ...i, heightFromFloor: h } : i,
-    ));
+    updateCell(ci, (localCellItems[ci] ?? []).map(i => {
+      if (i.id !== id) return i;
+      if (i.type === 'shelf') return { ...i, heightFromFloor: h, isManuallyPositioned: true };
+      return { ...i, heightFromFloor: h };
+    }));
   }
 
   function updateCellDrawerH(ci: number, id: string, raw: string): void {
@@ -133,6 +151,14 @@ export default function BoxInteriorEditor({
     updateCell(ci, (localCellItems[ci] ?? []).map(i =>
       i.id === id && i.type === 'drawer' ? { ...i, drawerHeight: h } : i,
     ));
+  }
+
+  function onCellItemMove(ci: number, id: string, newH: number): void {
+    updateCell(ci, (localCellItems[ci] ?? []).map(i => {
+      if (i.id !== id) return i;
+      if (i.type === 'shelf') return { ...i, heightFromFloor: newH, isManuallyPositioned: true };
+      return { ...i, heightFromFloor: newH };
+    }));
   }
 
   // ── partition action handlers ─────────────────────────────────────────────
@@ -358,6 +384,20 @@ export default function BoxInteriorEditor({
                     <span className={styles.cellDims}>
                       {cellW.toFixed(1)} × {bodyH} ס"מ
                     </span>
+                  </div>
+
+                  <div className={styles.cellSketch}>
+                    <BoxBodySketch
+                      bodyH={bodyH}
+                      bodyW={cellW}
+                      bodyD={box.D}
+                      items={cellItemList}
+                      svgWidth={CELL_SKETCH_W}
+                      svgHeight={CELL_SKETCH_H}
+                      showLabels={false}
+                      onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
+                      numPartitions={0}
+                    />
                   </div>
 
                   <div className={styles.addRow}>

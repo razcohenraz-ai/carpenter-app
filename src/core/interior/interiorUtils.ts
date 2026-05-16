@@ -187,6 +187,47 @@ export function defaultRodPlacement(
   return { type: 'rod', id: newItemId(), heightFromFloor: (bestLo + bestHi) / 2 };
 }
 
+// ── Equal shelf distribution ──────────────────────────────────────────────────
+// Shelves with isManuallyPositioned=true stay put.
+// All other shelves are spread evenly: position[i] = containerH × (i+1) / (N+1).
+// Non-shelf items are never touched.
+
+export function redistributeShelves(
+  items: InteriorItem[],
+  containerH: number,
+): InteriorItem[] {
+  const shelves = items.filter((i): i is ShelfItem => i.type === 'shelf');
+  const others  = items.filter(i => i.type !== 'shelf');
+
+  const manual = shelves.filter(s => s.isManuallyPositioned === true);
+  const auto   = shelves.filter(s => s.isManuallyPositioned !== true);
+
+  if (auto.length === 0) return items;
+
+  // Sort by current position to minimise visual jumps on redistribution.
+  const sorted = [...auto].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+  const N = sorted.length;
+  const redistributed = sorted.map((s, i) => ({
+    ...s,
+    heightFromFloor: containerH * (i + 1) / (N + 1),
+  }));
+
+  return [...others, ...manual, ...redistributed];
+}
+
+export function addShelfRedistributed(
+  items: InteriorItem[],
+  containerH: number,
+): InteriorItem[] {
+  const newShelf: ShelfItem = {
+    type: 'shelf',
+    id: newItemId(),
+    heightFromFloor: 0, // placeholder; redistributeShelves will set the real position
+    isManuallyPositioned: false,
+  };
+  return redistributeShelves([...items, newShelf], containerH);
+}
+
 // ── Validation (warnings, never blocking) ────────────────────────────────────
 
 export function validateInterior(

@@ -10,13 +10,15 @@ interface Props {
   items: InteriorItem[];
   svgWidth?: number;
   svgHeight?: number;
+  hasPartition?: boolean;
+  cellItems?: InteriorItem[][];
   onClick: () => void;
 }
 
 const DEFAULT_W = 70;
 const DEFAULT_H = 110;
 
-export default function BoxThumbnail({ box, items, svgWidth = DEFAULT_W, svgHeight = DEFAULT_H, onClick }: Props): React.JSX.Element {
+export default function BoxThumbnail({ box, items, svgWidth = DEFAULT_W, svgHeight = DEFAULT_H, hasPartition, cellItems, onClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   const levelLabels: Record<string, string> = {
@@ -41,10 +43,11 @@ export default function BoxThumbnail({ box, items, svgWidth = DEFAULT_W, svgHeig
     <button className={styles.thumb} onClick={onClick} title={t.interior.editBody}>
       <BoxBodySketch
         bodyH={box.H}
-        items={items}
+        items={hasPartition && cellItems ? cellItems.flat() : items}
         svgWidth={svgWidth}
         svgHeight={svgHeight}
         showLabels={false}
+        numPartitions={hasPartition ? 1 : 0}
       />
       <span className={styles.label}>{label}</span>
       <span className={styles.dims}>

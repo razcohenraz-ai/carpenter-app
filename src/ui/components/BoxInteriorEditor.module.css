@@ -316,3 +316,12 @@
   color: var(--color-text-muted);
 }
 
+.cellSketch {
+  display: flex;
+  justify-content: center;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-xs);
+}
+

@@ -8,6 +8,7 @@ interface BaseInteriorItem {
 export interface ShelfItem extends BaseInteriorItem {
   type: 'shelf';
   heightFromFloor: number; // cm from body bottom
+  isManuallyPositioned?: boolean; // true once user has moved this shelf by hand
 }
 
 export interface DrawerItem extends BaseInteriorItem {

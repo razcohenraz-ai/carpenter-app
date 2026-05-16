@@ -529,6 +529,7 @@ export default function CabinetForm(): React.JSX.Element {
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
               interiorById={result ? interiorById : undefined}
+              {...(result ? { cellInteriorById, partitionsById } : {})}
               hasShell={form.hasShell}
               frontMaterialThickness={frontThicknessCm}
               {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
@@ -559,6 +560,8 @@ export default function CabinetForm(): React.JSX.Element {
                   items={interiorById[box.id] ?? []}
                   svgWidth={w}
                   svgHeight={h}
+                  hasPartition={partitionsById.get(box.id) ?? false}
+                  {...(cellInteriorById[box.id] ? { cellItems: cellInteriorById[box.id] } : {})}
                   onClick={() => openEditor(box)}
                 />
                 );

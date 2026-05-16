@@ -8,6 +8,8 @@ import {
   defaultRodPlacement,
   validateInterior,
   filterItemsForHeight,
+  redistributeShelves,
+  addShelfRedistributed,
 } from './interiorUtils';
 import type { BodyLevel, InteriorItem } from '../../types/interior';
 import type { Box } from '../../types/geometry';
@@ -254,6 +256,124 @@ describe('validateInterior', () => {
       { type: 'drawer', id: 'b', heightFromFloor: 53, drawerHeight: 20 }, // [53,73] 3cm gap
     ];
     expect(validateInterior(items, 100).filter(w => w.kind === 'drawerOverlap')).toHaveLength(0);
+  });
+});
+
+// ── redistributeShelves / addShelfRedistributed ───────────────────────────────
+
+describe('addShelfRedistributed', () => {
+  it('א: first shelf → bodyH/2', () => {
+    const result = addShelfRedistributed([], 180);
+    const shelves = result.filter(i => i.type === 'shelf');
+    expect(shelves).toHaveLength(1);
+    expect(shelves[0]!.heightFromFloor).toBeCloseTo(90);
+  });
+
+  it('ב: second shelf → 60 and 120', () => {
+    const after1 = addShelfRedistributed([], 180);
+    const after2 = addShelfRedistributed(after1, 180);
+    const positions = after2
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions).toHaveLength(2);
+    expect(positions[0]).toBeCloseTo(60);
+    expect(positions[1]).toBeCloseTo(120);
+  });
+
+  it('ג: third shelf → 45, 90, 135', () => {
+    let items = addShelfRedistributed([], 180);
+    items = addShelfRedistributed(items, 180);
+    items = addShelfRedistributed(items, 180);
+    const positions = items
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(45);
+    expect(positions[1]).toBeCloseTo(90);
+    expect(positions[2]).toBeCloseTo(135);
+  });
+
+  it('ה: manual shelf stays, auto shelves redistribute around it', () => {
+    const initial: InteriorItem[] = [
+      { type: 'shelf', id: 'a', heightFromFloor: 50, isManuallyPositioned: true },
+      { type: 'shelf', id: 'b', heightFromFloor: 120, isManuallyPositioned: false },
+    ];
+    const result = addShelfRedistributed(initial, 180);
+    const shelves = result.filter(i => i.type === 'shelf');
+    const manualShelf = shelves.find(i => i.id === 'a');
+    expect(manualShelf!.heightFromFloor).toBeCloseTo(50); // unchanged
+    const autoPositions = shelves
+      .filter(i => i.id !== 'a')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(autoPositions).toHaveLength(2);
+    expect(autoPositions[0]).toBeCloseTo(60);
+    expect(autoPositions[1]).toBeCloseTo(120);
+  });
+
+  it('ח: drawer stays put when shelf added', () => {
+    const drawer: InteriorItem = { type: 'drawer', id: 'dr', heightFromFloor: 30, drawerHeight: 20 };
+    const result = addShelfRedistributed([drawer], 180);
+    const foundDrawer = result.find(i => i.id === 'dr')!;
+    expect(foundDrawer.type).toBe('drawer');
+    expect(foundDrawer.heightFromFloor).toBe(30);
+  });
+});
+
+describe('redistributeShelves', () => {
+  it('ז: delete middle shelf from 3 → remaining 2 split evenly', () => {
+    const items: InteriorItem[] = [
+      { type: 'shelf', id: 'a', heightFromFloor: 45 },
+      { type: 'shelf', id: 'b', heightFromFloor: 90 },
+      { type: 'shelf', id: 'c', heightFromFloor: 135 },
+    ];
+    const filtered = items.filter(i => i.id !== 'b');
+    const result = redistributeShelves(filtered, 180);
+    const positions = result
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(60);
+    expect(positions[1]).toBeCloseTo(120);
+  });
+
+  it('deleted manual shelf: remaining auto shelves redistribute normally', () => {
+    const items: InteriorItem[] = [
+      { type: 'shelf', id: 'a', heightFromFloor: 50, isManuallyPositioned: true },
+      { type: 'shelf', id: 'b', heightFromFloor: 60 },
+      { type: 'shelf', id: 'c', heightFromFloor: 120 },
+    ];
+    const filtered = items.filter(i => i.id !== 'a');
+    const result = redistributeShelves(filtered, 180);
+    const positions = result
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(60);
+    expect(positions[1]).toBeCloseTo(120);
+  });
+
+  it('only manual shelves → no redistribution, items unchanged', () => {
+    const items: InteriorItem[] = [
+      { type: 'shelf', id: 'a', heightFromFloor: 30, isManuallyPositioned: true },
+      { type: 'shelf', id: 'b', heightFromFloor: 80, isManuallyPositioned: true },
+    ];
+    const result = redistributeShelves(items, 180);
+    const positions = result
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions[0]).toBeCloseTo(30);
+    expect(positions[1]).toBeCloseTo(80);
+  });
+
+  it('rod stays put when shelf redistributed', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 160 };
+    const shelf: InteriorItem = { type: 'shelf', id: 's', heightFromFloor: 90 };
+    const result = redistributeShelves([rod, shelf], 180);
+    const foundRod = result.find(i => i.id === 'r')!;
+    expect(foundRod.heightFromFloor).toBe(160);
   });
 });
 
