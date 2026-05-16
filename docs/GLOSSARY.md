@@ -20,7 +20,7 @@
 לוח אנכי בתוך גוף, בין שתי חזיתות סמוכות. חלק מהקורפוס. מחומר bodyMaterial. position=0.5 (אמצע) בשלב 1.
 
 ### BoxCell / תא
-חלל עצמאי בתוך גוף שיש בו מחיצה. כל תא מקבל פריטים פנימיים (מדפים, מגירות, מוטות) משלו. מידות התא: W_cell = (box.W - tBody) / 2, H_cell = box.H, D_cell = box.D.
+חלל עצמאי בתוך גוף שיש בו מחיצה. כל תא מקבל פריטים פנימיים (מדפים, מגירות, מוטות) משלו. מידות התא: W_cell = (box.W - tBody) / 2, H_cell = box.H, D_cell = box.D. תא 0 = ימני, תא 1 = שמאלי.
 
 ### Plinth / צוקל / סוקל
 בסיס מבני מתחת לארון. גוף `level='plinth'` — ללא דלתות ופרזולים.
@@ -66,6 +66,15 @@
 
 ### hasInternalPartitions
 `boolean` על Box — האם הגוף מכיל מחיצות אנכיות פנימיות (שהמשתמש הוסיף).
+
+### CellInteriorById
+`Record<string, InteriorItem[][]>` — מפה מ-Box.id לפריטים פנימיים של תאים. הערך הוא מערך של שני מערכים: `[rightCellItems, leftCellItems]`. מקביל ל-`InteriorById` אך לגופים עם מחיצה.
+
+### isManuallyPositioned
+שדה `boolean?` על `ShelfItem`. `true` לאחר שהמשתמש גרר את המדף או שינה את גובהו בשדה. מדף כזה נשאר במקומו כשמדפים אחרים מתחלקים מחדש עקב הוספה/מחיקה.
+
+### redistributeShelves
+פונקציה ב-`interiorUtils.ts` שמחלקת שווה את כל המדפים עם `isManuallyPositioned !== true` לפי `H × (i+1) / (N+1)`. מדפים ידניים ופריטים שאינם מדפים לא נגעים.
 
 ### thicknessOverride
 דריסה ידנית של MaterialId לחזית בודדת, עוקפת את frontMaterial הגלובלי.
