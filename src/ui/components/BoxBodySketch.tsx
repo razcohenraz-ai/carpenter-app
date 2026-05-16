@@ -12,6 +12,7 @@ interface Props {
   showLabels?: boolean;
   showDimensions?: boolean;
   onItemMove?: (id: string, newH: number) => void;
+  numPartitions?: number;  // number of vertical partition lines to draw
 }
 
 interface DragState {
@@ -56,6 +57,7 @@ function computeDragBounds(
 export default function BoxBodySketch({
   bodyH, bodyW, bodyD, items, svgWidth, svgHeight,
   showLabels = false, showDimensions = false, onItemMove,
+  numPartitions = 0,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -64,12 +66,16 @@ export default function BoxBodySketch({
   const padRight = showDimensions ? DIM_PAD_RIGHT : PAD;
   const drawW = svgWidth  - PAD      - padRight;
   const drawH = svgHeight - padTop   - PAD;
-  const scale = drawH / Math.max(bodyH, 1);
 
-  const bX = PAD;
-  const bY = padTop;
-  const bW = drawW;
-  const bH = drawH;
+  // Uniform scale: fit the box inside drawW × drawH while preserving aspect ratio.
+  const scaleH = drawH / Math.max(bodyH, 1);
+  const scaleW = bodyW ? drawW / Math.max(bodyW, 1) : scaleH;
+  const scale  = Math.min(scaleW, scaleH);
+
+  const bW = bodyW ? bodyW * scale : drawW;
+  const bH = bodyH * scale;
+  const bX = PAD + (drawW - bW) / 2;
+  const bY = padTop + (drawH - bH) / 2;
 
   const toY = (h: number) => bY + bH - h * scale;
 
@@ -228,6 +234,18 @@ export default function BoxBodySketch({
         }
 
         return null;
+      })}
+
+      {numPartitions > 0 && Array.from({ length: numPartitions }, (_, i) => {
+        const x = bX + bW * (i + 1) / (numPartitions + 1);
+        return (
+          <line
+            key={`partition-${i}`}
+            x1={x} y1={bY}
+            x2={x} y2={bY + bH}
+            className={styles.partitionLine}
+          />
+        );
       })}
 
       {showDimensions && (() => {

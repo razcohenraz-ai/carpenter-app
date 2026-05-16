@@ -16,12 +16,15 @@ interface Props {
   items: InteriorItem[];
   onChange: (items: InteriorItem[]) => void;
   onBack: () => void;
+  numFronts: number;
+  hasPartitions: boolean;
+  onTogglePartitions: () => void;
 }
 
 const SKETCH_W = 180;
 const SKETCH_H = 380;
 
-export default function BoxInteriorEditor({ box, items, onChange, onBack }: Props): React.JSX.Element {
+export default function BoxInteriorEditor({ box, items, onChange, onBack, numFronts, hasPartitions, onTogglePartitions }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
 
@@ -139,6 +142,7 @@ export default function BoxInteriorEditor({ box, items, onChange, onBack }: Prop
             showLabels
             showDimensions
             onItemMove={onItemMove}
+            numPartitions={hasPartitions ? numFronts - 1 : 0}
           />
         </div>
 
@@ -155,6 +159,14 @@ export default function BoxInteriorEditor({ box, items, onChange, onBack }: Prop
             <button className={styles.addBtn} onClick={addRod}>
               {t.interior.addRod}
             </button>
+            {numFronts > 1 && (
+              <button
+                className={`${styles.addBtn} ${hasPartitions ? styles.addBtnActive : ''}`}
+                onClick={onTogglePartitions}
+              >
+                {hasPartitions ? t.interior.removePartitions : t.interior.addPartitions}
+              </button>
+            )}
           </div>
 
           {/* Items list */}

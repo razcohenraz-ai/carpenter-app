@@ -98,7 +98,7 @@ export default function DoorBodySketch({
           <line x1={dX + dW} y1={wArrowY - 4} x2={dX + dW} y2={wArrowY + 4} className={styles.dimLine} />
           <text x={dX + dW / 2} y={wArrowY - 3} textAnchor="middle" dominantBaseline="auto"
             className={styles.dimLabel}>
-            {Math.round(door.width)} ס"מ
+            {door.width.toFixed(1)} ס"מ
           </text>
 
           {/* Height arrow — spans full visual height */}
@@ -111,7 +111,7 @@ export default function DoorBodySketch({
             transform={`rotate(-90, ${hArrowX + 10}, ${dY + (dH + dSkirt) / 2})`}
             className={styles.dimLabel}
           >
-            {Math.round(visualH)} ס"מ
+            {visualH.toFixed(1)} ס"מ
           </text>
 
           {/* Thickness indicator */}

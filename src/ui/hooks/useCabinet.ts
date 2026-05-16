@@ -9,6 +9,10 @@ import {
   defaultHingeSide,
   assignDoorDisplayNumbers,
   shouldCoverSkirt,
+  getDoorWidth,
+  getDoorHeight,
+  makeDoorId,
+  salonHingeSide,
 } from '../../core/doors/doorUtils';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { getMaterial } from '../../catalog';
@@ -16,17 +20,58 @@ import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { InteriorItem, InteriorById } from '../../types/interior';
 import type { Door, DoorById, Hinge } from '../../types/doors';
 
+// ── Partition helpers ─────────────────────────────────────────────────────────
+
+function buildPartitionCutLabel(box: Box): string {
+  const parts: string[] = ['מחיצה פנימית'];
+  const levelMap: Record<string, string> = { top: 'עליונה', middle: 'אמצעית', bottom: 'תחתונה' };
+  if (box.level !== 'single' && levelMap[box.level]) parts.push(levelMap[box.level]!);
+  if (box.position === 'left') parts.push('שמאל');
+  else if (box.position === 'right') parts.push('ימין');
+  else if (box.unitIndex !== undefined) parts.push(`יחידה ${box.unitIndex}`);
+  return parts.join(' — ');
+}
+
+function computePartitionCuts(
+  boxes: Box[],
+  nfMap: Map<string, number>,
+  pMap: Map<string, boolean>,
+  tBodyCm: number,
+): CutItem[] {
+  const cuts: CutItem[] = [];
+  for (const box of boxes) {
+    if (box.level === 'plinth') continue;
+    if (!pMap.get(box.id)) continue;
+    const nf = nfMap.get(box.id) ?? 1;
+    const count = nf - 1;
+    if (count <= 0) continue;
+    cuts.push({
+      name: buildPartitionCutLabel(box),
+      qty: count,
+      w: box.D * 10,
+      h: box.H * 10,
+      group: 'body',
+      note: `${Math.round(tBodyCm * 10)}mm`,
+    });
+  }
+  return cuts;
+}
+
 export interface CabinetInput {
   W: number;
   H: number;
   D: number;
   hasShell: boolean;
+  hasEnvelopeTop: boolean;
   bodyMaterialId: MaterialId;
+  frontMaterialId: MaterialId;
   plinth: number;
   doorCoversPlinth: boolean;
   lowerDoorH: number | undefined;
   middleDoorH: number | undefined;
   doorsPerColumn: 'auto' | 1 | 2 | 3;
+  doorGapMm: number;
+  maxDoorWidth: number;
 }
 
 export interface CabinetResult {
@@ -42,34 +87,46 @@ export function useCabinet(): {
   setBoxInterior: (boxId: string, items: InteriorItem[]) => void;
   doorsById: DoorById;
   displayNumbers: Map<string, string>;
-  setDoorHingeSide: (boxId: string, side: 'left' | 'right') => void;
-  setDoorHingeCount: (boxId: string, count: 2 | 3 | 4 | 'auto') => void;
-  setHingeManual: (boxId: string, hingeId: string, pos: number) => void;
-  resetHingeToAuto: (boxId: string, hingeId: string) => void;
-  setDoorHasDoor: (boxId: string, hasDoor: boolean) => void;
-  setDoorThickness: (boxId: string, materialId: string) => void;
+  numFrontsPerBox: Map<string, number>;
+  partitionsById: Map<string, boolean>;
+  setBoxPartitions: (boxId: string, value: boolean) => void;
+  setDoorHingeSide: (doorId: string, side: 'left' | 'right') => void;
+  setDoorHingeCount: (doorId: string, count: 2 | 3 | 4 | 'auto') => void;
+  setHingeManual: (doorId: string, hingeId: string, pos: number) => void;
+  resetHingeToAuto: (doorId: string, hingeId: string) => void;
+  setDoorHasDoor: (doorId: string, hasDoor: boolean) => void;
+  setDoorThickness: (doorId: string, materialId: string) => void;
   setCoversSkirt: (value: boolean) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
   const [doorsById, setDoorsById] = useState<DoorById>({});
   const [displayNumbers, setDisplayNumbers] = useState<Map<string, string>>(new Map());
+  const [numFrontsPerBox, setNumFrontsPerBox] = useState<Map<string, number>>(new Map());
+  const [partitionsById, setPartitionsById] = useState<Map<string, boolean>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
   const doorsRef    = useRef<DoorById>({});
   const prevBoxesRef = useRef<Box[] | null>(null);
   const plinthRef = useRef<number>(0);
   const boxLevelMapRef = useRef<Map<string, string>>(new Map());
+  const numFrontsRef = useRef<Map<string, number>>(new Map());
+  const partitionsRef = useRef<Map<string, boolean>>(new Map());
+  const baseCutsRef = useRef<CutItem[]>([]);
+  const tBodyRef = useRef<number>(1.8);
 
   function setInterior(v: InteriorById): void {
     interiorRef.current = v;
     setInteriorById(v);
   }
 
-  function setDoors(v: DoorById, boxes?: Box[]): void {
+  function setDoors(v: DoorById, boxes?: Box[], nfMap?: Map<string, number>): void {
     doorsRef.current = v;
     setDoorsById(v);
-    if (boxes) setDisplayNumbers(assignDoorDisplayNumbers(boxes));
+    if (boxes) {
+      const nm = nfMap ?? numFrontsRef.current;
+      setDisplayNumbers(assignDoorDisplayNumbers(boxes, nm));
+    }
   }
 
   // ── Interior ──────────────────────────────────────────────────────────────
@@ -77,19 +134,35 @@ export function useCabinet(): {
   function setBoxInterior(boxId: string, items: InteriorItem[]): void {
     const newInterior = { ...interiorRef.current, [boxId]: items };
     setInterior(newInterior);
-    const door = doorsRef.current[boxId];
-    if (door) {
-      const updated = recomputeDoorHinges(door, items, plinthRef.current);
-      const newDoors = { ...doorsRef.current, [boxId]: updated };
-      doorsRef.current = newDoors;
-      setDoorsById(newDoors);
+    const nf = numFrontsRef.current.get(boxId) ?? 1;
+    const updatedDoors: DoorById = { ...doorsRef.current };
+    for (let fi = 0; fi < nf; fi++) {
+      const doorId = makeDoorId(boxId, fi);
+      const door = doorsRef.current[doorId];
+      if (door) updatedDoors[doorId] = recomputeDoorHinges(door, items, plinthRef.current);
     }
+    doorsRef.current = updatedDoors;
+    setDoorsById(updatedDoors);
+  }
+
+  // ── Partitions ────────────────────────────────────────────────────────────
+
+  function setBoxPartitions(boxId: string, value: boolean): void {
+    const newMap = new Map(partitionsRef.current);
+    if (value) newMap.set(boxId, true);
+    else newMap.delete(boxId);
+    partitionsRef.current = newMap;
+    setPartitionsById(new Map(newMap));
+
+    const boxes = prevBoxesRef.current ?? [];
+    const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
+    setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
   }
 
   // ── Door mutations ────────────────────────────────────────────────────────
 
-  function setDoorHingeSide(boxId: string, side: 'left' | 'right'): void {
-    const door = doorsRef.current[boxId];
+  function setDoorHingeSide(doorId: string, side: 'left' | 'right'): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
     const n = door.hingeCount === 'auto' ? undefined : door.hingeCount as 1 | 2 | 3 | 4;
     const defaults = computeDefaultHingePositions(door.height, n);
@@ -98,13 +171,13 @@ export function useCabinet(): {
       if (existing?.isManual) return existing;
       return { id: existing?.id ?? newItemId(), positionFromBottom: defaults[i]!, isManual: false };
     });
-    const items = interiorRef.current[boxId] ?? [];
+    const items = interiorRef.current[door.boxId] ?? [];
     const { hinges } = adjustHingesForInterior(reset, items, door.height);
-    _mutateDoor(boxId, { ...door, hingeSide: side, hinges });
+    _mutateDoor(doorId, { ...door, hingeSide: side, hinges });
   }
 
-  function setDoorHingeCount(boxId: string, count: 2 | 3 | 4 | 'auto'): void {
-    const door = doorsRef.current[boxId];
+  function setDoorHingeCount(doorId: string, count: 2 | 3 | 4 | 'auto'): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
     const n = count === 'auto' ? computeHingeCount(door.height) : count;
     const defaults = computeDefaultHingePositions(door.height, n);
@@ -113,22 +186,22 @@ export function useCabinet(): {
       positionFromBottom: p,
       isManual: false,
     }));
-    const items = interiorRef.current[boxId] ?? [];
+    const items = interiorRef.current[door.boxId] ?? [];
     const { hinges: adjusted } = adjustHingesForInterior(hinges, items, door.height);
-    _mutateDoor(boxId, { ...door, hingeCount: count, hinges: adjusted });
+    _mutateDoor(doorId, { ...door, hingeCount: count, hinges: adjusted });
   }
 
-  function setHingeManual(boxId: string, hingeId: string, pos: number): void {
-    const door = doorsRef.current[boxId];
+  function setHingeManual(doorId: string, hingeId: string, pos: number): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
     const hinges = door.hinges.map(h =>
       h.id === hingeId ? { ...h, positionFromBottom: pos, isManual: true } : h,
     );
-    _mutateDoor(boxId, { ...door, hinges });
+    _mutateDoor(doorId, { ...door, hinges });
   }
 
-  function resetHingeToAuto(boxId: string, hingeId: string): void {
-    const door = doorsRef.current[boxId];
+  function resetHingeToAuto(doorId: string, hingeId: string): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
     const hingeIdx = door.hinges.findIndex(h => h.id === hingeId);
     if (hingeIdx === -1) return;
@@ -139,25 +212,25 @@ export function useCabinet(): {
         ? { ...h, positionFromBottom: defaults[i] ?? h.positionFromBottom, isManual: false }
         : h,
     );
-    const items = interiorRef.current[boxId] ?? [];
+    const items = interiorRef.current[door.boxId] ?? [];
     const { hinges } = adjustHingesForInterior(reset, items, door.height);
-    _mutateDoor(boxId, { ...door, hinges });
+    _mutateDoor(doorId, { ...door, hinges });
   }
 
-  function setDoorHasDoor(boxId: string, hasDoor: boolean): void {
-    const door = doorsRef.current[boxId];
+  function setDoorHasDoor(doorId: string, hasDoor: boolean): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
-    _mutateDoor(boxId, { ...door, hasDoor });
+    _mutateDoor(doorId, { ...door, hasDoor });
   }
 
-  function setDoorThickness(boxId: string, materialId: string): void {
-    const door = doorsRef.current[boxId];
+  function setDoorThickness(doorId: string, materialId: string): void {
+    const door = doorsRef.current[doorId];
     if (!door) return;
     if (materialId) {
-      _mutateDoor(boxId, { ...door, thicknessOverride: materialId });
+      _mutateDoor(doorId, { ...door, thicknessOverride: materialId });
     } else {
       const { thicknessOverride: _removed, ...rest } = door;
-      _mutateDoor(boxId, rest as Door);
+      _mutateDoor(doorId, rest as Door);
     }
   }
 
@@ -167,14 +240,14 @@ export function useCabinet(): {
     const currentDoors = doorsRef.current;
     let changed = false;
     const newDoors: DoorById = {};
-    for (const [boxId, door] of Object.entries(currentDoors)) {
-      const coversSkirt = value && shouldCoverSkirt(levelMap.get(boxId) ?? '');
+    for (const [doorId, door] of Object.entries(currentDoors)) {
+      const coversSkirt = value && shouldCoverSkirt(levelMap.get(door.boxId) ?? '');
       if (coversSkirt !== door.coversSkirt) {
-        const items = interiorRef.current[boxId] ?? [];
-        newDoors[boxId] = recomputeDoorHinges({ ...door, coversSkirt }, items, plinthH);
+        const items = interiorRef.current[door.boxId] ?? [];
+        newDoors[doorId] = recomputeDoorHinges({ ...door, coversSkirt }, items, plinthH);
         changed = true;
       } else {
-        newDoors[boxId] = door;
+        newDoors[doorId] = door;
       }
     }
     if (changed) {
@@ -192,14 +265,25 @@ export function useCabinet(): {
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
-    const { W, H, D, hasShell, bodyMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn } = input;
-    const material = getMaterial(bodyMaterialId);
-    const t = material.thickness / 10;
+    const { W, H, D, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
+    const bodyMaterial  = getMaterial(bodyMaterialId);
+    const frontMaterial = getMaterial(frontMaterialId);
+    const tBody  = bodyMaterial.thickness / 10;   // cm
+    const tFront = frontMaterial.thickness / 10;  // cm
+    const innerW = hasShell ? W - 2 * tFront : W;
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
-    const cuts = calcCuts('cabinet', W, H, D, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, hasShell, t, t);
-    const doors = calcDoors(W, H, plinth, doorCoversPlinth, lowerDoorH, hasShell, t, forceRows);
+    const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+    const cuts  = calcCuts('cabinet', innerW, H, D, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
+    const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
+
+    if (hasShell) {
+      cuts.push({ name: 'מעטפת — צד ימין', qty: 1, w: D * 10, h: H * 10, group: 'shell' });
+      cuts.push({ name: 'מעטפת — צד שמאל', qty: 1, w: D * 10, h: H * 10, group: 'shell' });
+      if (hasEnvelopeTop) {
+        cuts.push({ name: 'מעטפת תקרה', qty: 1, w: innerW * 10, h: D * 10, group: 'shell' });
+      }
+    }
 
     // ── Interior preservation ──────────────────────────────────────────────
     const prevBoxes = prevBoxesRef.current;
@@ -228,57 +312,102 @@ export function useCabinet(): {
     // ── Door preservation ──────────────────────────────────────────────────
     plinthRef.current = plinth;
     const currentDoors = doorsRef.current;
+    const prevNumFronts = numFrontsRef.current;
+
+    // Stable map: "${boxStableKey}:${fi}" → Door
     const stableDoorMap = new Map<string, Door>();
     if (prevBoxes) {
       for (const box of prevBoxes) {
         if (box.level === 'plinth') continue;
-        const d = currentDoors[box.id];
-        if (d) stableDoorMap.set(boxStableKey(box), d);
+        const nf = prevNumFronts.get(box.id) ?? 1;
+        for (let fi = 0; fi < nf; fi++) {
+          const d = currentDoors[makeDoorId(box.id, fi)];
+          if (d) stableDoorMap.set(`${boxStableKey(box)}:${fi}`, d);
+        }
       }
     }
 
     const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
     const allPositions = bodyBoxes.map(b => b.position);
     boxLevelMapRef.current = new Map(bodyBoxes.map(b => [b.id, b.level]));
+
+    const newNumFrontsMap = new Map<string, number>();
     const newDoors: DoorById = {};
 
     for (const box of bodyBoxes) {
-      const key = boxStableKey(box);
-      const oldDoor = stableDoorMap.get(key);
-      const items = newInterior[box.id] ?? [];
       const coversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
+      const isTopLevel = box.level === 'top' || box.level === 'single';
+      const effectiveBoxH = (hasEnvelopeTop && hasShell && isTopLevel) ? box.H - tFront : box.H;
+      const isBottomMost = box.level === 'bottom' || box.level === 'single';
+      const hasBottomGap = !(isBottomMost && plinth > 0 && !coversSkirt);
+      const panelH = getDoorHeight(effectiveBoxH, doorGapMm, hasBottomGap);
 
-      if (!oldDoor) {
-        // New box — initialize with defaults
-        const defaults = computeDefaultHingePositions(box.H);
-        const rawHinges: Hinge[] = defaults.map(p => ({ id: newItemId(), positionFromBottom: p, isManual: false }));
-        const { hinges } = adjustHingesForInterior(rawHinges, items, box.H);
-        newDoors[box.id] = {
-          id: box.id, boxId: box.id, height: box.H, width: box.W,
-          hingeSide: defaultHingeSide(box.position, allPositions),
-          hingeCount: 'auto', hinges, hasDoor: true, coversSkirt,
-        };
-      } else {
-        // Existing box — preserve manual hinges, recompute non-manual
-        const recomputed = recomputeDoorHinges(
-          { ...oldDoor, id: box.id, boxId: box.id, height: box.H, width: box.W, coversSkirt },
-          items,
-          plinth,
-        );
-        newDoors[box.id] = recomputed;
+      const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+      const frontW = getDoorWidth(box.W, numFronts, doorGapMm);
+      newNumFrontsMap.set(box.id, numFronts);
+
+      const items = newInterior[box.id] ?? [];
+
+      for (let fi = 0; fi < numFronts; fi++) {
+        const doorId = makeDoorId(box.id, fi);
+        const oldDoor = stableDoorMap.get(`${boxStableKey(box)}:${fi}`);
+        const hingeSide = numFronts > 1
+          ? salonHingeSide(fi, numFronts)
+          : defaultHingeSide(box.position, allPositions);
+
+        if (!oldDoor) {
+          const defaults = computeDefaultHingePositions(panelH);
+          const rawHinges: Hinge[] = defaults.map(p => ({ id: newItemId(), positionFromBottom: p, isManual: false }));
+          const { hinges } = adjustHingesForInterior(rawHinges, items, panelH);
+          newDoors[doorId] = {
+            id: doorId, boxId: box.id, frontIndex: fi,
+            height: panelH, width: frontW,
+            hingeSide, hingeCount: 'auto', hinges, hasDoor: true, coversSkirt, gapMm: doorGapMm,
+          };
+        } else {
+          const recomputed = recomputeDoorHinges(
+            { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm },
+            items, plinth,
+          );
+          newDoors[doorId] = recomputed;
+        }
       }
     }
 
+    // ── Partition preservation ─────────────────────────────────────────────
+    const stablePartitionsMap = new Map<string, boolean>();
+    if (prevBoxes) {
+      for (const box of prevBoxes) {
+        if (box.level === 'plinth') continue;
+        if (partitionsRef.current.get(box.id)) stablePartitionsMap.set(boxStableKey(box), true);
+      }
+    }
+    const newPartitionsMap = new Map<string, boolean>();
+    for (const box of bodyBoxes) {
+      if (stablePartitionsMap.get(boxStableKey(box))) {
+        const nf = newNumFrontsMap.get(box.id) ?? 1;
+        if (nf > 1) newPartitionsMap.set(box.id, true);
+      }
+    }
+    partitionsRef.current = newPartitionsMap;
+    setPartitionsById(new Map(newPartitionsMap));
+    tBodyRef.current = tBody;
+    baseCutsRef.current = cuts;
+
+    numFrontsRef.current = newNumFrontsMap;
+    setNumFrontsPerBox(newNumFrontsMap);
     prevBoxesRef.current = boxes;
     setInterior(newInterior);
-    setDoors(newDoors, boxes);
-    setResult({ boxes, cuts, doors });
+    setDoors(newDoors, boxes, newNumFrontsMap);
+    const allCuts = [...cuts, ...computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody)];
+    setResult({ boxes, cuts: allCuts, doors });
   }
 
   return {
     result, calculate,
     interiorById, setBoxInterior,
-    doorsById, displayNumbers,
+    doorsById, displayNumbers, numFrontsPerBox,
+    partitionsById, setBoxPartitions,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
   };

@@ -56,6 +56,13 @@
   stroke-width: 1;
 }
 
+.envelopePanel {
+  fill: var(--color-fronts);
+  opacity: 0.35;
+  stroke: var(--color-fronts);
+  stroke-width: 1;
+}
+
 .dimLabel {
   fill: var(--color-text-secondary);
   font-size: 11px;

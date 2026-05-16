@@ -44,6 +44,10 @@ export interface SketchGeometry {
   boxSvgRects: Record<string, BoxSvgRect>;
   /** All decomposed boxes (including plinth) — for door fronts rendering */
   boxes: Box[];
+  /** Outer envelope side panels (when hasShell) */
+  envelopePanels: { left: BoxSvgRect; right: BoxSvgRect } | null;
+  /** Outer envelope ceiling panel (when hasShell && hasEnvelopeTop) */
+  envelopeTopPanel: BoxSvgRect | null;
 }
 
 export function isValidSketchInput(
@@ -98,6 +102,8 @@ export function computeSketchGeometry(
   lowerDoorH?: number,
   doorsPerColumn: 'auto' | 1 | 2 | 3 = 'auto',
   middleDoorH?: number,
+  tEnvelope?: number,
+  hasEnvelopeTop = false,
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
@@ -113,7 +119,10 @@ export function computeSketchGeometry(
     ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
     : null;
 
-  const boxes = decomposeBoxes(W, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+  const envelopePx = tEnvelope ? tEnvelope * scale : 0;
+  const innerW = tEnvelope ? W - 2 * tEnvelope : W;
+
+  const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
 
   // ── Build level → H map (body boxes only) ────────────────────────────────────
   const levelHeightMap = new Map<BoxLevel, number>();
@@ -132,7 +141,7 @@ export function computeSketchGeometry(
   for (let i = 0; i < activeLevels.length - 1; i++) {
     cumH += levelHeightMap.get(activeLevels[i]!)!;
     const splitY = cabY + cumH * scale;
-    splitLines.push({ x1: cabX, y1: splitY, x2: cabX + cabW, y2: splitY });
+    splitLines.push({ x1: cabX + envelopePx, y1: splitY, x2: cabX + cabW - envelopePx, y2: splitY });
   }
 
   // ── Vertical split lines: use the bottom-most body level as column reference ──
@@ -144,7 +153,7 @@ export function computeSketchGeometry(
   let cumW = 0;
   for (let i = 0; i < colBoxes.length - 1; i++) {
     cumW += colBoxes[i]!.W;
-    const splitX = cabX + cumW * scale;
+    const splitX = cabX + envelopePx + cumW * scale;
     splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
   }
 
@@ -158,9 +167,9 @@ export function computeSketchGeometry(
     }
   }
   const internalShelfLines: SketchLine[] = [...internalShelfHeights].map(sh => ({
-    x1: cabX,
+    x1: cabX + envelopePx,
     y1: cabY + (H - sh) * scale,
-    x2: cabX + cabW,
+    x2: cabX + cabW - envelopePx,
     y2: cabY + (H - sh) * scale,
   }));
 
@@ -193,7 +202,7 @@ export function computeSketchGeometry(
       let cumW = 0;
       for (const box of levelBoxes) {
         boxSvgRects[box.id] = {
-          x: cabX + cumW * scale,
+          x: cabX + envelopePx + cumW * scale,
           y: cabY + yOff * scale,
           w: box.W * scale,
           h: box.H * scale,
@@ -202,6 +211,17 @@ export function computeSketchGeometry(
       }
     }
   }
+
+  const envelopePanels = envelopePx > 0
+    ? {
+        left:  { x: cabX,                       y: cabY, w: envelopePx, h: cabH },
+        right: { x: cabX + cabW - envelopePx,   y: cabY, w: envelopePx, h: cabH },
+      }
+    : null;
+
+  const envelopeTopPanel = (hasEnvelopeTop && envelopePx > 0)
+    ? { x: cabX + envelopePx, y: cabY, w: cabW - 2 * envelopePx, h: envelopePx }
+    : null;
 
   return {
     svgWidth: SVG_W,
@@ -216,5 +236,7 @@ export function computeSketchGeometry(
     bodyFloors,
     boxSvgRects,
     boxes,
+    envelopePanels,
+    envelopeTopPanel,
   };
 }

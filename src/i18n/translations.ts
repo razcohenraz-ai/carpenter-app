@@ -30,6 +30,12 @@ export interface Translations {
     errorInvalid: string;
     errorMustBeLessThanH: string;
     errorSumTooLarge: string;
+    shellWidthWarning: (cm: number) => string;
+    doorGap: string;
+    doorGapWarn: string;
+    hasEnvelopeTop: string;
+    envelopeTopWarn: (cm: number) => string;
+    maxDoorWidth: string;
   };
 
   results: {
@@ -61,6 +67,8 @@ export interface Translations {
     addShelf: string;
     addDrawer: string;
     addRod: string;
+    addPartitions: string;
+    removePartitions: string;
     heightFromFloor: string;
     drawerHeight: string;
     editBody: string;
@@ -95,6 +103,9 @@ export interface Translations {
     warnThicknessHigh: (cm: number) => string;
     listTitle: string;
     front: string;
+    envelopeSideRight: string;
+    envelopeSideLeft: string;
+    envelopeTop: string;
   };
 
   groups: {
@@ -146,6 +157,12 @@ const he: Translations = {
     errorInvalid: 'יש להזין מספר חיובי',
     errorMustBeLessThanH: 'חייב להיות קטן מגובה הארון',
     errorSumTooLarge: 'סכום הקומות חייב להיות קטן מגובה הארון',
+    shellWidthWarning: (cm: number) => `רוחב הגופים הפנימיים נמוך מאוד (${cm.toFixed(1)} ס"מ). שקול ארון רחב יותר או ביטול המעטפת.`,
+    doorGap: 'רווח בין דלתות (מ"מ)',
+    doorGapWarn: 'רווח גדול מ-4 מ"מ נחשב גדול מהמקובל. וודא שהצירים מתאימים.',
+    hasEnvelopeTop: 'מעטפת תקרה',
+    envelopeTopWarn: (cm: number) => `אזהרה: גובה קומה עליונה פנימית ${cm.toFixed(1)} ס"מ — מומלץ לפחות 20 ס"מ.`,
+    maxDoorWidth: 'רוחב מקסימלי לחזית (ס"מ)',
   },
 
   results: {
@@ -177,6 +194,8 @@ const he: Translations = {
     addShelf: '+ מדף',
     addDrawer: '+ מגירה',
     addRod: '+ מוט תליה',
+    addPartitions: '+ מחיצות',
+    removePartitions: 'הסר מחיצות',
     heightFromFloor: 'גובה מרצפה (ס"מ)',
     drawerHeight: 'גובה מגירה (ס"מ)',
     editBody: 'עריכת פנים גוף',
@@ -211,6 +230,9 @@ const he: Translations = {
     warnThicknessHigh:  (cm: number) => `עובי ${cm} ס"מ — עבה מהמקסימום המומלץ (2.5 ס"מ)`,
     listTitle:          'פיצול לחזיתות',
     front:              'חזית',
+    envelopeSideRight:  'צד ימין',
+    envelopeSideLeft:   'צד שמאל',
+    envelopeTop:        'תקרה',
   },
 
   groups: {
@@ -261,6 +283,12 @@ const en: Translations = {
     errorInvalid: 'Must be a positive number',
     errorMustBeLessThanH: 'Must be less than cabinet height',
     errorSumTooLarge: 'Sections sum must be less than cabinet height',
+    shellWidthWarning: (cm: number) => `Inner body width is very low (${cm.toFixed(1)} cm). Consider a wider cabinet or removing the envelope.`,
+    doorGap: 'Door Gap (mm)',
+    doorGapWarn: 'Gap over 4 mm is larger than standard. Ensure hinges are suitable.',
+    hasEnvelopeTop: 'Ceiling Panel',
+    envelopeTopWarn: (cm: number) => `Warning: top section inner height is ${cm.toFixed(1)} cm — recommended minimum is 20 cm.`,
+    maxDoorWidth: 'Max Front Width (cm)',
   },
 
   results: {
@@ -292,6 +320,8 @@ const en: Translations = {
     addShelf: '+ Shelf',
     addDrawer: '+ Drawer',
     addRod: '+ Hanging Rod',
+    addPartitions: '+ Partitions',
+    removePartitions: 'Remove Partitions',
     heightFromFloor: 'Height from floor (cm)',
     drawerHeight: 'Drawer height (cm)',
     editBody: 'Edit Body Interior',
@@ -326,6 +356,9 @@ const en: Translations = {
     warnThicknessHigh:  (cm: number) => `Thickness ${cm} cm — above recommended maximum (2.5 cm)`,
     listTitle:          'Fronts Breakdown',
     front:              'Front',
+    envelopeSideRight:  'Right Side',
+    envelopeSideLeft:   'Left Side',
+    envelopeTop:        'Ceiling',
   },
 
   groups: {

@@ -1,5 +1,6 @@
 import type { CutItem, FurnitureType } from "../../types";
 import { calcDoors } from "../doors/doorCalc";
+import { getDoorHeight, getDoorWidth } from "../doors/doorUtils";
 import { roundInternal, roundOutput } from "../utils/round";
 
 // ── קבועים (מ"מ אלא אם צוין אחרת) ──────────────────────────────────────────
@@ -11,10 +12,10 @@ const SHELF_WIDTH_REVEAL_MM = 2;
 /** קיצור עומק מדף צף (מאפשר הוצאה ללא חיכוך), מ"מ */
 const SHELF_DEPTH_REVEAL_MM = 20;
 
-/** רווח כולל לרוחב דלת (overlay על הגוף), מ"מ */
+/** רווח ברירת מחדל לרוחב דלת כשאין gap מוגדר (overlay על הגוף), מ"מ */
 const DOOR_WIDTH_REVEAL_MM = 2;
 
-/** רווח כולל לגובה דלת, מ"מ */
+/** רווח ברירת מחדל לגובה דלת כשאין gap מוגדר, מ"מ */
 const DOOR_HEIGHT_REVEAL_MM = 2;
 
 /** שיעור גובה אזור המגירות מתוך הגובה הזמין של הגוף */
@@ -59,6 +60,7 @@ const cm = (v: number) => v * 10;
  * @param hasShell         - האם הארון בנוי ממעטפת חיצונית + גוף פנימי
  * @param tShell           - עובי לוח מעטפת, ס"מ (ברירת מחדל 1.8 = 18 מ"מ)
  * @param tBody            - עובי לוח גוף פנימי, ס"מ (ברירת מחדל 1.8 = 18 מ"מ)
+ * @param doorGapMm        - רווח בין דלתות לדפנות, מ"מ (ברירת מחדל 0)
  * @returns מערך פריטי חיתוך עם שם, כמות, מידות ב-מ"מ וקבוצה
  */
 export function calcCuts(
@@ -75,6 +77,10 @@ export function calcCuts(
   hasShell: boolean,
   tShell = 1.8,
   tBody = 1.8,
+  doorGapMm = 0,
+  hasEnvelopeTop = false,
+  tFront = 1.8,
+  maxDoorWidth = 60,
 ): CutItem[] {
   const cuts: CutItem[] = [];
 
@@ -92,6 +98,9 @@ export function calcCuts(
       cuts.push({ name: "מעטפת — צד שמאל", qty: 1, w: cm(D),  h: cm(H),  group: "shell" });
       cuts.push({ name: "מעטפת — צד ימין", qty: 1, w: cm(D),  h: cm(H),  group: "shell" });
       cuts.push({ name: "מעטפת — טופ",      qty: 1, w: cm(iW), h: cm(D),  group: "shell" });
+      if (hasEnvelopeTop) {
+        cuts.push({ name: "מעטפת תקרה", qty: 1, w: cm(iW), h: cm(D), group: "shell" });
+      }
 
       // ── גוף פנימי ─────────────────────────────────────────────────────────
       cuts.push({ name: "גוף פנימי — צד שמאל", qty: 1, w: cm(iD),             h: cm(iH),           group: "body" });
@@ -141,29 +150,48 @@ export function calcCuts(
     }
 
     // ── דלתות ─────────────────────────────────────────────────────────────────
+    // Panel dimensions align with getDoorWidth/getDoorHeight in doorUtils.ts.
+    // hasEnvelopeTop reduces the effective height of the top/single-level box.
+    //
+    // Horizontal splitting matches useCabinet: first split by MAX_BOX_W=100,
+    // then split each box-column by maxDoorWidth.
+    const MAX_BOX_W_CM = 100;
+    const innerW = hasShell ? W - tShell * 2 : W;
+    const numBoxCols = Math.ceil(innerW / MAX_BOX_W_CM);
+    const colW = innerW / numBoxCols;
+    const numFrontsPerCol = Math.max(1, Math.ceil(colW / maxDoorWidth));
+    const frontW_mm = cm(getDoorWidth(colW, numFrontsPerCol, doorGapMm));
+    const frontsPerRow = numBoxCols * numFrontsPerCol;
+
+    const topReduction = (hasEnvelopeTop && hasShell) ? tFront : 0;
+    const lowerBoxH = d.rows === 1 ? (H - plinth) - topReduction : d.lowerH - plinth;
+    // Bottom/single-row door rests on the plinth — no lower clearance needed.
+    const lowerHasBottomGap = !(plinth > 0 && !doorCoversPlinth);
     const doorName = d.rows === 1 ? "דלת" : "דלת תחתונה";
     cuts.push({
       name: doorName,
-      qty: d.n,
-      w: cm(d.doorW) - DOOR_WIDTH_REVEAL_MM,
-      h: cm(d.lowerH) - DOOR_HEIGHT_REVEAL_MM,
+      qty: frontsPerRow,
+      w: frontW_mm,
+      h: cm(getDoorHeight(lowerBoxH, doorGapMm, lowerHasBottomGap)),
       group: "door",
     });
     if (d.rows >= 2 && d.upperH !== null) {
+      const upperBoxH = (H - d.lowerH) - (d.rows === 2 ? topReduction : 0);
       cuts.push({
         name: d.rows === 3 ? "דלת אמצעית" : "דלת עליונה",
-        qty: d.n,
-        w: cm(d.doorW) - DOOR_WIDTH_REVEAL_MM,
-        h: cm(d.upperH) - DOOR_HEIGHT_REVEAL_MM,
+        qty: frontsPerRow,
+        w: frontW_mm,
+        h: cm(getDoorHeight(upperBoxH, doorGapMm)),
         group: "door",
       });
     }
     if (d.rows === 3 && d.topH !== null) {
+      const topBoxH = (H - d.lowerH - (d.upperH ?? 0)) - topReduction;
       cuts.push({
         name: "דלת עליונה",
-        qty: d.n,
-        w: cm(d.doorW) - DOOR_WIDTH_REVEAL_MM,
-        h: cm(d.topH) - DOOR_HEIGHT_REVEAL_MM,
+        qty: frontsPerRow,
+        w: frontW_mm,
+        h: cm(getDoorHeight(topBoxH, doorGapMm)),
         group: "door",
       });
     }

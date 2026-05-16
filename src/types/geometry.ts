@@ -46,6 +46,8 @@ export interface Box {
   unitTotal?: number;
   /** גבהים מוחלטים מרצפת הארון (ס"מ) של מדפים פנימיים בגוף מאוחד */
   internalShelves?: number[];
+  /** האם קיימות מחיצות פנימיות אנכיות בין חזיתות */
+  hasInternalPartitions?: boolean;
 }
 
 // ── Door calculation result ───────────────────────────────────────────────────

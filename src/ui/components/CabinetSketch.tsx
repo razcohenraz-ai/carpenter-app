@@ -14,9 +14,12 @@ interface Props {
   doorsPerColumn?: string;
   middleDoorH?: string;
   interiorById?: InteriorById | undefined;
+  hasShell?: boolean;
+  frontMaterialThickness?: number;
+  hasEnvelopeTop?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, hasShell, frontMaterialThickness, hasEnvelopeTop }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -33,7 +36,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
     doorsPerColumn === '1' ? 1 :
     doorsPerColumn === '2' ? 2 :
     doorsPerColumn === '3' ? 3 : 'auto';
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid);
+  const tEnv = hasShell && frontMaterialThickness ? frontMaterialThickness : undefined;
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
 
   return (
     <div className={styles.wrapper}>
@@ -62,6 +66,37 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             width={geo.plinthRect.w}
             height={geo.plinthRect.h}
             className={styles.plinthRect}
+          />
+        )}
+
+        {/* Outer envelope side panels */}
+        {geo.envelopePanels && (
+          <>
+            <rect
+              x={geo.envelopePanels.left.x}
+              y={geo.envelopePanels.left.y}
+              width={geo.envelopePanels.left.w}
+              height={geo.envelopePanels.left.h}
+              className={styles.envelopePanel}
+            />
+            <rect
+              x={geo.envelopePanels.right.x}
+              y={geo.envelopePanels.right.y}
+              width={geo.envelopePanels.right.w}
+              height={geo.envelopePanels.right.h}
+              className={styles.envelopePanel}
+            />
+          </>
+        )}
+
+        {/* Outer envelope ceiling panel */}
+        {geo.envelopeTopPanel && (
+          <rect
+            x={geo.envelopeTopPanel.x}
+            y={geo.envelopeTopPanel.y}
+            width={geo.envelopeTopPanel.w}
+            height={geo.envelopeTopPanel.h}
+            className={styles.envelopePanel}
           />
         )}
 

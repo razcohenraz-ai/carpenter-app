@@ -41,3 +41,10 @@
   font-family: var(--font-family);
 }
 
+.partitionLine {
+  stroke: var(--color-primary);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.5;
+}
+

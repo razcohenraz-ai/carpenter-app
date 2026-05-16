@@ -28,7 +28,7 @@ export default function DoorThumbnail({ door, displayNumber, globalMaterialId, p
       <span className={styles.label}>{displayNumber}</span>
       {door.hasDoor && (
         <span className={`${styles.dims} ${hasOverride ? styles.dimsOverride : ''}`}>
-          {Math.round(door.width)}×{Math.round(visualH)}×{thicknessCm.toFixed(1)}
+          {door.width.toFixed(1)}×{visualH.toFixed(1)}×{thicknessCm.toFixed(1)}
         </span>
       )}
     </button>

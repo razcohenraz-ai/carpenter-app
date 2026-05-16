@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import DimensionValue from './DimensionValue';
-import { getDoorVisualHeight, getDoorThicknessCm } from '../../core/doors/doorUtils';
+import { getDoorVisualHeight, getDoorThicknessCm, makeDoorId } from '../../core/doors/doorUtils';
 import styles from './DoorsList.module.css';
 import type { Box } from '../../types';
 import type { Door, DoorById } from '../../types/doors';
@@ -13,6 +13,13 @@ interface Props {
   displayNumbers: Map<string, string>;
   globalMaterialId: string;
   plinthHeight: number;
+  numFrontsPerBox: Map<string, number>;
+  hasShell?: boolean;
+  hasEnvelopeTop?: boolean;
+  cabinetW?: number;
+  cabinetH?: number;
+  cabinetD?: number;
+  frontMaterialThickness?: number;
 }
 
 function buildDoorLabel(box: Box, displayNum: string, t: Translations): string {
@@ -57,22 +64,33 @@ function HingeMini({ door }: { door: Door }): React.JSX.Element {
 }
 
 export default function DoorsList({
-  bodyBoxes, doorsById, displayNumbers, globalMaterialId, plinthHeight,
+  bodyBoxes, doorsById, displayNumbers, globalMaterialId, plinthHeight, numFrontsPerBox,
+  hasShell, hasEnvelopeTop, cabinetW, cabinetH, cabinetD, frontMaterialThickness,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
-  const rows = bodyBoxes
-    .map(box => ({ box, door: doorsById[box.id] }))
-    .filter((e): e is { box: Box; door: Door } => e.door?.hasDoor === true);
+  const rows: { box: Box; door: Door }[] = bodyBoxes.flatMap(box => {
+    const nf = numFrontsPerBox.get(box.id) ?? 1;
+    const items: { box: Box; door: Door }[] = [];
+    for (let fi = 0; fi < nf; fi++) {
+      const door = doorsById[makeDoorId(box.id, fi)];
+      if (door?.hasDoor) items.push({ box, door });
+    }
+    return items;
+  });
 
-  if (rows.length === 0) return <></>;
+  const showEnvelope = hasShell && cabinetH && cabinetD && frontMaterialThickness;
+
+  if (rows.length === 0 && !showEnvelope) return <></>;
+
+  const nextIndex = rows.length + 1;
 
   return (
     <section className={styles.section}>
       <h3 className={styles.title}>{t.doors.listTitle}</h3>
       <ul className={styles.list}>
         {rows.map(({ box, door }) => {
-          const displayNum = displayNumbers.get(box.id) ?? '';
+          const displayNum = displayNumbers.get(door.id) ?? '';
           const visualH    = getDoorVisualHeight(door, plinthHeight);
           const thickness  = getDoorThicknessCm(door, globalMaterialId);
           return (
@@ -91,6 +109,49 @@ export default function DoorsList({
             </li>
           );
         })}
+
+        {showEnvelope && (
+          <>
+            <li className={styles.item}>
+              <span className={styles.index}>{nextIndex}</span>
+              <span className={styles.label}>{t.doors.envelopeSideRight}</span>
+              <span className={styles.dims}>
+                <DimensionValue value={cabinetD!.toFixed(1)} axis="width" />
+                {' × '}
+                <DimensionValue value={cabinetH!.toFixed(1)} axis="height" />
+                {' × '}
+                <DimensionValue value={frontMaterialThickness!.toFixed(1)} axis="depth" />
+                <span className={styles.unit}> {t.form.unitCm}</span>
+              </span>
+            </li>
+            <li className={styles.item}>
+              <span className={styles.index}>{nextIndex + 1}</span>
+              <span className={styles.label}>{t.doors.envelopeSideLeft}</span>
+              <span className={styles.dims}>
+                <DimensionValue value={cabinetD!.toFixed(1)} axis="width" />
+                {' × '}
+                <DimensionValue value={cabinetH!.toFixed(1)} axis="height" />
+                {' × '}
+                <DimensionValue value={frontMaterialThickness!.toFixed(1)} axis="depth" />
+                <span className={styles.unit}> {t.form.unitCm}</span>
+              </span>
+            </li>
+            {hasEnvelopeTop && cabinetW !== undefined && (
+              <li className={styles.item}>
+                <span className={styles.index}>{nextIndex + 2}</span>
+                <span className={styles.label}>{t.doors.envelopeTop}</span>
+                <span className={styles.dims}>
+                  <DimensionValue value={(cabinetW - 2 * frontMaterialThickness!).toFixed(1)} axis="width" />
+                  {' × '}
+                  <DimensionValue value={cabinetD!.toFixed(1)} axis="height" />
+                  {' × '}
+                  <DimensionValue value={frontMaterialThickness!.toFixed(1)} axis="depth" />
+                  <span className={styles.unit}> {t.form.unitCm}</span>
+                </span>
+              </li>
+            )}
+          </>
+        )}
       </ul>
     </section>
   );

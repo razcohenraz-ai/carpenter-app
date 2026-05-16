@@ -4,6 +4,7 @@ import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS } from '../../catalog';
 import type { MaterialId } from '../../types';
 import type { Box } from '../../types/geometry';
+import { makeDoorId } from '../../core/doors/doorUtils';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
@@ -41,10 +42,14 @@ interface FormState {
   lowerDoorH: string;
   middleDoorH: string;
   hasShell: boolean;
+  hasEnvelopeTop: boolean;
   doorCoversPlinth: boolean;
   bodyMaterialId: MaterialId;
   frontMaterialId: MaterialId;
   doorsPerColumn: DoorsPerColumn;
+  doorGap: string;
+  doorGapManuallySet: boolean;
+  maxDoorWidth: string;
 }
 
 interface FormErrors {
@@ -73,7 +78,8 @@ export default function CabinetForm(): React.JSX.Element {
   const {
     result, calculate,
     interiorById, setBoxInterior,
-    doorsById, displayNumbers,
+    doorsById, displayNumbers, numFrontsPerBox,
+    partitionsById, setBoxPartitions,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
   } = useCabinet();
@@ -96,8 +102,10 @@ export default function CabinetForm(): React.JSX.Element {
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
     plinth: '10', lowerDoorH: '110', middleDoorH: '80',
-    hasShell: true, doorCoversPlinth: false,
+    hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
     bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
+    doorGap: '2', doorGapManuallySet: false,
+    maxDoorWidth: '60',
   });
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
@@ -175,12 +183,16 @@ export default function CabinetForm(): React.JSX.Element {
     calculate({
       W, H, D,
       hasShell: form.hasShell,
+      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
       bodyMaterialId: form.bodyMaterialId,
+      frontMaterialId: form.frontMaterialId,
       plinth,
       doorCoversPlinth: form.doorCoversPlinth,
       lowerDoorH: needsLo ? loDoor : undefined,
       middleDoorH: needsMid ? midDoor : undefined,
       doorsPerColumn,
+      doorGapMm: parseFloat(form.doorGap) || 0,
+      maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
     });
   }
 
@@ -192,6 +204,27 @@ export default function CabinetForm(): React.JSX.Element {
     ? t.form.lowerDoorHeightMulti
     : t.form.lowerDoorHeight;
   const totalPieces = result?.cuts.reduce((sum, c) => sum + c.qty, 0) ?? 0;
+
+  const frontThicknessCm = (MATERIALS[form.frontMaterialId]?.thickness ?? 18) / 10;
+  const parsedW = parseFloat(form.W);
+  const innerBodyW = form.hasShell && !isNaN(parsedW) ? parsedW - 2 * frontThicknessCm : parsedW;
+  const shellWidthWarning = form.hasShell && !isNaN(parsedW) && innerBodyW < 30
+    ? t.form.shellWidthWarning(innerBodyW)
+    : null;
+
+  const parsedH     = parseFloat(form.H);
+  const parsedPlinth = parseFloat(form.plinth) || 0;
+  const parsedLo    = parseFloat(form.lowerDoorH) || 0;
+  const parsedMid   = parseFloat(form.middleDoorH) || 0;
+  const topBoxH = needsMiddle
+    ? parsedH - parsedLo - parsedMid
+    : needsLower
+      ? parsedH - parsedLo
+      : parsedH - parsedPlinth;
+  const innerTopH = form.hasEnvelopeTop && form.hasShell ? topBoxH - frontThicknessCm : topBoxH;
+  const envelopeTopWarning = form.hasEnvelopeTop && form.hasShell && !isNaN(innerTopH) && innerTopH < 20
+    ? t.form.envelopeTopWarn(innerTopH)
+    : null;
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -265,6 +298,9 @@ export default function CabinetForm(): React.JSX.Element {
           items={interiorById[editingBox.id] ?? []}
           onChange={items => setBoxInterior(editingBox.id, items)}
           onBack={() => setView('main')}
+          numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
+          hasPartitions={partitionsById.get(editingBox.id) ?? false}
+          onTogglePartitions={() => setBoxPartitions(editingBox.id, !(partitionsById.get(editingBox.id) ?? false))}
         />
       </div>
     );
@@ -277,7 +313,7 @@ export default function CabinetForm(): React.JSX.Element {
         <div className={styles.form}>
           <DoorEditor
             door={door}
-            interiorItems={interiorById[editingDoorId] ?? []}
+            interiorItems={interiorById[door.boxId] ?? []}
             displayNumber={displayNumbers.get(editingDoorId) ?? ''}
             globalMaterialId={form.frontMaterialId}
             plinthHeight={parseFloat(form.plinth) || 0}
@@ -372,12 +408,22 @@ export default function CabinetForm(): React.JSX.Element {
 
             {/* צ'קבוקסים — משתרעים על כל הרוחב */}
             <div className={styles.checkboxRow}>
-              {checkbox(
-                'input-shell',
-                form.hasShell,
-                t.form.hasShell,
-                v => setForm(p => ({ ...p, hasShell: v })),
-              )}
+              <div className={styles.checkboxWithWarn}>
+                {checkbox(
+                  'input-shell',
+                  form.hasShell,
+                  t.form.hasShell,
+                  v => setForm(p => ({
+                    ...p,
+                    hasShell: v,
+                    ...(v ? {} : { hasEnvelopeTop: false }),
+                    ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
+                  })),
+                )}
+                {shellWidthWarning && (
+                  <span className={styles.warnMsg}>{shellWidthWarning}</span>
+                )}
+              </div>
               {checkbox(
                 'input-covers-plinth',
                 form.doorCoversPlinth,
@@ -388,6 +434,55 @@ export default function CabinetForm(): React.JSX.Element {
                 },
                 parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
               )}
+              <div className={styles.checkboxWithWarn}>
+                {checkbox(
+                  'input-envelope-top',
+                  form.hasEnvelopeTop,
+                  t.form.hasEnvelopeTop,
+                  v => setForm(p => ({ ...p, hasEnvelopeTop: v })),
+                  !form.hasShell,
+                )}
+                {envelopeTopWarning && (
+                  <span className={styles.warnMsg}>{envelopeTopWarning}</span>
+                )}
+              </div>
+            </div>
+
+            {/* רווח בין דלתות */}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-door-gap">
+                {t.form.doorGap}
+              </label>
+              <input
+                id="input-door-gap"
+                className={styles.input}
+                type="number"
+                value={form.doorGap}
+                step={0.5}
+                min={0}
+                onChange={e => setForm(p => ({ ...p, doorGap: e.target.value, doorGapManuallySet: true }))}
+                onFocus={e => e.target.select()}
+              />
+              {(parseFloat(form.doorGap) || 0) > 4 && (
+                <span className={styles.warnMsg}>{t.form.doorGapWarn}</span>
+              )}
+            </div>
+
+            {/* רוחב מקסימלי לחזית */}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-max-door-width">
+                {t.form.maxDoorWidth}
+              </label>
+              <input
+                id="input-max-door-width"
+                className={styles.input}
+                type="number"
+                value={form.maxDoorWidth}
+                step={5}
+                min={10}
+                onChange={e => setForm(p => ({ ...p, maxDoorWidth: e.target.value }))}
+                onFocus={e => e.target.select()}
+              />
             </div>
 
             {/* שדות מותנים: גובה קומות */}
@@ -429,6 +524,9 @@ export default function CabinetForm(): React.JSX.Element {
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
               interiorById={result ? interiorById : undefined}
+              hasShell={form.hasShell}
+              frontMaterialThickness={frontThicknessCm}
+              {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
             />
           ) : (
             <CabinetFrontsSketch
@@ -465,19 +563,23 @@ export default function CabinetForm(): React.JSX.Element {
 
           {bodyBoxes.length > 0 && sketchMode === 'fronts' && result && (
             <div className={styles.thumbRow}>
-              {bodyBoxes.map(box => {
-                const door = doorsById[box.id];
-                if (!door) return null;
-                return (
-                  <DoorThumbnail
-                    key={box.id}
-                    door={door}
-                    displayNumber={displayNumbers.get(box.id) ?? ''}
-                    globalMaterialId={form.frontMaterialId}
-                    plinthHeight={parseFloat(form.plinth) || 0}
-                    onClick={() => openDoorEditor(box.id)}
-                  />
-                );
+              {bodyBoxes.flatMap(box => {
+                const nf = numFrontsPerBox.get(box.id) ?? 1;
+                return Array.from({ length: nf }, (_, fi) => {
+                  const doorId = makeDoorId(box.id, fi);
+                  const door = doorsById[doorId];
+                  if (!door) return null;
+                  return (
+                    <DoorThumbnail
+                      key={doorId}
+                      door={door}
+                      displayNumber={displayNumbers.get(doorId) ?? ''}
+                      globalMaterialId={form.frontMaterialId}
+                      plinthHeight={parseFloat(form.plinth) || 0}
+                      onClick={() => openDoorEditor(doorId)}
+                    />
+                  );
+                });
               })}
             </div>
           )}
@@ -501,6 +603,11 @@ export default function CabinetForm(): React.JSX.Element {
                 displayNumbers={displayNumbers}
                 globalMaterialId={form.frontMaterialId}
                 plinthHeight={parseFloat(form.plinth) || 0}
+                numFrontsPerBox={numFrontsPerBox}
+                hasShell={form.hasShell}
+                {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
+                {...(parsedW > 0 ? { cabinetW: parsedW, cabinetH: parseFloat(form.H) || 0, cabinetD: parseFloat(form.D) || 0 } : {})}
+                frontMaterialThickness={frontThicknessCm}
               />
           }
         </>

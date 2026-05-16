@@ -185,10 +185,13 @@ export function getDoorStructuralHeight(door: Door): number {
 }
 
 // Visual height = structural + plinth extension when coversSkirt is true.
-// Extension = plinthH − 1 cm (leaves 1 cm floor clearance).
+// Extension = (plinthH − 1) cm (leaves 1 cm floor clearance) + gapCm (bottom gap
+// was subtracted from door.height by getDoorHeight, but skirt doors have no bottom gap —
+// the 1 cm absolute clearance already covers it).
 export function getDoorVisualHeight(door: Door, plinthH: number): number {
   if (!door.coversSkirt || !(plinthH > 0)) return door.height;
-  return door.height + (plinthH - 1);
+  const gapCm = (door.gapMm ?? 0) / 10;
+  return door.height + (plinthH - 1) + gapCm;
 }
 
 // ── Init doors from boxes ─────────────────────────────────────────────────────
@@ -214,6 +217,7 @@ export function initDoorsFromBoxes(
     result[box.id] = {
       id: box.id,
       boxId: box.id,
+      frontIndex: 0,
       height: box.H,
       width: box.W,
       hingeSide: defaultHingeSide(box.position, allPositions),
@@ -245,6 +249,34 @@ export function recomputeDoorHinges(door: Door, items: InteriorItem[], plinthH =
   return { ...door, hinges };
 }
 
+// ── Multi-front helpers ───────────────────────────────────────────────────────
+
+// doorId for frontIndex 0 equals boxId (backward-compat); fi > 0 → "${boxId}:${fi}"
+export function makeDoorId(boxId: string, frontIndex: number): string {
+  return frontIndex === 0 ? boxId : `${boxId}:${frontIndex}`;
+}
+
+// Salon-style hinge side for horizontal front splitting within a single box.
+// Right half (fi < ceil(n/2)) → hinges right; left half → hinges left.
+export function salonHingeSide(frontIndex: number, numFronts: number): 'right' | 'left' {
+  return frontIndex < Math.ceil(numFronts / 2) ? 'right' : 'left';
+}
+
+// ── Door panel dimensions (with gap) ─────────────────────────────────────────
+
+export function getDoorWidth(innerW: number, numCols: number, gapMm: number): number {
+  const gapCm = gapMm / 10;
+  return (innerW - (numCols + 1) * gapCm) / numCols;
+}
+
+// hasBottomGap=true (default): top + bottom clearance (2 × gapCm).
+// hasBottomGap=false: top clearance only (1 × gapCm) — used when the door
+// bottom rests on a plinth and the plinth itself provides the lower clearance.
+export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true): number {
+  const gapCm = gapMm / 10;
+  return boxH - gapCm - (hasBottomGap ? gapCm : 0);
+}
+
 // ── Effective door thickness ──────────────────────────────────────────────────
 
 export function getDoorThicknessCm(door: Door, globalMaterialId: string): number {
@@ -267,7 +299,12 @@ const LEVEL_RANK: Record<string, number> = {
   bottom: 0, single: 0, middle: 1, top: 2,
 };
 
-export function assignDoorDisplayNumbers(boxes: Box[]): Map<string, string> {
+// numFrontsMap: boxId → number of horizontal fronts (default 1 when absent).
+// Returns doorId → display label, where doorId = makeDoorId(boxId, frontIndex).
+export function assignDoorDisplayNumbers(
+  boxes: Box[],
+  numFrontsMap: Map<string, number> = new Map(),
+): Map<string, string> {
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
 
   // Group by column position
@@ -291,12 +328,22 @@ export function assignDoorDisplayNumbers(boxes: Box[]): Map<string, string> {
       (a, b) => (LEVEL_RANK[a.level] ?? 0) - (LEVEL_RANK[b.level] ?? 0),
     );
 
-    if (colBoxes.length === 1) {
-      result.set(colBoxes[0]!.id, `${colNum}`);
+    const totalFronts = colBoxes.reduce(
+      (sum, box) => sum + (numFrontsMap.get(box.id) ?? 1),
+      0,
+    );
+
+    if (totalFronts === 1) {
+      result.set(makeDoorId(colBoxes[0]!.id, 0), `${colNum}`);
     } else {
-      colBoxes.forEach((box, i) => {
-        result.set(box.id, `${colNum}${HEBREW[i] ?? i}`);
-      });
+      let letterIdx = 0;
+      for (const box of colBoxes) {
+        const nf = numFrontsMap.get(box.id) ?? 1;
+        for (let fi = 0; fi < nf; fi++) {
+          result.set(makeDoorId(box.id, fi), `${colNum}${HEBREW[letterIdx] ?? letterIdx}`);
+          letterIdx++;
+        }
+      }
     }
     colNum++;
   }

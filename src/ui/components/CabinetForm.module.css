@@ -96,6 +96,19 @@
   gap: var(--spacing-md);
 }
 
+.checkboxWithWarn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.warnMsg {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning, #b45309);
+  max-width: 26ch;
+  line-height: 1.3;
+}
+
 .checkboxLabel {
   display: flex;
   align-items: center;

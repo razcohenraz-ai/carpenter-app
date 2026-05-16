@@ -57,78 +57,98 @@ export default function CabinetFrontsSketch({
           className={sketchStyles.cabinetRect}
         />
 
-        {/* Door panels */}
-        {Object.entries(doorsById).map(([boxId, door]) => {
-          const rect = geo.boxSvgRects[boxId];
-          if (!rect) return null;
-
-          const num = displayNumbers.get(boxId) ?? '';
-          const toSvgY = (fromBottom: number) => rect.y + rect.h - fromBottom * geo.scale;
-          const hingeX = door.hingeSide === 'right' ? rect.x + rect.w : rect.x;
-
-          if (!door.hasDoor) {
-            return (
-              <g key={boxId}>
-                <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h}
-                  className={styles.noDoorRect} />
-                <text x={rect.x + rect.w / 2} y={rect.y + rect.h / 2}
-                  textAnchor="middle" dominantBaseline="middle"
-                  className={styles.noDoorLabel}>
-                  {t.doors.noFront}
-                </text>
-              </g>
-            );
+        {/* Door panels — grouped by box, multiple horizontal fronts per box */}
+        {(() => {
+          // Group doors by boxId, then render all fronts within each box rect
+          const doorsByBoxId = new Map<string, typeof doorsById[string][]>();
+          for (const door of Object.values(doorsById)) {
+            const list = doorsByBoxId.get(door.boxId) ?? [];
+            list.push(door);
+            doorsByBoxId.set(door.boxId, list);
           }
 
-          const spacingWarns = computeHingeSpacingWarnings(door);
-          const iconX = door.hingeSide === 'right' ? hingeX + 6 : hingeX - 6;
-          const iconAnchor = door.hingeSide === 'right' ? 'start' : 'end';
+          return [...doorsByBoxId.entries()].flatMap(([boxId, doors]) => {
+            const rect = geo.boxSvgRects[boxId];
+            if (!rect) return [];
 
-          const skirtExt = (getDoorVisualHeight(door, plinthH) - door.height) * geo.scale;
+            const sortedDoors = [...doors].sort((a, b) => a.frontIndex - b.frontIndex);
 
-          return (
-            <g key={boxId}>
-              <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h + skirtExt}
-                className={styles.doorRect} />
-              {skirtExt > 0 && (
-                <line
-                  x1={rect.x} y1={rect.y + rect.h}
-                  x2={rect.x + rect.w} y2={rect.y + rect.h}
-                  className={styles.skirtLine}
-                />
-              )}
+            return sortedDoors.map(door => {
+              const panelW   = door.width * geo.scale;
+              const gapPx    = (door.gapMm ?? 0) / 10 * geo.scale;
+              const fi       = door.frontIndex;
+              // fi=0 is rightmost → highest x in LTR SVG coordinates
+              const panelX   = rect.x + rect.w - (fi + 1) * (panelW + gapPx);
+              const panelH   = door.height * geo.scale;
+              const panelY   = rect.y + rect.h - panelH;
+              const toSvgY   = (fromBottom: number) => rect.y + rect.h - fromBottom * geo.scale;
+              const num      = displayNumbers.get(door.id) ?? '';
 
-              {/* Hinges */}
-              {door.hinges.map(hinge => {
-                const cy = toSvgY(hinge.positionFromBottom);
-                const hasSpacingWarn = spacingWarns.has(hinge.id);
+              if (!door.hasDoor) {
                 return (
-                  <g key={hinge.id}>
-                    <circle
-                      cx={hingeX} cy={cy} r={3.5}
-                      className={`${styles.hinge} ${hinge.isManual ? styles.hingeManual : ''} ${hasSpacingWarn ? styles.hingeWarn : ''}`}
-                    />
-                    {hasSpacingWarn && (
-                      <text x={iconX} y={cy} textAnchor={iconAnchor} dominantBaseline="middle"
-                        className={styles.hingeWarnIcon}>⚠</text>
-                    )}
+                  <g key={door.id}>
+                    <rect x={panelX} y={panelY} width={panelW} height={panelH}
+                      className={styles.noDoorRect} />
+                    <text x={panelX + panelW / 2} y={panelY + panelH / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      className={styles.noDoorLabel}>
+                      {t.doors.noFront}
+                    </text>
                   </g>
                 );
-              })}
+              }
 
-              {/* Door number */}
-              <text
-                x={rect.x + rect.w / 2}
-                y={rect.y + rect.h / 2}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className={styles.doorNumber}
-              >
-                {num}
-              </text>
-            </g>
-          );
-        })}
+              const spacingWarns = computeHingeSpacingWarnings(door);
+              const iconAnchor   = door.hingeSide === 'right' ? 'start' : 'end';
+              const skirtExt     = (getDoorVisualHeight(door, plinthH) - door.height) * geo.scale;
+
+              return (
+                <g key={door.id}>
+                  <rect x={panelX} y={panelY} width={panelW} height={panelH + skirtExt}
+                    className={styles.doorRect} />
+                  {skirtExt > 0 && (
+                    <line
+                      x1={panelX} y1={panelY + panelH}
+                      x2={panelX + panelW} y2={panelY + panelH}
+                      className={styles.skirtLine}
+                    />
+                  )}
+
+                  {/* Hinges */}
+                  {door.hinges.map(hinge => {
+                    const cy = toSvgY(hinge.positionFromBottom);
+                    const hasSpacingWarn = spacingWarns.has(hinge.id);
+                    const hingeXPanel = door.hingeSide === 'right' ? panelX + panelW : panelX;
+                    const iconXPanel  = door.hingeSide === 'right' ? hingeXPanel + 6 : hingeXPanel - 6;
+                    return (
+                      <g key={hinge.id}>
+                        <circle
+                          cx={hingeXPanel} cy={cy} r={3.5}
+                          className={`${styles.hinge} ${hinge.isManual ? styles.hingeManual : ''} ${hasSpacingWarn ? styles.hingeWarn : ''}`}
+                        />
+                        {hasSpacingWarn && (
+                          <text x={iconXPanel} y={cy} textAnchor={iconAnchor} dominantBaseline="middle"
+                            className={styles.hingeWarnIcon}>⚠</text>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* Door number */}
+                  <text
+                    x={panelX + panelW / 2}
+                    y={panelY + panelH / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className={styles.doorNumber}
+                  >
+                    {num}
+                  </text>
+                </g>
+              );
+            });
+          });
+        })()}
 
         {/* Width label */}
         <text

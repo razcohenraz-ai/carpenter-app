@@ -12,6 +12,8 @@ import {
   shouldCoverSkirt,
   getDoorVisualHeight,
   getDoorStructuralHeight,
+  getDoorHeight,
+  getDoorWidth,
 } from './doorUtils';
 import type { Box } from '../../types/geometry';
 import type { Door, Hinge } from '../../types/doors';
@@ -169,7 +171,7 @@ describe('recomputeDoorHinges', () => {
       isManual: i === manualIdx,
     }));
     return {
-      id: 'd1', boxId: 'b1', height, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height, width: 60, hingeSide: 'right',
       hingeCount: 'auto', hinges, hasDoor: true, coversSkirt: false,
     };
   }
@@ -215,7 +217,7 @@ describe('recomputeDoorHinges', () => {
 describe('computeHingeSpacingWarnings', () => {
   function doorAt(height: number, positions: number[]): Door {
     return {
-      id: 'd1', boxId: 'b1', height, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height, width: 60, hingeSide: 'right',
       hingeCount: 'auto', hasDoor: true, coversSkirt: false,
       hinges: positions.map((p, i) => ({ id: `h${i}`, positionFromBottom: p, isManual: false })),
     };
@@ -247,7 +249,7 @@ describe('computeHingeSpacingWarnings', () => {
 
   it('hasDoor=false → no warnings', () => {
     const door: Door = {
-      id: 'd1', boxId: 'b1', height: 44, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height: 44, width: 60, hingeSide: 'right',
       hingeCount: 'auto', hasDoor: false, coversSkirt: false, hinges: [],
     };
     expect(computeHingeSpacingWarnings(door).size).toBe(0);
@@ -385,7 +387,7 @@ describe('adjustHingesForInterior', () => {
 describe('computeHingeWarnings', () => {
   function doorWithHinge(pos: number, manual: boolean): Door {
     return {
-      id: 'd1', boxId: 'b1', height: 100, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height: 100, width: 60, hingeSide: 'right',
       hingeCount: 'auto', hasDoor: true, coversSkirt: false,
       hinges: [{ id: 'h0', positionFromBottom: pos, isManual: manual }],
     };
@@ -423,7 +425,7 @@ describe('recomputeDoorHinges — hingeCount', () => {
   it('hingeCount=4 preserved after interior change (200cm auto→3)', () => {
     const positions = computeDefaultHingePositions(200, 4);
     const door: Door = {
-      id: 'd1', boxId: 'b1', height: 200, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height: 200, width: 60, hingeSide: 'right',
       hingeCount: 4,
       hinges: positions.map((p, i) => ({ id: `h${i}`, positionFromBottom: p, isManual: false })),
       hasDoor: true, coversSkirt: false,
@@ -437,7 +439,7 @@ describe('recomputeDoorHinges — hingeCount', () => {
   it('hingeCount=4 preserved when height changes to 180cm, positions recomputed', () => {
     const positions = computeDefaultHingePositions(200, 4);
     const door: Door = {
-      id: 'd1', boxId: 'b1', height: 200, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height: 200, width: 60, hingeSide: 'right',
       hingeCount: 4,
       hinges: positions.map((p, i) => ({ id: `h${i}`, positionFromBottom: p, isManual: false })),
       hasDoor: true, coversSkirt: false,
@@ -455,7 +457,7 @@ describe('recomputeDoorHinges — hingeCount', () => {
 
   it('hingeCount=auto respects height-based count', () => {
     const door: Door = {
-      id: 'd1', boxId: 'b1', height: 200, width: 60, hingeSide: 'right',
+      id: 'd1', boxId: 'b1', frontIndex: 0, height: 200, width: 60, hingeSide: 'right',
       hingeCount: 'auto',
       hinges: [10, 71, 133, 190].map((p, i) => ({ id: `h${i}`, positionFromBottom: p, isManual: false })),
       hasDoor: true, coversSkirt: false,
@@ -471,7 +473,7 @@ describe('recomputeDoorHinges — hingeCount', () => {
 
 describe('getDoorThicknessCm', () => {
   const baseDoor: Door = {
-    id: 'd1', boxId: 'b1', height: 100, width: 60,
+    id: 'd1', boxId: 'b1', frontIndex: 0, height: 100, width: 60,
     hingeSide: 'right', hingeCount: 'auto', hinges: [], hasDoor: true, coversSkirt: false,
   };
 
@@ -508,7 +510,7 @@ describe('shouldCoverSkirt', () => {
 
 describe('getDoorVisualHeight', () => {
   const skirtDoor: Door = {
-    id: 'd1', boxId: 'b1', height: 190, width: 60,
+    id: 'd1', boxId: 'b1', frontIndex: 0, height: 190, width: 60,
     hingeSide: 'right', hingeCount: 'auto', hinges: [], hasDoor: true, coversSkirt: true,
   };
   const noSkirtDoor: Door = { ...skirtDoor, coversSkirt: false };
@@ -531,6 +533,42 @@ describe('getDoorVisualHeight', () => {
   it('getDoorStructuralHeight always returns door.height', () => {
     expect(getDoorStructuralHeight(skirtDoor)).toBe(190);
     expect(getDoorStructuralHeight(noSkirtDoor)).toBe(190);
+  });
+
+  // ── gapMm correction for skirt-covering doors ─────────────────────────────
+  // getDoorHeight deducts both top and bottom gaps from door.height.
+  // For skirt-covering doors the bottom gap is replaced by the absolute 1cm
+  // floor clearance; getDoorVisualHeight must add it back.
+
+  it('coversSkirt=true, plinthH=10, gapMm=2 → door.height + 9 + 0.2', () => {
+    const door: Door = { ...skirtDoor, height: 149.7, gapMm: 2 };
+    expect(getDoorVisualHeight(door, 10)).toBeCloseTo(158.9); // original bug scenario
+  });
+
+  it('coversSkirt=true, plinthH=10, gapMm=0 → door.height + 9 (no correction)', () => {
+    const door: Door = { ...skirtDoor, height: 150, gapMm: 0 };
+    expect(getDoorVisualHeight(door, 10)).toBeCloseTo(159);
+  });
+
+  it('coversSkirt=true, plinthH=10, gapMm=4 → door.height + 9 + 0.4', () => {
+    const door: Door = { ...skirtDoor, height: 149.5, gapMm: 4 };
+    expect(getDoorVisualHeight(door, 10)).toBeCloseTo(149.5 + 9 + 0.4);
+  });
+
+  it('coversSkirt=false, gapMm=2 → structural height only (no skirt extension)', () => {
+    const door: Door = { ...noSkirtDoor, height: 149.7, gapMm: 2 };
+    expect(getDoorVisualHeight(door, 10)).toBeCloseTo(149.7);
+  });
+
+  it('coversSkirt=true, plinthH=0, gapMm=2 → structural height (plinth guard)', () => {
+    const door: Door = { ...skirtDoor, height: 149.7, gapMm: 2 };
+    expect(getDoorVisualHeight(door, 0)).toBeCloseTo(149.7);
+  });
+
+  it('skirt door: getDoorVisualHeight adds plinthH-1+gapCm to structural height', () => {
+    const structuralH = getDoorHeight(150, 2); // 149.6 (2 gaps, default)
+    const door: Door = { ...skirtDoor, height: structuralH, gapMm: 2 };
+    expect(getDoorVisualHeight(door, 10)).toBeCloseTo(149.6 + 9 + 0.2); // 158.8
   });
 });
 
@@ -589,5 +627,45 @@ describe('assignDoorDisplayNumbers', () => {
     expect(nums.get('r')).toBe('1');
     expect(nums.get('lb')).toBe('2א');
     expect(nums.get('lt')).toBe('2ב');
+  });
+});
+
+// ── getDoorHeight ─────────────────────────────────────────────────────────────
+
+describe('getDoorHeight', () => {
+  it('gap=0: returns boxH unchanged', () => {
+    expect(getDoorHeight(180, 0)).toBeCloseTo(180);
+    expect(getDoorHeight(180, 0, false)).toBeCloseTo(180);
+  });
+  it('gap=2mm, hasBottomGap=true (default): boxH − 2×0.2', () => {
+    expect(getDoorHeight(180, 2)).toBeCloseTo(179.6);
+    expect(getDoorHeight(180, 2, true)).toBeCloseTo(179.6);
+  });
+  it('gap=1mm, hasBottomGap=true: boxH − 2×0.1', () => {
+    expect(getDoorHeight(180, 1)).toBeCloseTo(179.8);
+  });
+  it('gap=2mm, hasBottomGap=false (plinth, no skirt): boxH − 0.2 only', () => {
+    expect(getDoorHeight(180, 2, false)).toBeCloseTo(179.8);
+  });
+  it('gap=2mm, hasBottomGap=false, 88.2cm box → 88.0 (bug scenario)', () => {
+    expect(getDoorHeight(88.2, 2, false)).toBeCloseTo(88.0);
+  });
+});
+
+// ── getDoorWidth ──────────────────────────────────────────────────────────────
+
+describe('getDoorWidth', () => {
+  it('gap=0: returns innerW/n unchanged', () => {
+    expect(getDoorWidth(100, 1, 0)).toBe(100);
+    expect(getDoorWidth(100, 2, 0)).toBe(50);
+  });
+  it('gap=2mm, 1 door: 100 − 2×0.2 = 99.6', () => {
+    expect(getDoorWidth(100, 1, 2)).toBeCloseTo(99.6);
+  });
+  it('gap=2mm, 2 doors: (100 − 3×0.2)/2 = 49.7', () => {
+    expect(getDoorWidth(100, 2, 2)).toBeCloseTo(49.7);
+  });
+  it('gap=4mm, 1 door: 100 − 2×0.4 = 99.2', () => {
+    expect(getDoorWidth(100, 1, 4)).toBeCloseTo(99.2);
   });
 });

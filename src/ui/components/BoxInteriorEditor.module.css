@@ -91,6 +91,15 @@
   color: var(--color-surface);
 }
 
+.addBtnActive {
+  background: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.addBtnActive:hover {
+  opacity: 0.85;
+}
+
 /* ── Items list ── */
 
 .empty {
