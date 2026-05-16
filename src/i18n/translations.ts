@@ -85,6 +85,10 @@ export interface Translations {
     noItems: string;
     warnOutOfBounds: string;
     warnDrawerOverlap: string;
+    warnShelfSmallZone: string;
+    warnRodLow: string;
+    warnRodDrawerClose: string;
+    dismissWarning: string;
   };
 
   doors: {
@@ -221,6 +225,10 @@ const he: Translations = {
     noItems: 'אין פריטים פנימיים',
     warnOutOfBounds: 'חורג מגבולות הגוף',
     warnDrawerOverlap: 'מגירות חופפות',
+    warnShelfSmallZone: 'חלל קטן — אין מדף',
+    warnRodLow: 'מוט נמוך — מתחת ל-80',
+    warnRodDrawerClose: 'מגירה קרובה למוט מדי',
+    dismissWarning: 'הסתר',
   },
 
   doors: {
@@ -356,6 +364,10 @@ const en: Translations = {
     noItems: 'No interior items',
     warnOutOfBounds: 'Exceeds body bounds',
     warnDrawerOverlap: 'Overlapping drawers',
+    warnShelfSmallZone: 'Zone too small',
+    warnRodLow: 'Rod too low — < 80 cm',
+    warnRodDrawerClose: 'Drawer too close to rod',
+    dismissWarning: 'Dismiss',
   },
 
   doors: {

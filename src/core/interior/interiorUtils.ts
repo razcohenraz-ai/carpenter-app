@@ -7,12 +7,18 @@ import type {
   DrawerItem,
   RodItem,
   InteriorWarning,
+  ShelfWarning,
 } from '../../types/interior';
 
 // ── ID generation ─────────────────────────────────────────────────────────────
 
 export function newItemId(): string {
   return Math.random().toString(36).slice(2, 9);
+}
+
+// Round to 1 decimal cm — keeps storage and display clean (carpentry precision).
+export function roundCm(h: number): number {
+  return Math.round(h * 10) / 10;
 }
 
 // ── Stable key for cross-recalculation identity ───────────────────────────────
@@ -146,45 +152,154 @@ export function defaultShelfPlacement(
 }
 
 const DEFAULT_DRAWER_H = 20;
+const ROD_CEILING_CLEARANCE = 10;
+const HANGER_DROP = 80;
+const HANGER_MIN_GAP = 70;
+const MIN_AUTO_SHELF_ZONE = 25;
+
+function findLowestRod(items: InteriorItem[]): RodItem | null {
+  let lowest: RodItem | null = null;
+  for (const item of items) {
+    if (item.type !== 'rod') continue;
+    if (!lowest || item.heightFromFloor < lowest.heightFromFloor) {
+      lowest = item;
+    }
+  }
+  return lowest;
+}
+
+function findDrawerJustBelowRod(items: InteriorItem[], rodH: number): DrawerItem | null {
+  let candidate: DrawerItem | null = null;
+  for (const item of items) {
+    if (item.type !== 'drawer') continue;
+    const top = item.heightFromFloor + item.drawerHeight;
+    if (top > rodH) continue;
+    if (!candidate || top > candidate.heightFromFloor + candidate.drawerHeight) {
+      candidate = item;
+    }
+  }
+  return candidate;
+}
 
 export function defaultDrawerPlacement(
   existingItems: InteriorItem[],
   bodyH: number,
   drawerH: number = DEFAULT_DRAWER_H,
-): DrawerItem {
+): { drawer: DrawerItem; warnings: ShelfWarning[] } {
+  const newId = newItemId();
+  const warnings: ShelfWarning[] = [];
+
   const drawers = existingItems
     .filter((i): i is DrawerItem => i.type === 'drawer')
     .sort((a, b) => a.heightFromFloor - b.heightFromFloor); // lowest first
 
-  const heightFromFloor = drawers.length === 0
-    ? Math.max(0, (bodyH - drawerH) / 2)                           // first: center
-    : Math.max(0, drawers[0]!.heightFromFloor - drawerH - 3);      // next: 3cm gap below lowest
+  // Existing drawer → stack 3cm below lowest (no rod-aware logic for stacking)
+  if (drawers.length > 0) {
+    const heightFromFloor = roundCm(Math.max(0, drawers[0]!.heightFromFloor - drawerH - 3));
+    return {
+      drawer: { type: 'drawer', id: newId, heightFromFloor, drawerHeight: drawerH },
+      warnings,
+    };
+  }
 
-  return { type: 'drawer', id: newItemId(), heightFromFloor, drawerHeight: drawerH };
+  const rod = findLowestRod(existingItems);
+  if (!rod) {
+    // No rod, no existing drawers → centre of body
+    return {
+      drawer: {
+        type: 'drawer',
+        id: newId,
+        heightFromFloor: roundCm(Math.max(0, (bodyH - drawerH) / 2)),
+        drawerHeight: drawerH,
+      },
+      warnings,
+    };
+  }
+
+  // Rod present, first drawer → keep 80cm hanger gap when possible
+  const rodH = rod.heightFromFloor;
+  const desiredH = rodH - HANGER_DROP - drawerH;
+  if (desiredH >= 0) {
+    return {
+      drawer: { type: 'drawer', id: newId, heightFromFloor: roundCm(desiredH), drawerHeight: drawerH },
+      warnings,
+    };
+  }
+
+  // Not enough room — place at floor, warn if resulting gap is <70
+  const placedH = 0;
+  const actualGap = rodH - drawerH;
+  if (actualGap < HANGER_MIN_GAP) {
+    warnings.push({ kind: 'rod_drawer_close', gap: actualGap, rodId: rod.id, drawerId: newId });
+  }
+  return {
+    drawer: { type: 'drawer', id: newId, heightFromFloor: placedH, drawerHeight: drawerH },
+    warnings,
+  };
 }
 
 export function defaultRodPlacement(
   bodyH: number,
   existingItems: InteriorItem[] = [],
-): RodItem {
+): { rod: RodItem; warnings: ShelfWarning[] } {
+  const newId = newItemId();
+  const warnings: ShelfWarning[] = [];
+
   const rods = existingItems
-    .filter(i => i.type === 'rod')
+    .filter((i): i is RodItem => i.type === 'rod')
     .map(i => i.heightFromFloor)
     .sort((a, b) => a - b);
 
-  if (rods.length === 0) {
-    return { type: 'rod', id: newItemId(), heightFromFloor: Math.max(0, bodyH - 10) };
+  // Subsequent rod → bisect largest gap between floor and existing rod heights
+  if (rods.length > 0) {
+    const boundaries = [0, ...rods];
+    let bestLo = 0, bestHi = rods[0]!;
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      const lo = boundaries[i]!;
+      const hi = boundaries[i + 1]!;
+      if (hi - lo > bestHi - bestLo) { bestLo = lo; bestHi = hi; }
+    }
+    return {
+      rod: { type: 'rod', id: newId, heightFromFloor: roundCm((bestLo + bestHi) / 2) },
+      warnings,
+    };
   }
 
-  // Subsequent rods: bisect the largest gap between floor (0) and existing rod heights
-  const boundaries = [0, ...rods];
-  let bestLo = 0, bestHi = rods[0]!;
-  for (let i = 0; i < boundaries.length - 1; i++) {
-    const lo = boundaries[i]!;
-    const hi = boundaries[i + 1]!;
-    if (hi - lo > bestHi - bestLo) { bestLo = lo; bestHi = hi; }
+  const defaultH = Math.max(0, bodyH - ROD_CEILING_CLEARANCE);
+  const drawers = existingItems.filter((i): i is DrawerItem => i.type === 'drawer');
+
+  if (drawers.length === 0) {
+    return { rod: { type: 'rod', id: newId, heightFromFloor: roundCm(defaultH) }, warnings };
   }
-  return { type: 'rod', id: newItemId(), heightFromFloor: (bestLo + bestHi) / 2 };
+
+  // Highest drawer top defines the minimum rod height needed for 80cm hanger
+  let highestTop = -Infinity;
+  let highestDrawer: DrawerItem = drawers[0]!;
+  for (const d of drawers) {
+    const top = d.heightFromFloor + d.drawerHeight;
+    if (top > highestTop) { highestTop = top; highestDrawer = d; }
+  }
+  const requiredH = highestTop + HANGER_DROP;
+
+  if (requiredH <= bodyH) {
+    // Push rod up to maintain 80cm gap, but never below the default ceiling clearance
+    return {
+      rod: { type: 'rod', id: newId, heightFromFloor: roundCm(Math.max(defaultH, requiredH)) },
+      warnings,
+    };
+  }
+
+  // Cannot satisfy 80cm — fall back to default position. Warn if gap <70.
+  const actualGap = defaultH - highestTop;
+  if (actualGap < HANGER_MIN_GAP) {
+    warnings.push({
+      kind: 'rod_drawer_close',
+      gap: actualGap,
+      rodId: newId,
+      drawerId: highestDrawer.id,
+    });
+  }
+  return { rod: { type: 'rod', id: newId, heightFromFloor: roundCm(defaultH) }, warnings };
 }
 
 // ── Equal shelf distribution ──────────────────────────────────────────────────
@@ -242,11 +357,19 @@ function computeFreeZones(
   return free.length > 0 ? free : [{ lo: 0, hi: containerH }];
 }
 
+// ── Smart shelf distribution ──────────────────────────────────────────────────
+// MIN_AUTO_SHELF_ZONE: zones smaller than this are skipped by auto distribution
+// HANGER_DROP: recommended clearance below a rod for hanging clothes
+// HANGER_MIN_GAP: minimum drawer-to-rod gap below which the rod is "inefficient"
+// (constants and rod/drawer helpers are declared above near defaultDrawerPlacement)
+
 export function redistributeShelves(
   items: InteriorItem[],
   containerH: number,
   shelfThickness = 1.8,
-): InteriorItem[] {
+): { items: InteriorItem[]; warnings: ShelfWarning[] } {
+  const warnings: ShelfWarning[] = [];
+
   const manual = items.filter(
     (i): i is ShelfItem => i.type === 'shelf' && i.isManuallyPositioned === true,
   );
@@ -255,34 +378,125 @@ export function redistributeShelves(
   );
   const others = items.filter(i => i.type !== 'shelf');
 
-  if (auto.length === 0) return items;
+  if (auto.length === 0) return { items, warnings };
 
-  // Blockers: drawers, rods, and manual shelves
-  const freeZones = computeFreeZones([...others, ...manual], containerH, shelfThickness);
+  // ── Rod-hanger logic ──────────────────────────────────────────────────────
+  // The lowest rod defines a hanger zone; the first auto shelf is the hanger
+  // floor — placed 80cm below the rod when possible.
+  const rod = findLowestRod(others);
+  let hangerShelf: ShelfItem | null = null;
+  let remainingAuto = [...auto];
 
-  // Pick the largest free zone; on equal size prefer the higher zone (larger lo)
-  const largestZone = freeZones.reduce((best, z) =>
-    (z.hi - z.lo) > (best.hi - best.lo) ||
-    ((z.hi - z.lo) === (best.hi - best.lo) && z.lo > best.lo)
-      ? z : best,
-  );
+  if (rod) {
+    const rodH = rod.heightFromFloor;
+    if (rodH < HANGER_DROP) {
+      warnings.push({ kind: 'rod_low', rodHeight: rodH, rodId: rod.id });
+    } else {
+      const drawer = findDrawerJustBelowRod(others, rodH);
+      if (drawer) {
+        const drawerTop = drawer.heightFromFloor + drawer.drawerHeight;
+        const gap = rodH - drawerTop;
 
-  // Sort auto shelves by current position to minimise visual jumps
-  const sorted = [...auto].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
-  const N = sorted.length;
-  const { lo, hi } = largestZone;
-  const redistributed = sorted.map((s, i) => ({
-    ...s,
-    heightFromFloor: lo + (hi - lo) * (i + 1) / (N + 1),
-  }));
+        if (gap < HANGER_MIN_GAP) {
+          // <70: rod is too close to the drawer — inefficient as hanger.
+          // The drawer top acts as the de-facto hanger floor (no extra shelf),
+          // and the first auto shelf goes below the drawer when there is room.
+          warnings.push({ kind: 'rod_drawer_close', gap, rodId: rod.id, drawerId: drawer.id });
+          if (drawer.heightFromFloor > 0) {
+            hangerShelf = { ...remainingAuto[0]!, heightFromFloor: drawer.heightFromFloor / 2 };
+            remainingAuto = remainingAuto.slice(1);
+          }
+        } else if (gap < HANGER_DROP) {
+          // 70–80: drawer top serves as the hanger floor; first shelf goes below it
+          if (drawer.heightFromFloor > 0) {
+            hangerShelf = { ...remainingAuto[0]!, heightFromFloor: drawer.heightFromFloor / 2 };
+            remainingAuto = remainingAuto.slice(1);
+          }
+        } else {
+          // ≥80: standard hanger — first shelf 80cm below rod
+          hangerShelf = { ...remainingAuto[0]!, heightFromFloor: rodH - HANGER_DROP };
+          remainingAuto = remainingAuto.slice(1);
+        }
+      } else {
+        hangerShelf = { ...remainingAuto[0]!, heightFromFloor: rodH - HANGER_DROP };
+        remainingAuto = remainingAuto.slice(1);
+      }
+    }
+  }
 
-  return [...others, ...manual, ...redistributed];
+  // ── Round-robin zone distribution ─────────────────────────────────────────
+  // Blockers (drawers, rods, manual shelves, and the hanger shelf if placed)
+  // define free zones. Zones ≥ 25cm receive auto shelves in round-robin order,
+  // starting with the largest. Multiple shelves in one zone divide it evenly.
+  const blockers: InteriorItem[] = [...others, ...manual];
+  if (hangerShelf) blockers.push(hangerShelf);
+
+  const allZones = computeFreeZones(blockers, containerH, shelfThickness);
+  const validZones = allZones.filter(z => z.hi - z.lo >= MIN_AUTO_SHELF_ZONE);
+
+  if (remainingAuto.length > 0) {
+    for (const z of allZones) {
+      const size = z.hi - z.lo;
+      if (size > 0 && size < MIN_AUTO_SHELF_ZONE) {
+        warnings.push({ kind: 'small_zone', zoneSize: size });
+      }
+    }
+  }
+
+  const placedShelves: ShelfItem[] = [];
+
+  if (remainingAuto.length > 0) {
+    const zonesToUse = validZones.length > 0 ? validZones : allZones;
+
+    if (zonesToUse.length === 0) {
+      const N = remainingAuto.length;
+      for (let i = 0; i < N; i++) {
+        placedShelves.push({
+          ...remainingAuto[i]!,
+          heightFromFloor: containerH * (i + 1) / (N + 1),
+        });
+      }
+    } else {
+      // Sort by size desc; on ties prefer the higher zone (larger lo)
+      const sortedZones = [...zonesToUse].sort(
+        (a, b) => (b.hi - b.lo) - (a.hi - a.lo) || b.lo - a.lo,
+      );
+
+      const zoneToShelves = new Map<number, ShelfItem[]>();
+      for (let i = 0; i < remainingAuto.length; i++) {
+        const zoneIdx = i % sortedZones.length;
+        if (!zoneToShelves.has(zoneIdx)) zoneToShelves.set(zoneIdx, []);
+        zoneToShelves.get(zoneIdx)!.push(remainingAuto[i]!);
+      }
+
+      for (const [zoneIdx, shelves] of zoneToShelves) {
+        const zone = sortedZones[zoneIdx]!;
+        const N = shelves.length;
+        for (let j = 0; j < N; j++) {
+          placedShelves.push({
+            ...shelves[j]!,
+            heightFromFloor: zone.lo + (zone.hi - zone.lo) * (j + 1) / (N + 1),
+          });
+        }
+      }
+    }
+  }
+
+  const finalShelves: ShelfItem[] = (hangerShelf
+    ? [hangerShelf, ...placedShelves]
+    : placedShelves
+  ).map(s => ({ ...s, heightFromFloor: roundCm(s.heightFromFloor) }));
+
+  return {
+    items: [...others, ...manual, ...finalShelves],
+    warnings,
+  };
 }
 
 export function addShelfRedistributed(
   items: InteriorItem[],
   containerH: number,
-): InteriorItem[] {
+): { items: InteriorItem[]; warnings: ShelfWarning[] } {
   const newShelf: ShelfItem = {
     type: 'shelf',
     id: newItemId(),

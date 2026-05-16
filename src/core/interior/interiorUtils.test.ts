@@ -158,57 +158,129 @@ describe('defaultShelfPlacement', () => {
 // ── defaultDrawerPlacement ────────────────────────────────────────────────────
 
 describe('defaultDrawerPlacement', () => {
-  it('first drawer: centered in body', () => {
-    const drawer = defaultDrawerPlacement([], 100);
+  it('first drawer (no rod): centered in body', () => {
+    const { drawer, warnings } = defaultDrawerPlacement([], 100);
     expect(drawer.type).toBe('drawer');
     expect(drawer.drawerHeight).toBe(20);
     expect(drawer.heightFromFloor).toBeCloseTo(40); // (100-20)/2
+    expect(warnings).toEqual([]);
   });
 
   it('second drawer: 3cm gap below first', () => {
-    const first = defaultDrawerPlacement([], 100);
-    const second = defaultDrawerPlacement([first], 100);
-    // first at h=40, second at 40-20-3=17
-    expect(second.heightFromFloor).toBeCloseTo(17);
+    const { drawer: first } = defaultDrawerPlacement([], 100);
+    const { drawer: second } = defaultDrawerPlacement([first], 100);
+    expect(second.heightFromFloor).toBeCloseTo(17); // 40-20-3
   });
 
-  it('clamps to 0 when body too small', () => {
-    const first = defaultDrawerPlacement([], 30);
-    // h = (30-20)/2 = 5
-    const second = defaultDrawerPlacement([first], 30);
-    // 5 - 20 - 3 = -18 → clamped to 0
+  it('clamps to 0 when stacking below tiny body', () => {
+    const { drawer: first } = defaultDrawerPlacement([], 30);
+    const { drawer: second } = defaultDrawerPlacement([first], 30);
     expect(second.heightFromFloor).toBe(0);
+  });
+
+  it('drawer with rod: placed at rodH − 80 − drawerHeight (gap = 80)', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 160 };
+    const { drawer, warnings } = defaultDrawerPlacement([rod], 170);
+    // 160 − 80 − 20 = 60. Drawer top at 80, gap = 80.
+    expect(drawer.heightFromFloor).toBeCloseTo(60);
+    expect(warnings).toEqual([]);
+  });
+
+  it('drawer with high rod: room for default + extra → place at rodH − 80 − drawerH', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 250 };
+    const { drawer, warnings } = defaultDrawerPlacement([rod], 300);
+    expect(drawer.heightFromFloor).toBeCloseTo(150); // 250 − 80 − 20
+    expect(warnings).toEqual([]);
+  });
+
+  it('drawer with rod too low for hanger → drawer at floor, rod_drawer_close warning', () => {
+    // Body 80, rod at 70. desired drawerH = 70-80-20 = -30 → place at 0.
+    // gap = 70 - 20 = 50 → warn.
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 70 };
+    const { drawer, warnings } = defaultDrawerPlacement([rod], 80);
+    expect(drawer.heightFromFloor).toBe(0);
+    expect(warnings).toHaveLength(1);
+    if (warnings[0]!.kind === 'rod_drawer_close') {
+      expect(warnings[0]!.gap).toBe(50);
+      expect(warnings[0]!.rodId).toBe('r');
+    }
+  });
+
+  it('second drawer with rod: stacks below first (no rod-aware logic)', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 160 };
+    const { drawer: first } = defaultDrawerPlacement([rod], 170);  // at 60
+    const { drawer: second, warnings } = defaultDrawerPlacement([rod, first], 170);
+    expect(second.heightFromFloor).toBeCloseTo(37); // 60-20-3
+    expect(warnings).toEqual([]);
   });
 });
 
 // ── defaultRodPlacement ───────────────────────────────────────────────────────
 
 describe('defaultRodPlacement', () => {
-  it('rod at 10cm below ceiling', () => {
-    const rod = defaultRodPlacement(100);
+  it('rod at 10cm below ceiling when no drawer', () => {
+    const { rod, warnings } = defaultRodPlacement(100);
     expect(rod.type).toBe('rod');
     expect(rod.heightFromFloor).toBe(90);
+    expect(warnings).toEqual([]);
   });
 
   it('clamps to 0 for tiny body', () => {
-    const rod = defaultRodPlacement(5);
-    expect(rod.heightFromFloor).toBe(0); // max(0, 5-10) = 0
+    const { rod } = defaultRodPlacement(5);
+    expect(rod.heightFromFloor).toBe(0);
   });
 
   it('second rod: center between first rod and floor', () => {
-    const first = defaultRodPlacement(100);
-    // first at 90
-    const second = defaultRodPlacement(100, [first]);
-    // largest gap between {0, 90} is [0,90] → center = 45
+    const { rod: first } = defaultRodPlacement(100);
+    const { rod: second } = defaultRodPlacement(100, [first]);
     expect(second.heightFromFloor).toBeCloseTo(45);
   });
 
   it('third rod: bisects largest remaining gap', () => {
-    const first  = defaultRodPlacement(100);          // 90
-    const second = defaultRodPlacement(100, [first]);  // 45
-    const third  = defaultRodPlacement(100, [first, second]);
-    // gaps between {0, 45, 90}: [0,45]=45 and [45,90]=45 → bisect first = 22.5
+    const { rod: first }  = defaultRodPlacement(100);          // 90
+    const { rod: second } = defaultRodPlacement(100, [first]);  // 45
+    const { rod: third }  = defaultRodPlacement(100, [first, second]);
     expect(third.heightFromFloor).toBeCloseTo(22.5);
+  });
+
+  it('rod with drawer below: default position fine → no warning', () => {
+    // Body 200, drawer at 30 (top=50). Default rod at 190.
+    // requiredH = 50 + 80 = 130. defaultH=190 already ≥ requiredH → place at 190.
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
+    const { rod, warnings } = defaultRodPlacement(200, [drawer]);
+    expect(rod.heightFromFloor).toBeCloseTo(190);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod with drawer high enough to push rod up', () => {
+    // Body 150, drawer at 50 (top=70). defaultH=140. requiredH = 70 + 80 = 150.
+    // 150 ≤ bodyH → place at max(140, 150) = 150.
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 50, drawerHeight: 20 };
+    const { rod, warnings } = defaultRodPlacement(150, [drawer]);
+    expect(rod.heightFromFloor).toBeCloseTo(150);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod with drawer that leaves no room: rod at default, warning emitted', () => {
+    // Body 170, drawer at 75 (top=95). defaultH=160. requiredH = 95 + 80 = 175 > bodyH.
+    // Place at 160. gap = 160 - 95 = 65 → warn (gap < 70).
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 75, drawerHeight: 20 };
+    const { rod, warnings } = defaultRodPlacement(170, [drawer]);
+    expect(rod.heightFromFloor).toBeCloseTo(160);
+    expect(warnings).toHaveLength(1);
+    if (warnings[0]!.kind === 'rod_drawer_close') {
+      expect(warnings[0]!.gap).toBe(65);
+      expect(warnings[0]!.drawerId).toBe('d');
+    }
+  });
+
+  it('rod with drawer that leaves marginal room (gap 70-79): rod at default, no warning', () => {
+    // Body 175, drawer at 25 (top=45). defaultH=165. requiredH = 45 + 80 = 125 ≤ bodyH.
+    // Place at max(165, 125) = 165. gap = 165 - 45 = 120. No warning.
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 25, drawerHeight: 20 };
+    const { rod, warnings } = defaultRodPlacement(175, [drawer]);
+    expect(rod.heightFromFloor).toBeCloseTo(165);
+    expect(warnings).toEqual([]);
   });
 });
 
@@ -263,15 +335,15 @@ describe('validateInterior', () => {
 
 describe('addShelfRedistributed', () => {
   it('א: first shelf → bodyH/2', () => {
-    const result = addShelfRedistributed([], 180);
-    const shelves = result.filter(i => i.type === 'shelf');
+    const { items } = addShelfRedistributed([], 180);
+    const shelves = items.filter(i => i.type === 'shelf');
     expect(shelves).toHaveLength(1);
     expect(shelves[0]!.heightFromFloor).toBeCloseTo(90);
   });
 
   it('ב: second shelf → 60 and 120', () => {
-    const after1 = addShelfRedistributed([], 180);
-    const after2 = addShelfRedistributed(after1, 180);
+    const { items: after1 } = addShelfRedistributed([], 180);
+    const { items: after2 } = addShelfRedistributed(after1, 180);
     const positions = after2
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
@@ -282,9 +354,9 @@ describe('addShelfRedistributed', () => {
   });
 
   it('ג: third shelf → 45, 90, 135', () => {
-    let items = addShelfRedistributed([], 180);
-    items = addShelfRedistributed(items, 180);
-    items = addShelfRedistributed(items, 180);
+    let items = addShelfRedistributed([], 180).items;
+    items = addShelfRedistributed(items, 180).items;
+    items = addShelfRedistributed(items, 180).items;
     const positions = items
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
@@ -294,15 +366,16 @@ describe('addShelfRedistributed', () => {
     expect(positions[2]).toBeCloseTo(135);
   });
 
-  it('ה: manual shelf stays, auto shelves redistribute in largest free zone above it', () => {
-    // Manual shelf at 50 occupies [50, 51.8]. Free zones: [0,50] and [51.8,180].
-    // Largest zone: [51.8, 180] (size 128.2). Two auto shelves divide it evenly.
+  it('ה: manual shelf stays, auto shelves split round-robin across zones', () => {
+    // Manual shelf at 50 occupies [50, 51.8]. Free zones: [0,50] (size 50) and
+    // [51.8,180] (size 128.2). Round-robin (sorted desc): shelf 1 → upper zone,
+    // shelf 2 → lower zone.
     const initial: InteriorItem[] = [
       { type: 'shelf', id: 'a', heightFromFloor: 50, isManuallyPositioned: true },
       { type: 'shelf', id: 'b', heightFromFloor: 120, isManuallyPositioned: false },
     ];
-    const result = addShelfRedistributed(initial, 180);
-    const shelves = result.filter(i => i.type === 'shelf');
+    const { items } = addShelfRedistributed(initial, 180);
+    const shelves = items.filter(i => i.type === 'shelf');
     const manualShelf = shelves.find(i => i.id === 'a');
     expect(manualShelf!.heightFromFloor).toBeCloseTo(50); // unchanged
     const autoPositions = shelves
@@ -310,14 +383,14 @@ describe('addShelfRedistributed', () => {
       .map(i => i.heightFromFloor)
       .sort((a, b) => a - b);
     expect(autoPositions).toHaveLength(2);
-    expect(autoPositions[0]).toBeCloseTo(51.8 + 128.2 / 3);  // ≈ 94.5
-    expect(autoPositions[1]).toBeCloseTo(51.8 + 128.2 * 2 / 3); // ≈ 137.3
+    expect(autoPositions[0]).toBeCloseTo(25);                // lower zone center
+    expect(autoPositions[1]).toBeCloseTo(51.8 + 128.2 / 2);  // ≈ 115.9
   });
 
   it('ח: drawer stays put when shelf added', () => {
     const drawer: InteriorItem = { type: 'drawer', id: 'dr', heightFromFloor: 30, drawerHeight: 20 };
-    const result = addShelfRedistributed([drawer], 180);
-    const foundDrawer = result.find(i => i.id === 'dr')!;
+    const { items } = addShelfRedistributed([drawer], 180);
+    const foundDrawer = items.find(i => i.id === 'dr')!;
     expect(foundDrawer.type).toBe('drawer');
     expect(foundDrawer.heightFromFloor).toBe(30);
   });
@@ -328,18 +401,10 @@ describe('redistributeShelves — free-zone awareness', () => {
     // Drawer zone [34.1, 54.1]. Free zones: [0,34.1] and [54.1,88.2] — equal size.
     // Tiebreaker: prefer higher zone → [54.1, 88.2]. Shelf at center = 71.15.
     const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 34.1, drawerHeight: 20 };
-    const result = addShelfRedistributed([drawer], 88.2);
-    const shelf = result.find(i => i.type === 'shelf')!;
+    const { items } = addShelfRedistributed([drawer], 88.2);
+    const shelf = items.find(i => i.type === 'shelf')!;
     expect(shelf.heightFromFloor).toBeGreaterThanOrEqual(54.1);
-    expect(shelf.heightFromFloor).toBeCloseTo((54.1 + 88.2) / 2); // 71.15
-  });
-
-  it('ד: rod at 170 → shelf lands in large zone [0, 168.5]', () => {
-    // Rod zone [168.5, 171.5]. Largest free zone [0, 168.5].
-    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 170 };
-    const result = addShelfRedistributed([rod], 180);
-    const shelf = result.find(i => i.type === 'shelf')!;
-    expect(shelf.heightFromFloor).toBeCloseTo(168.5 / 2); // 84.25
+    expect(shelf.heightFromFloor).toBeCloseTo(71.2, 1); // (54.1+88.2)/2 rounded to 1 decimal
   });
 
   it('drawer + shelf → redistribution moves shelf above drawer', () => {
@@ -347,15 +412,15 @@ describe('redistributeShelves — free-zone awareness', () => {
     // Largest: [80,180]. One auto shelf → center = 130.
     const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
     const shelf: InteriorItem  = { type: 'shelf',  id: 's', heightFromFloor: 90 };
-    const result = redistributeShelves([drawer, shelf], 180);
-    const found = result.find(i => i.id === 's')!;
+    const { items } = redistributeShelves([drawer, shelf], 180);
+    const found = items.find(i => i.id === 's')!;
     expect(found.heightFromFloor).toBeCloseTo(130);
   });
 
-  it('no blockers → same even distribution as before', () => {
-    let items = addShelfRedistributed([], 180);
-    items = addShelfRedistributed(items, 180);
-    items = addShelfRedistributed(items, 180);
+  it('no blockers → even distribution', () => {
+    let items = addShelfRedistributed([], 180).items;
+    items = addShelfRedistributed(items, 180).items;
+    items = addShelfRedistributed(items, 180).items;
     const positions = items
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
@@ -365,20 +430,133 @@ describe('redistributeShelves — free-zone awareness', () => {
     expect(positions[2]).toBeCloseTo(135);
   });
 
-  it('two drawers → shelves land in largest gap between them', () => {
-    // Body 200. Drawers at [10,30] and [150,170]. Gaps: [0,10], [30,150], [170,200].
-    // Largest: [30,150] (size 120). Two shelves: 30+40=70 and 30+80=110.
+  it('two drawers + two shelves → round-robin across two valid zones', () => {
+    // Body 200. Drawers at [10,30] and [150,170]. Free zones (sizes):
+    // [0,10] (10) — too small, [30,150] (120), [170,200] (30).
+    // Round-robin between [30,150] and [170,200]: shelf 1 → big zone (center 90),
+    // shelf 2 → small zone (center 185).
     const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
     const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 150, drawerHeight: 20 };
     let items: InteriorItem[] = [d1, d2];
-    items = addShelfRedistributed(items, 200);
-    items = addShelfRedistributed(items, 200);
+    items = addShelfRedistributed(items, 200).items;
+    items = addShelfRedistributed(items, 200).items;
     const positions = items
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
       .sort((a, b) => a - b);
-    expect(positions[0]).toBeCloseTo(70);
-    expect(positions[1]).toBeCloseTo(110);
+    expect(positions[0]).toBeCloseTo(90);
+    expect(positions[1]).toBeCloseTo(185);
+  });
+});
+
+describe('redistributeShelves — hanger logic', () => {
+  it('rod ≥80, no drawer → first shelf at rod − 80', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 170 };
+    const { items, warnings } = addShelfRedistributed([rod], 180);
+    const shelf = items.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeCloseTo(90); // 170 − 80
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod at exactly 80, no drawer → first shelf at 0', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 80 };
+    const { items, warnings } = addShelfRedistributed([rod], 180);
+    const shelf = items.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeCloseTo(0);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod <80 → rod_low warning, no hanger shelf, round-robin in available zone', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 60 };
+    const { items, warnings } = addShelfRedistributed([rod], 180);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toEqual({ kind: 'rod_low', rodHeight: 60, rodId: 'r' });
+    const shelf = items.find(i => i.type === 'shelf')!;
+    // Free zones (rod at 60 with ±1.5 → [58.5, 61.5]): [0, 58.5] and [61.5, 180]
+    // Largest [61.5, 180] (size 118.5). Single shelf at center, rounded to 1 decimal.
+    expect(shelf.heightFromFloor).toBeCloseTo(120.8, 1); // (61.5+180)/2 = 120.75
+  });
+
+  it('rod ≥80 + drawer with gap >80 → standard hanger logic', () => {
+    // Rod at 180, drawer top at 50 → gap = 130 (>80). First shelf at 100.
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 180 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
+    const { items, warnings } = addShelfRedistributed([rod, drawer], 200);
+    const shelf = items.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeCloseTo(100);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod + drawer gap in 70–80 → first shelf below drawer, no warning', () => {
+    // Rod at 100, drawer top at 25 → gap = 75 (in 70–80 range).
+    // First shelf below drawer (centered between floor and drawer bottom).
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 100 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 5, drawerHeight: 20 };
+    const { items, warnings } = addShelfRedistributed([rod, drawer], 180);
+    const shelf = items.find(i => i.type === 'shelf')!;
+    // drawer.heightFromFloor = 5, so shelf at 5/2 = 2.5
+    expect(shelf.heightFromFloor).toBeCloseTo(2.5);
+    expect(warnings).toEqual([]);
+  });
+
+  it('rod + drawer gap <70 → rod_drawer_close warning', () => {
+    // Rod at 100, drawer top at 50 → gap = 50 (<70).
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 100 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
+    const { items, warnings } = addShelfRedistributed([rod, drawer], 180);
+    expect(warnings.some(w => w.kind === 'rod_drawer_close')).toBe(true);
+    const w = warnings.find(w => w.kind === 'rod_drawer_close')!;
+    if (w.kind === 'rod_drawer_close') {
+      expect(w.gap).toBe(50);
+      expect(w.rodId).toBe('r');
+      expect(w.drawerId).toBe('d');
+    }
+    // First shelf still placed below drawer (drawer.heightFromFloor=30 > 0)
+    const shelf = items.find(i => i.type === 'shelf')!;
+    expect(shelf.heightFromFloor).toBeCloseTo(15);
+  });
+
+  it('multiple shelves with hanger: first = hanger, rest = round-robin', () => {
+    // Rod at 180, body 200. Add 3 shelves.
+    // First shelf becomes hanger at 100 (180 − 80).
+    // After hanger placed: blockers = rod[178.5, 181.5] + hanger[100, 101.8]
+    // Free zones: [0, 100], [101.8, 178.5]. Round-robin for 2 remaining:
+    //   shelf 2 → larger zone, shelf 3 → smaller zone.
+    let items: InteriorItem[] = [{ type: 'rod', id: 'r', heightFromFloor: 180 }];
+    items = addShelfRedistributed(items, 200).items;
+    items = addShelfRedistributed(items, 200).items;
+    items = addShelfRedistributed(items, 200).items;
+    const positions = items
+      .filter(i => i.type === 'shelf')
+      .map(i => i.heightFromFloor)
+      .sort((a, b) => a - b);
+    expect(positions).toHaveLength(3);
+    expect(positions).toContain(100);  // hanger shelf at exactly 100
+  });
+
+  it('rod stays put when shelf redistributed', () => {
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 160 };
+    const shelf: InteriorItem = { type: 'shelf', id: 's', heightFromFloor: 90 };
+    const { items } = redistributeShelves([rod, shelf], 180);
+    const foundRod = items.find(i => i.id === 'r')!;
+    expect(foundRod.heightFromFloor).toBe(160);
+  });
+});
+
+describe('redistributeShelves — small zone warnings', () => {
+  it('emits small_zone warning when a free zone is <25cm', () => {
+    // Body 200. Two drawers tightly packed leave a tiny gap between them.
+    // Drawer 1 at [10,30], drawer 2 at [40,60]: gap [30,40] = 10cm.
+    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
+    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 40, drawerHeight: 20 };
+    const { warnings } = addShelfRedistributed([d1, d2], 200);
+    expect(warnings.some(w => w.kind === 'small_zone')).toBe(true);
+  });
+
+  it('no small_zone warning when all zones are ≥25cm', () => {
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const { warnings } = addShelfRedistributed([drawer], 180);
+    expect(warnings.filter(w => w.kind === 'small_zone')).toHaveLength(0);
   });
 });
 
@@ -390,7 +568,7 @@ describe('redistributeShelves', () => {
       { type: 'shelf', id: 'c', heightFromFloor: 135 },
     ];
     const filtered = items.filter(i => i.id !== 'b');
-    const result = redistributeShelves(filtered, 180);
+    const { items: result } = redistributeShelves(filtered, 180);
     const positions = result
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
@@ -406,7 +584,7 @@ describe('redistributeShelves', () => {
       { type: 'shelf', id: 'c', heightFromFloor: 120 },
     ];
     const filtered = items.filter(i => i.id !== 'a');
-    const result = redistributeShelves(filtered, 180);
+    const { items: result } = redistributeShelves(filtered, 180);
     const positions = result
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
@@ -420,21 +598,13 @@ describe('redistributeShelves', () => {
       { type: 'shelf', id: 'a', heightFromFloor: 30, isManuallyPositioned: true },
       { type: 'shelf', id: 'b', heightFromFloor: 80, isManuallyPositioned: true },
     ];
-    const result = redistributeShelves(items, 180);
+    const { items: result } = redistributeShelves(items, 180);
     const positions = result
       .filter(i => i.type === 'shelf')
       .map(i => i.heightFromFloor)
       .sort((a, b) => a - b);
     expect(positions[0]).toBeCloseTo(30);
     expect(positions[1]).toBeCloseTo(80);
-  });
-
-  it('rod stays put when shelf redistributed', () => {
-    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 160 };
-    const shelf: InteriorItem = { type: 'shelf', id: 's', heightFromFloor: 90 };
-    const result = redistributeShelves([rod, shelf], 180);
-    const foundRod = result.find(i => i.id === 'r')!;
-    expect(foundRod.heightFromFloor).toBe(160);
   });
 });
 

@@ -9,8 +9,16 @@ import {
   validateInterior,
 } from '../../core/interior/interiorUtils';
 import styles from './BoxInteriorEditor.module.css';
-import type { InteriorItem, DrawerItem, InteriorWarning } from '../../types/interior';
+import type { InteriorItem, DrawerItem, InteriorWarning, ShelfWarning } from '../../types/interior';
 import type { Box, BoxPosition } from '../../types/geometry';
+import type { Translations } from '../../i18n/translations';
+
+function shelfWarningText(w: ShelfWarning, t: Translations): string {
+  if (w.kind === 'small_zone')        return t.interior.warnShelfSmallZone;
+  if (w.kind === 'rod_low')           return t.interior.warnRodLow;
+  if (w.kind === 'rod_drawer_close')  return t.interior.warnRodDrawerClose;
+  return '';
+}
 
 interface Props {
   box: Box;
@@ -42,6 +50,8 @@ export default function BoxInteriorEditor({
     cellItems.length === 2 ? cellItems : [[], []],
   );
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
+  const [boxShelfWarnings,  setBoxShelfWarnings]  = useState<ShelfWarning[]>([]);
+  const [cellShelfWarnings, setCellShelfWarnings] = useState<ShelfWarning[][]>([[], []]);
 
   const bodyH = box.H;
   const cellW = (box.W - tBody) / 2;
@@ -71,14 +81,31 @@ export default function BoxInteriorEditor({
     onChange(next);
   }
 
-  function addShelf(): void { update(addShelfRedistributed(localItems, bodyH)); }
-  function addDrawer(): void { update([...localItems, defaultDrawerPlacement(localItems, bodyH)]); }
-  function addRod(): void { update([...localItems, defaultRodPlacement(bodyH, localItems)]); }
+  function addShelf(): void {
+    const { items: next, warnings } = addShelfRedistributed(localItems, bodyH);
+    update(next);
+    setBoxShelfWarnings(warnings);
+  }
+  function addDrawer(): void {
+    const { drawer, warnings } = defaultDrawerPlacement(localItems, bodyH);
+    update([...localItems, drawer]);
+    setBoxShelfWarnings(warnings);
+  }
+  function addRod(): void {
+    const { rod, warnings } = defaultRodPlacement(bodyH, localItems);
+    update([...localItems, rod]);
+    setBoxShelfWarnings(warnings);
+  }
 
   function deleteItem(id: string): void {
     const filtered = localItems.filter(i => i.id !== id);
     const wasShelf = localItems.some(i => i.id === id && i.type === 'shelf');
-    update(wasShelf ? redistributeShelves(filtered, bodyH) : filtered);
+    if (wasShelf) {
+      const { items: next } = redistributeShelves(filtered, bodyH);
+      update(next);
+    } else {
+      update(filtered);
+    }
   }
 
   function updateHeight(id: string, raw: string): void {
@@ -115,24 +142,54 @@ export default function BoxInteriorEditor({
     onCellItemsChange(cellIndex, next);
   }
 
+  function setCellWarnings(ci: number, warnings: ShelfWarning[]): void {
+    setCellShelfWarnings(prev => {
+      const out = [prev[0] ?? [], prev[1] ?? []];
+      out[ci] = warnings;
+      return out;
+    });
+  }
+
   function addCellShelf(ci: number): void {
     const c = localCellItems[ci] ?? [];
-    updateCell(ci, addShelfRedistributed(c, bodyH));
+    const { items: next, warnings } = addShelfRedistributed(c, bodyH);
+    updateCell(ci, next);
+    setCellWarnings(ci, warnings);
   }
   function addCellDrawer(ci: number): void {
     const c = localCellItems[ci] ?? [];
-    updateCell(ci, [...c, defaultDrawerPlacement(c, bodyH)]);
+    const { drawer, warnings } = defaultDrawerPlacement(c, bodyH);
+    updateCell(ci, [...c, drawer]);
+    setCellWarnings(ci, warnings);
   }
   function addCellRod(ci: number): void {
     const c = localCellItems[ci] ?? [];
-    updateCell(ci, [...c, defaultRodPlacement(bodyH, c)]);
+    const { rod, warnings } = defaultRodPlacement(bodyH, c);
+    updateCell(ci, [...c, rod]);
+    setCellWarnings(ci, warnings);
   }
 
   function deleteCellItem(ci: number, id: string): void {
     const current = localCellItems[ci] ?? [];
     const filtered = current.filter(i => i.id !== id);
     const wasShelf = current.some(i => i.id === id && i.type === 'shelf');
-    updateCell(ci, wasShelf ? redistributeShelves(filtered, bodyH) : filtered);
+    if (wasShelf) {
+      const { items: next } = redistributeShelves(filtered, bodyH);
+      updateCell(ci, next);
+    } else {
+      updateCell(ci, filtered);
+    }
+  }
+
+  function dismissBoxWarning(i: number): void {
+    setBoxShelfWarnings(ws => ws.filter((_, j) => j !== i));
+  }
+  function dismissCellWarning(ci: number, i: number): void {
+    setCellShelfWarnings(prev => {
+      const out = [prev[0] ?? [], prev[1] ?? []];
+      out[ci] = (out[ci] ?? []).filter((_, j) => j !== i);
+      return out;
+    });
   }
 
   function updateCellHeight(ci: number, id: string, raw: string): void {
@@ -262,6 +319,31 @@ export default function BoxInteriorEditor({
       return t.interior.partitionWarnRemove(a, b);
     }
     return '';
+  }
+
+  // ── shelf-warning banner ──────────────────────────────────────────────────
+
+  function renderShelfWarnings(
+    warnings: ShelfWarning[],
+    onDismiss: (i: number) => void,
+  ): React.JSX.Element | null {
+    if (warnings.length === 0) return null;
+    return (
+      <div className={styles.shelfWarnings}>
+        {warnings.map((w, i) => (
+          <div key={i} className={styles.shelfWarning}>
+            <span>⚠ {shelfWarningText(w, t)}</span>
+            <button
+              className={styles.shelfWarningDismiss}
+              onClick={() => onDismiss(i)}
+              aria-label={t.interior.dismissWarning}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   // ── item list renderer (shared between box and cell) ─────────────────────
@@ -412,6 +494,11 @@ export default function BoxInteriorEditor({
                     </button>
                   </div>
 
+                  {renderShelfWarnings(
+                    cellShelfWarnings[ci] ?? [],
+                    i => dismissCellWarning(ci, i),
+                  )}
+
                   {renderItemList(
                     cellItemList,
                     id => deleteCellItem(ci, id),
@@ -462,6 +549,8 @@ export default function BoxInteriorEditor({
                 </button>
               )}
             </div>
+
+            {renderShelfWarnings(boxShelfWarnings, dismissBoxWarning)}
 
             {renderItemList(
               sorted,
