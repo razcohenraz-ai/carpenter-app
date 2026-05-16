@@ -16,7 +16,7 @@ src/
 ├── types/              הגדרות TypeScript (ממשקים, סוגים)
 │   ├── geometry.ts     Box, Dimensions, BoxPosition, BoxLevel
 │   ├── doors.ts        Door, Hinge, DoorById
-│   ├── interior.ts     InteriorItem, ShelfItem, DrawerItem, RodItem
+│   ├── interior.ts     InteriorItem, ShelfItem (+ isManuallyPositioned), DrawerItem, RodItem, CellInteriorById
 │   ├── cuts.ts         CutItem, CutGroup, SheetUsage
 │   ├── materials.ts    Material, MaterialId
 │   ├── hardware.ts     HardwareSpec, HardwareLineItem, FurnitureType
@@ -33,7 +33,7 @@ src/
 │   │   ├── cuttingList.ts        חישוב רשימת חיתוכים (calcCuts)
 │   │   └── sheetCalculator.ts    ספירת לוחות (sheetsNeeded)
 │   ├── interior/
-│   │   └── interiorUtils.ts      init/preserve/validate פריטים פנימיים
+│   │   └── interiorUtils.ts      init/preserve/validate; redistributeShelves; addShelfRedistributed
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן שעות עבודה (לא מחובר לUI עדיין)
 │   └── index.ts                  re-exports מ-core
@@ -51,7 +51,7 @@ src/
 │
 └── ui/
     ├── hooks/
-    │   ├── useCabinet.ts     ה-hook המרכזי — כל state הארון
+    │   ├── useCabinet.ts     ה-hook המרכזי — כל state הארון (כולל cellInteriorById, addPartition/removePartition/setCellItems)
     │   └── useTranslation.ts גישה לתרגומים
     └── components/
         ├── CabinetForm.tsx         טופס קלט + תיאום ראשי
@@ -77,6 +77,7 @@ CabinetForm (input)
         → calcDoors()          → doors: DoorCalcResult
         → door preservation    → doorsById: DoorById
         → interior preservation → interiorById: InteriorById
+        → cell interior preservation → cellInteriorById: CellInteriorById
         → partition preservation → partitionsById: Map<string,boolean>
     → setState → תצוגה מתעדכנת
 ```
@@ -117,7 +118,12 @@ interface Door {
 ```typescript
 type InteriorItem = ShelfItem | DrawerItem | RodItem;
 // כולם: { id, type, heightFromFloor }
+// ShelfItem גם: { isManuallyPositioned?: boolean }  ← true לאחר גרירה/שינוי ידני
 // DrawerItem גם: { drawerHeight }
+
+// תאים (גוף עם מחיצה):
+type CellInteriorById = Record<string, InteriorItem[][]>;
+// מפתח = Box.id, ערך = [rightCellItems, leftCellItems]
 ```
 
 ## עקרונות ארכיטקטוניים
