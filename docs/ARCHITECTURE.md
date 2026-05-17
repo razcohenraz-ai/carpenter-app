@@ -126,6 +126,35 @@ type CellInteriorById = Record<string, InteriorItem[][]>;
 // מפתח = Box.id, ערך = [rightCellItems, leftCellItems]
 ```
 
+### ShelfWarning — אזהרות חלוקת מדפים
+```typescript
+type ShelfWarning =
+  | { kind: 'small_zone' }                                                    // פער <25 ס"מ בין פריטים סמוכים
+  | { kind: 'rod_low'; rodHeight: number; rodId: string }                     // מוט <80 ס"מ
+  | { kind: 'rod_drawer_close'; gap: number; rodId: string; drawerId: string }; // gap <70 בין מגירה למוט
+```
+מופקות ע"י `redistributeShelves`, `defaultDrawerPlacement`, `defaultRodPlacement`. מוצגות כבאנר בעורך הפנים (`boxShelfWarnings`, `cellShelfWarnings`).
+
+### חתימות פונקציות placement (כולן מחזירות `{ item, warnings }`)
+```typescript
+redistributeShelves(items, containerH, shelfThickness=1.8)
+  → { items: InteriorItem[]; warnings: ShelfWarning[] }
+addShelfRedistributed(items, containerH)
+  → { items: InteriorItem[]; warnings: ShelfWarning[] }
+defaultDrawerPlacement(existingItems, bodyH, drawerH=20)
+  → { drawer: DrawerItem; warnings: ShelfWarning[] }
+defaultRodPlacement(bodyH, existingItems)
+  → { rod: RodItem; warnings: ShelfWarning[] }
+```
+
+### Helpers פנימיים ב-`interiorUtils.ts`
+- `roundCm(h)` — עיגול ל-1 ספרה עשרונית. מיושם בכל פלט של פונקציות placement.
+- `findLowestRod(items)` — מחזיר את המוט הנמוך ביותר (לחישוב hanger).
+- `findDrawerJustBelowRod(items, rodH)` — מחזיר את המגירה עם ראש הכי גבוה מתחת למוט.
+- `physicalZone(item, shelfThickness)` — אזור פיזי של פריט: מדף=[h,h+1.8], מגירה=[h,h+dH], מוט=[h-1.5,h+1.5].
+- `hasSmallGap(items, shelfThickness)` — True אם יש זוג פריטים סמוכים בפער 0<gap<25 ס"מ.
+- קבועים: `HANGER_DROP=80`, `HANGER_MIN_GAP=70`, `MIN_AUTO_SHELF_ZONE=25`, `ROD_CEILING_CLEARANCE=10`.
+
 ## עקרונות ארכיטקטוניים
 
 1. **הפרדה מלאה**: `core/` לא יודע מ-React. components לא מחשבים.
