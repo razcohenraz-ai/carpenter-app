@@ -9,7 +9,7 @@ import {
   validateInterior,
 } from '../../core/interior/interiorUtils';
 import styles from './BoxInteriorEditor.module.css';
-import type { InteriorItem, DrawerItem, InteriorWarning, ShelfWarning } from '../../types/interior';
+import type { InteriorItem, DrawerItem, DrawerMount, InteriorWarning, ShelfWarning } from '../../types/interior';
 import type { Box, BoxPosition } from '../../types/geometry';
 import type { Translations } from '../../i18n/translations';
 
@@ -52,6 +52,9 @@ export default function BoxInteriorEditor({
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
   const [boxShelfWarnings,  setBoxShelfWarnings]  = useState<ShelfWarning[]>([]);
   const [cellShelfWarnings, setCellShelfWarnings] = useState<ShelfWarning[][]>([[], []]);
+  // Where to drop the new drawer once the user picks internal/external.
+  // null = no dialog open; { kind: 'box' } = add to body; { kind: 'cell', cellIndex } = add to cell.
+  const [drawerTarget, setDrawerTarget] = useState<null | { kind: 'box' } | { kind: 'cell'; cellIndex: number }>(null);
 
   const bodyH = box.H;
   const cellW = (box.W - tBody) / 2;
@@ -87,9 +90,23 @@ export default function BoxInteriorEditor({
     setBoxShelfWarnings(warnings);
   }
   function addDrawer(): void {
-    const { drawer, warnings } = defaultDrawerPlacement(localItems, bodyH);
-    update([...localItems, drawer]);
-    setBoxShelfWarnings(warnings);
+    // Open the type dialog; actual placement happens in confirmDrawerType.
+    setDrawerTarget({ kind: 'box' });
+  }
+  function confirmDrawerType(mount: DrawerMount): void {
+    if (!drawerTarget) return;
+    if (drawerTarget.kind === 'box') {
+      const { drawer, warnings } = defaultDrawerPlacement(localItems, bodyH, undefined, mount);
+      update([...localItems, drawer]);
+      setBoxShelfWarnings(warnings);
+    } else {
+      const ci = drawerTarget.cellIndex;
+      const c = localCellItems[ci] ?? [];
+      const { drawer, warnings } = defaultDrawerPlacement(c, bodyH, undefined, mount);
+      updateCell(ci, [...c, drawer]);
+      setCellWarnings(ci, warnings);
+    }
+    setDrawerTarget(null);
   }
   function addRod(): void {
     const { rod, warnings } = defaultRodPlacement(bodyH, localItems);
@@ -157,10 +174,8 @@ export default function BoxInteriorEditor({
     setCellWarnings(ci, warnings);
   }
   function addCellDrawer(ci: number): void {
-    const c = localCellItems[ci] ?? [];
-    const { drawer, warnings } = defaultDrawerPlacement(c, bodyH);
-    updateCell(ci, [...c, drawer]);
-    setCellWarnings(ci, warnings);
+    // Same dialog as the body editor — user picks mount, then confirmDrawerType places it.
+    setDrawerTarget({ kind: 'cell', cellIndex: ci });
   }
   function addCellRod(ci: number): void {
     const c = localCellItems[ci] ?? [];
@@ -431,6 +446,34 @@ export default function BoxInteriorEditor({
                 {t.interior.cancel}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer-type dialog (internal vs external) */}
+      {drawerTarget && (
+        <div className={styles.dialogOverlay}>
+          <div className={styles.dialog}>
+            <p className={styles.dialogTitle}>{t.interior.drawerTypeDialogTitle}</p>
+            <div className={styles.drawerTypeBtns}>
+              <button
+                className={styles.drawerTypeBtn}
+                onClick={() => confirmDrawerType('internal')}
+              >
+                <span className={styles.drawerTypeLabel}>{t.interior.drawerInternal}</span>
+                <span className={styles.drawerTypeDesc}>{t.interior.drawerInternalDesc}</span>
+              </button>
+              <button
+                className={styles.drawerTypeBtn}
+                onClick={() => confirmDrawerType('external')}
+              >
+                <span className={styles.drawerTypeLabel}>{t.interior.drawerExternal}</span>
+                <span className={styles.drawerTypeDesc}>{t.interior.drawerExternalDesc}</span>
+              </button>
+            </div>
+            <button className={styles.dialogCancelBtn} onClick={() => setDrawerTarget(null)}>
+              {t.interior.cancel}
+            </button>
           </div>
         </div>
       )}

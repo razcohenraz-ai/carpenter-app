@@ -7,7 +7,27 @@
 
 ## [Unreleased]
 
-### נוסף
+### נוסף — שלב 2.1: חיווט מגירות חיצוניות ל-state ול-UI
+- `useCabinet.calculate()` משתמש ב-`calcMainDoorHeight` במקום `getDoorHeight` — הדלת מתקצרת אוטומטית כשיש external drawers בגוף (או בתא, במצב מחיצה).
+- העברת `coversSkirt` אוטומטית מהדלת הראשית למגירה החיצונית הנמוכה ביותר. הדלת מאבדת את הדגל; ה-`drawerId` נשמר ב-`skirtCoveringDrawerIdsRef` ל-2.2 (תצוגה).
+- חיתוכי חזיתות external מצורפים אוטומטית ל-cuts תחת `CutGroup` `'front'` — דרך `calcExternalDrawerFrontCuts` שנקרא פר-`(box, frontIndex)`.
+- `setBoxInterior` / `setCellItems` / `setBoxPartitions` / `addPartition` / `removePartition` מפעילים `calculate()` במלואו כאשר שינוי מצב המגירות הוא "מבני" (mount toggle, drawerHeight, הוספה/הסרה של external) — דרך helper חדש `externalStackChanged`.
+- **BoxInteriorEditor**: כפתור "+ מגירה" (גם בגוף הראשי וגם בכל תא במצב מחיצה) פותח דיאלוג בחירה internal/external עם תיאור משני קצר. הלחיצה על אחד הסוגים יוצרת `DrawerItem` עם `mount` המתאים.
+- `defaultDrawerPlacement` קיבל פרמטר אופציונלי `mount?: DrawerMount` (default `'internal'`). עבור `mount='external'`: מיקום `heightFromFloor = calcExternalStackHeight + drawerHeight/2` (נערם מעל קיימים).
+- helpers ב-`core/doors/doorUtils.ts`: `getItemsForFront`, `externalStackSignature`, `externalStackChanged`.
+- 4 מפתחות תרגום חדשים (HE/EN): `drawerTypeDialogTitle`, `drawerInternal`, `drawerExternal`, `drawerInternalDesc`, `drawerExternalDesc`.
+- 18 בדיקות חדשות (`externalDrawerWiring.test.ts`) מכסות את 5 התרחישים שצוינו ב-2.1.D + signature stability.
+
+### תוקן (חוב משלב 1)
+- `cellIndexToFrontIndex` היה הפוך: cell 0 (ימני) מיפה ל-frontIndex `numFronts-1` (השמאלי). תוקן ל-זהות: cell 0 → frontIndex 0, cell 1 → frontIndex numFronts−1. הבדיקה התואמת ב-stage 1 עודכנה בהתאמה. ראה `DECISIONS_LOG.md` 2026-05-17.
+
+### ידוע (לא יעבוד עד שלב 2.2)
+- `CabinetSketch`, `CabinetFrontsSketch`, `BoxBodySketch`, `DoorsList` לא מציגים external drawers כחזיתות נפרדות. הם רואים את המגירה כפריט פנימי בלבד (heightFromFloor + drawerHeight). הדלת בסקיצה מצוירת לפי `door.height` (ובמצב הקיים — היא תיראה מקוצרת, מה שיוצר רווח ריק במקום שבו המגירה תהיה).
+- אין עדיין עורך מותאם לחזית מגירה (`frontThicknessOverride` עוד לא חשוף ב-UI).
+- אזהרות `main_door_absent` / `main_door_too_short` עוד לא מוצגות.
+- חיתוכי הדלת הראשית מ-`calcCuts` משקפים את הגוף המלא, **לא** את הדלת המקוצרת. החיתוך הסופי בקובץ עדיין יציג את הדלת כ-`box.H − 2×gap` ולא את `mainDoorHeight`. שלב הבא ידרוש refactor של `calcCuts` או יצירת חיתוכי דלת פר-`Door` ב-`useCabinet` (לא נעשה ב-2.1 כי ההוראה אמרה "מצורפת ל-cuts הסופי", לא "החלף").
+
+### נוסף — שלב 1: ליבה בלבד
 - **מגירות חיצוניות (external drawers) — שלב 1: ליבה בלבד.** `DrawerItem` קיבל שדה `mount: 'internal' | 'external'` (חובה) ו-`frontThicknessOverride?: MaterialId` (אופציונלי, רלוונטי רק ל-external). מגירה חיצונית היא מגירה עם חזית עצמאית שמשולבת בקדמת הארון.
 - helpers ליבה חדשים ב-`core/doors/doorUtils.ts`:
   - `getExternalDrawers(items)` — מסנן ומיין external drawers (הנמוך ראשון)
@@ -21,14 +41,12 @@
   - `calcExternalDrawerFrontCuts(items, frontWidthCm, gapMm, plinthCm, mainDoorCoversSkirt, frontThicknessMm, perDrawerThicknessMm?)` — מייצר `CutItem` לכל external drawer בקבוצה `'front'` (קבוצה חדשה ב-`CutGroup`)
 - 30 בדיקות חדשות (`externalDrawer.test.ts`) מכסות: ערימה ריקה/יחיד/מרובה, mainDoorHeight חיובי/אפס/שלילי, אזהרות, coversSkirt transfer, override עובי, מיפוי תאים.
 
-### ידוע (לא יעבוד עד שלב 2)
-- שלב 1 רק מוסיף **לוגיקת ליבה**. אין wiring ב-`useCabinet` או ב-UI:
-  - `defaultDrawerPlacement` עדיין מציב מגירות חדשות עם `mount: 'internal'` בלבד.
-  - הדלת הראשית בעת חישוב לא מקוצרת אוטומטית כשיש external drawers בגוף — `useCabinet.calculate()` עדיין משתמש ב-`getDoorHeight(box.H, ...)` ישירות. שלב 2 ידרוש: החלפה ל-`calcMainDoorHeight(box.H, items, gapMm, ...)` והעברת `coversSkirt` למגירה הנמוכה.
-  - `calcExternalDrawerFrontCuts` לא נקרא משום מקום ב-`useCabinet`. שלב 2 ידרוש לקרוא אותו פר-גוף ולמזג את הפלט ל-`cuts`.
-  - אין UI להחלפת `mount` או `frontThicknessOverride` של מגירה. השדה זמין רק בנתונים.
-  - אזהרות `main_door_absent` / `main_door_too_short` עוד לא מוצגות באף מקום.
-- האזהרה "מוט נמוך — מתחת ל-80" וחבריה (`ShelfWarning`) שמופקות מ-`redistributeShelves` עדיין לא מתחברות ל-`main_door_*` warnings החדשות — שני מנגנונים נפרדים.
+### ידוע (סטטוס מעודכן ל-2.1)
+- חיווט `useCabinet` (החלפה ל-`calcMainDoorHeight`, `coversSkirt` transfer, חיתוכי `'front'`) — ✅ נעשה ב-2.1.
+- UI להחלפת `mount` (דיאלוג internal/external) — ✅ נעשה ב-2.1.
+- `frontThicknessOverride` — עדיין לא חשוף ב-UI (פתוח ל-2.2 או אחרי).
+- אזהרות `main_door_absent` / `main_door_too_short` — עדיין לא מוצגות (פתוח).
+- חיבור `ShelfWarning` ל-`MainDoorWarning` — עדיין שני מנגנונים נפרדים.
 
 ### תוקן
 - מיקום מדף בלתי-עקבי לפי סדר ההוספה: "מוט → מגירה → מדף" יצר מדף בדיוק על ראש המגירה (gap=80 → hanger ב-rod-80 = drawerTop), בעוד "מגירה → מוט → מדף" יצר מדף מתחת למגירה. עכשיו: כשיש מגירה מתחת למוט (בכל gap), המדף הראשון תמיד מוצב מתחת למגירה (drawer top משמש כרצפת התלייה). תוצאה: התנהגות עקבית ללא תלות בסדר ההוספה

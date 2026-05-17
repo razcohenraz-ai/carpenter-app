@@ -177,14 +177,14 @@ describe('validateMainDoorHeight', () => {
 // ── cellIndexToFrontIndex ─────────────────────────────────────────────────────
 
 describe('cellIndexToFrontIndex', () => {
-  it('cellIndex 0 (right) → frontIndex = numFronts − 1', () => {
-    expect(cellIndexToFrontIndex(0, 2)).toBe(1);
-    expect(cellIndexToFrontIndex(0, 3)).toBe(2);
+  it('cellIndex 0 (right) → frontIndex 0 (right door, identity)', () => {
+    expect(cellIndexToFrontIndex(0, 2)).toBe(0);
+    expect(cellIndexToFrontIndex(0, 3)).toBe(0);
   });
 
-  it('cellIndex 1 (left) → frontIndex = 0', () => {
-    expect(cellIndexToFrontIndex(1, 2)).toBe(0);
-    expect(cellIndexToFrontIndex(1, 3)).toBe(0);
+  it('cellIndex 1 (left) → frontIndex = numFronts − 1 (left-most door)', () => {
+    expect(cellIndexToFrontIndex(1, 2)).toBe(1);
+    expect(cellIndexToFrontIndex(1, 3)).toBe(2);
   });
 });
 

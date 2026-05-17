@@ -283,6 +283,50 @@
 
 .dialogCancelBtn:hover { background: var(--color-surface-raised); }
 
+.dialogTitle {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  margin: 0;
+  text-align: center;
+}
+
+.drawerTypeBtns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.drawerTypeBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  text-align: start;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.drawerTypeBtn:hover {
+  background: var(--color-surface-raised);
+  border-color: var(--color-primary, #1976d2);
+}
+
+.drawerTypeLabel {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.drawerTypeDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
 /* ── Partition mode layout ── */
 
 .partitionBody {

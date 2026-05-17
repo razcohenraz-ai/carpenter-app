@@ -5,6 +5,7 @@ import type {
   InteriorById,
   ShelfItem,
   DrawerItem,
+  DrawerMount,
   RodItem,
   InteriorWarning,
   ShelfWarning,
@@ -185,15 +186,35 @@ export function defaultDrawerPlacement(
   existingItems: InteriorItem[],
   bodyH: number,
   drawerH: number = DEFAULT_DRAWER_H,
+  mount: DrawerMount = 'internal',
+  gapMm = 2,
 ): { drawer: DrawerItem; warnings: ShelfWarning[] } {
   const newId = newItemId();
   const warnings: ShelfWarning[] = [];
 
+  // External drawer: stack above existing externals.
+  // heightFromFloor = stack-top centred at drawerHeight/2 (so drawer bottom sits
+  // exactly at the top of the current stack — the next external slots above
+  // the previous one with a gap supplied by calcExternalStackHeight).
+  if (mount === 'external') {
+    const stackTop = calcExternalStackHeightLocal(existingItems, gapMm);
+    return {
+      drawer: {
+        type: 'drawer',
+        id: newId,
+        heightFromFloor: roundCm(stackTop + drawerH / 2),
+        drawerHeight: drawerH,
+        mount: 'external',
+      },
+      warnings,
+    };
+  }
+
   const drawers = existingItems
-    .filter((i): i is DrawerItem => i.type === 'drawer')
+    .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount !== 'external')
     .sort((a, b) => a.heightFromFloor - b.heightFromFloor); // lowest first
 
-  // Existing drawer → stack 3cm below lowest (no rod-aware logic for stacking)
+  // Existing internal drawer → stack 3cm below lowest (no rod-aware logic for stacking)
   if (drawers.length > 0) {
     const heightFromFloor = roundCm(Math.max(0, drawers[0]!.heightFromFloor - drawerH - 3));
     return {
@@ -237,6 +258,18 @@ export function defaultDrawerPlacement(
     drawer: { type: 'drawer', id: newId, heightFromFloor: placedH, drawerHeight: drawerH, mount: 'internal' },
     warnings,
   };
+}
+
+// Local copy to avoid circular import with doorUtils (interiorUtils is imported
+// by doorUtils via newItemId). Same formula as `calcExternalStackHeight`.
+function calcExternalStackHeightLocal(items: InteriorItem[], gapMm: number): number {
+  const externals = items.filter(
+    (i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external',
+  );
+  if (externals.length === 0) return 0;
+  const gapCm = gapMm / 10;
+  const sum = externals.reduce((s, d) => s + d.drawerHeight, 0);
+  return sum + externals.length * gapCm;
 }
 
 export function defaultRodPlacement(

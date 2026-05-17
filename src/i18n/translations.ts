@@ -89,6 +89,11 @@ export interface Translations {
     warnRodLow: string;
     warnRodDrawerClose: string;
     dismissWarning: string;
+    drawerTypeDialogTitle: string;
+    drawerInternal: string;
+    drawerExternal: string;
+    drawerInternalDesc: string;
+    drawerExternalDesc: string;
   };
 
   doors: {
@@ -229,6 +234,11 @@ const he: Translations = {
     warnRodLow: 'מוט נמוך — מתחת ל-80',
     warnRodDrawerClose: 'מגירה קרובה למוט מדי',
     dismissWarning: 'הסתר',
+    drawerTypeDialogTitle: 'סוג מגירה',
+    drawerInternal: 'מגירה פנימית',
+    drawerExternal: 'מגירה חיצונית',
+    drawerInternalDesc: 'יושבת מאחורי הדלת',
+    drawerExternalDesc: 'חזית פיזית משלה',
   },
 
   doors: {
@@ -368,6 +378,11 @@ const en: Translations = {
     warnRodLow: 'Rod too low — < 80 cm',
     warnRodDrawerClose: 'Drawer too close to rod',
     dismissWarning: 'Dismiss',
+    drawerTypeDialogTitle: 'Drawer type',
+    drawerInternal: 'Internal drawer',
+    drawerExternal: 'External drawer',
+    drawerInternalDesc: 'Sits behind the door',
+    drawerExternalDesc: 'Has its own physical front',
   },
 
   doors: {

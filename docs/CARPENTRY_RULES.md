@@ -302,13 +302,18 @@
 
 ### אינטראקציה עם מחיצות פנימיות
 - **מגירה ב-`cellInteriorById[boxId][cellIndex]`**: רוחב = W_cell, מקצרת רק את החזית של frontIndex המתאים לתא:
-  - cellIndex 0 (ימני) → frontIndex = numFronts − 1
-  - cellIndex 1 (שמאלי) → frontIndex = 0
+  - cellIndex 0 (ימני) → frontIndex 0 (זהות; דלת ימנית)
+  - cellIndex 1 (שמאלי) → frontIndex = numFronts − 1 (הדלת השמאלית ביותר)
 - **מגירה ב-`interiorById` בגוף עם numFronts>1 ללא מחיצה**: רוחב גוף מלא, מקצרת את **כל** החזיתות באותו גוף בגובה זהה.
 
-### מצב כיום (שלב 1)
-- ליבה בלבד: `mount` בשדה, helpers ב-`doorUtils.ts`, חיתוכים ב-`externalDrawerCuts.ts`, 30 בדיקות.
-- אין UI ואין wiring ב-`useCabinet`. מגירות חדשות שנוצרות ב-`defaultDrawerPlacement` עדיין `mount: 'internal'` תמיד.
+### מגבלה ידועה
+- בגוף עם `numFronts > 2` ועם מחיצה, ה-frontIndex האמצעי **אינו מקבל cell** ולכן לא יכול לקבל מגירה חיצונית (מקבל `items=[]` מ-`getItemsForFront` והדלת לא מתקצרת). תמיכה מורחבת תידרש בעת תמיכה ביותר ממחיצה אחת לגוף.
+
+### מצב כיום (שלב 2.1)
+- ליבה (שלב 1): `mount` בשדה, helpers ב-`doorUtils.ts`, חיתוכים ב-`externalDrawerCuts.ts`, 30 בדיקות יחידה.
+- חיווט (שלב 2.1): `useCabinet.calculate()` משתמש ב-`calcMainDoorHeight`; `coversSkirt` עובר לdrawer הנמוכה אם רלוונטי; חיתוכי `'front'` מצורפים לתוצאה.
+- UI (שלב 2.1): דיאלוג בחירה internal/external בעת הוספת מגירה (בגוף או בתא).
+- חסר (שלב 2.2): סקיצות ויזואליות, חשיפת `frontThicknessOverride`, תצוגת אזהרות `main_door_*`, refactor של חיתוכי הדלת ב-`calcCuts`.
 
 ---
 

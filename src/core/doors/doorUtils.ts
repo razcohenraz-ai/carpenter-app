@@ -349,10 +349,48 @@ export function isExternalDrawer(item: InteriorItem): item is DrawerItem {
 }
 
 /** Maps a cell index (0=right, 1=left) to a frontIndex within a body with
- *  `numFronts` horizontal fronts. Mirrors the convention in `CellInteriorById`:
- *  right cell = highest frontIndex, left cell = 0. */
+ *  `numFronts` horizontal fronts. Identity mapping for the two ends:
+ *  `Door.frontIndex` is 0 = rightmost (RTL convention), and cell 0 is the
+ *  right cell — so right cell sits behind the right door (frontIndex 0), and
+ *  left cell sits behind the leftmost door (frontIndex numFronts−1). */
 export function cellIndexToFrontIndex(cellIndex: 0 | 1, numFronts: number): number {
-  return cellIndex === 0 ? numFronts - 1 : 0;
+  return cellIndex === 0 ? 0 : numFronts - 1;
+}
+
+/** Items that drive the front of a given door (frontIndex):
+ *  - Body without partition → all body items affect every front.
+ *  - Partition body → right cell items drive frontIndex 0; left cell items
+ *    drive frontIndex numFronts−1. Middle frontIndices have no cell mapping
+ *    (numFronts > 2 + partition is not yet supported) and receive []. */
+export function getItemsForFront(
+  frontIndex: number,
+  numFronts: number,
+  hasPartition: boolean,
+  bodyItems: InteriorItem[],
+  cellItems: InteriorItem[][] | undefined,
+): InteriorItem[] {
+  if (!hasPartition || !cellItems) return bodyItems;
+  if (frontIndex === 0) return cellItems[0] ?? [];
+  if (frontIndex === numFronts - 1) return cellItems[1] ?? [];
+  return [];
+}
+
+/** Signature describing the set of external drawers in `items` (id + height).
+ *  Two snapshots with the same signature produce the same door geometry and
+ *  the same `'front'` cuts — used to short-circuit unrelated state updates. */
+export function externalStackSignature(items: InteriorItem[]): string {
+  return items
+    .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+    .map(d => `${d.id}:${d.drawerHeight}`)
+    .sort()
+    .join('|');
+}
+
+/** True when adding/removing/resizing an external drawer (or toggling a
+ *  drawer's mount) changes the external stack. Callers may use this to decide
+ *  whether to trigger a full `calculate()` versus a surgical state update. */
+export function externalStackChanged(prev: InteriorItem[], next: InteriorItem[]): boolean {
+  return externalStackSignature(prev) !== externalStackSignature(next);
 }
 
 /** Returns the external drawer that should carry the original door's

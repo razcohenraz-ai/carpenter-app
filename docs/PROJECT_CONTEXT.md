@@ -26,6 +26,7 @@
 - **עורך פנים גוף**: מדפים, מגירות, מוטות תליה — עם גרירה
 - **מחיצות פנימיות**: לגופים עם numFronts > 1 — toggle, עורך תאים עצמאי עם סקיצה ופריטים, תצוגה ב-CabinetSketch ובמיניאטורות
 - **חלוקת מדפים חכמה**: round-robin בין כל האזורים החופשיים (≥25 ס"מ); לוגיקת hanger (מדף 80 ס"מ מתחת למוט, או מתחת למגירה אם קיימת); הצבת מגירה/מוט חדשים מתחשבת בפריטים קיימים; אזהרות `small_zone`/`rod_low`/`rod_drawer_close` כבאנר ניתן להסתרה; מדף שנגרר/שונה ידנית נשאר קבוע
+- **מגירות חיצוניות (external drawers)**: לוגיקה מלאה + UI בסיסי. דיאלוג בחירה internal/external בעת הוספת מגירה (בגוף או בתא); הדלת מתקצרת אוטומטית לפי `calcMainDoorHeight`; `coversSkirt` עובר למגירה התחתונה אם רלוונטי; חיתוכי חזיתות מצורפים תחת `CutGroup` `'front'`. תצוגה ויזואלית מלאה בסקיצות תידרש בשלב 2.2.
 - **תצוגה מקדימה**: סקיצת ארון חיה, מיניאטורות גופים פרופורציונליות
 - **דו-לשוני**: עברית ואנגלית
 
@@ -36,10 +37,10 @@
 
 ## חובות טכניים ידועים
 
-### External drawers — שלב 2 לא הושלם
-שלב 1 הוסיף ליבה מלאה למגירות חיצוניות (חזית עצמאית): טיפוסים (`mount`, `frontThicknessOverride`), helpers ב-`doorUtils.ts` (`calcMainDoorHeight`, `calcExternalStackHeight`, `validateMainDoorHeight`, `getSkirtCoveringDrawer`, ועוד), וכן `calcExternalDrawerFrontCuts` בקבוצת חיתוך חדשה `'front'`.
+### External drawers — שלב 2.2 עדיין פתוח
+שלבים 1 ו-2.1 השלימו: ליבה, חיווט `useCabinet`, דיאלוג בחירה ב-UI, חיתוכי `'front'`. הסקיצות הוויזואליות (`CabinetSketch`, `CabinetFrontsSketch`, `BoxBodySketch`, `DoorsList`) **עדיין לא** מציגות external drawers כחזיתות נפרדות מהדלת. גם `frontThicknessOverride` ואזהרות `main_door_*` לא חשופים ב-UI. שלב 2.2 ייעד לכך.
 
-**מה חסר**: wiring ב-`useCabinet.calculate()` — קיצור דלת ראשית אוטומטי, העברת `coversSkirt` למגירה הנמוכה, ומיזוג חיתוכי החזיתות לרשימת ה-cuts הסופית. וגם UI: toggle `mount` בעורך מגירה ושדה `frontThicknessOverride`. עד אז, מגירות חדשות נוצרות תמיד `mount: 'internal'`.
+חיתוכי הדלת הראשית מ-`calcCuts` עדיין משקפים את הגוף המלא ולא את הדלת המקוצרת — חוב טכני נוסף שיטופל ב-refactor של `calcCuts` או בייצור חיתוכי דלת פר-`Door` ב-`useCabinet`.
 
 ### עומק גופים פנימיים
 הגופים מקבלים כרגע את עומק הארון המלא שהוזן. בפועל, העומק הפנימי הנגיש קטן יותר מ-3 סיבות:

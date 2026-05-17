@@ -10,10 +10,14 @@ import {
   assignDoorDisplayNumbers,
   shouldCoverSkirt,
   getDoorWidth,
-  getDoorHeight,
   makeDoorId,
   salonHingeSide,
+  calcMainDoorHeight,
+  getSkirtCoveringDrawer,
+  externalStackChanged,
+  getItemsForFront,
 } from '../../core/doors/doorUtils';
+import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
@@ -120,6 +124,13 @@ export function useCabinet(): {
   const partitionsRef = useRef<Map<string, boolean>>(new Map());
   const baseCutsRef = useRef<CutItem[]>([]);
   const tBodyRef = useRef<number>(1.8);
+  // Stored input enables full re-calculate when an external-drawer mount
+  // toggle reaches setBoxInterior/setCellItems (see Q3 of stage 2.1).
+  const lastInputRef = useRef<CabinetInput | null>(null);
+  // IDs of external drawers that inherited coversSkirt from their main door.
+  // Used by future visualization in stage 2.2; tracked here so it survives
+  // recalcs without re-derivation.
+  const skirtCoveringDrawerIdsRef = useRef<Set<string>>(new Set());
 
   function setInterior(v: InteriorById): void {
     interiorRef.current = v;
@@ -138,8 +149,17 @@ export function useCabinet(): {
   // ── Interior ──────────────────────────────────────────────────────────────
 
   function setBoxInterior(boxId: string, items: InteriorItem[]): void {
+    const prevItems = interiorRef.current[boxId] ?? [];
     const newInterior = { ...interiorRef.current, [boxId]: items };
     setInterior(newInterior);
+
+    // External-drawer change → door height, coversSkirt and 'front' cuts may
+    // all flip; run the full pipeline rather than a surgical update (Q3).
+    if (externalStackChanged(prevItems, items) && lastInputRef.current) {
+      calculate(lastInputRef.current);
+      return;
+    }
+
     const nf = numFrontsRef.current.get(boxId) ?? 1;
     const updatedDoors: DoorById = { ...doorsRef.current };
     for (let fi = 0; fi < nf; fi++) {
@@ -158,8 +178,12 @@ export function useCabinet(): {
     if (value) newMap.set(boxId, true);
     else newMap.delete(boxId);
     partitionsRef.current = newMap;
-    setPartitionsById(new Map(newMap));
 
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+      return;
+    }
+    setPartitionsById(new Map(newMap));
     const boxes = prevBoxesRef.current ?? [];
     const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
     setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
@@ -169,19 +193,23 @@ export function useCabinet(): {
     const newMap = new Map(partitionsRef.current);
     newMap.set(boxId, true);
     partitionsRef.current = newMap;
-    setPartitionsById(new Map(newMap));
 
-    // Clear regular items for this box
+    // Clear regular items for this box (interior moves into cells)
     const newInterior = { ...interiorRef.current };
     delete newInterior[boxId];
     interiorRef.current = newInterior;
-    setInteriorById(newInterior);
 
     // Initialize empty cell items (2 cells: right=0, left=1)
     const newCellInterior = { ...cellInteriorRef.current, [boxId]: [[], []] as InteriorItem[][] };
     cellInteriorRef.current = newCellInterior;
-    setCellInteriorById(newCellInterior);
 
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+      return;
+    }
+    setPartitionsById(new Map(newMap));
+    setInteriorById(newInterior);
+    setCellInteriorById(newCellInterior);
     const boxes = prevBoxesRef.current ?? [];
     const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
     setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
@@ -191,14 +219,18 @@ export function useCabinet(): {
     const newMap = new Map(partitionsRef.current);
     newMap.delete(boxId);
     partitionsRef.current = newMap;
-    setPartitionsById(new Map(newMap));
 
-    // Clear cell items for this box
+    // Clear cell items for this box (cell interior is forgotten on remove)
     const newCellInterior = { ...cellInteriorRef.current };
     delete newCellInterior[boxId];
     cellInteriorRef.current = newCellInterior;
-    setCellInteriorById(newCellInterior);
 
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+      return;
+    }
+    setPartitionsById(new Map(newMap));
+    setCellInteriorById(newCellInterior);
     const boxes = prevBoxesRef.current ?? [];
     const partitionCuts = computePartitionCuts(boxes, numFrontsRef.current, newMap, tBodyRef.current);
     setResult(prev => prev ? { ...prev, cuts: [...baseCutsRef.current, ...partitionCuts] } : null);
@@ -206,10 +238,16 @@ export function useCabinet(): {
 
   function setCellItems(boxId: string, cellIndex: number, items: InteriorItem[]): void {
     const current = cellInteriorRef.current[boxId] ?? [[], []];
+    const prevItems = current[cellIndex] ?? [];
     const updated: InteriorItem[][] = current.map((c, i) => i === cellIndex ? items : c);
     const newCellInterior = { ...cellInteriorRef.current, [boxId]: updated };
     cellInteriorRef.current = newCellInterior;
     setCellInteriorById(newCellInterior);
+
+    // Mount toggle inside a cell → full recalculate (same rationale as setBoxInterior).
+    if (externalStackChanged(prevItems, items) && lastInputRef.current) {
+      calculate(lastInputRef.current);
+    }
   }
 
   // ── Door mutations ────────────────────────────────────────────────────────
@@ -318,6 +356,8 @@ export function useCabinet(): {
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
+    lastInputRef.current = input;
+
     const { W, H, D, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
     const bodyMaterial  = getMaterial(bodyMaterialId);
     const frontMaterial = getMaterial(frontMaterialId);
@@ -339,21 +379,52 @@ export function useCabinet(): {
       }
     }
 
-    // ── Interior preservation ──────────────────────────────────────────────
+    // ── Stable maps from previous state ────────────────────────────────────
     const prevBoxes = prevBoxesRef.current;
     const currentInterior = interiorRef.current;
-    const stableInteriorMap = new Map<string, { items: InteriorItem[]; H: number }>();
+    const currentCellInterior = cellInteriorRef.current;
+    const currentDoors = doorsRef.current;
+    const prevNumFronts = numFrontsRef.current;
+
+    const stableInteriorMap   = new Map<string, { items: InteriorItem[]; H: number }>();
+    const stableCellMap       = new Map<string, InteriorItem[][]>();
+    const stablePartitionsMap = new Map<string, boolean>();
+    const stableDoorMap       = new Map<string, Door>();
+
     if (prevBoxes) {
       for (const box of prevBoxes) {
         if (box.level === 'plinth') continue;
-        stableInteriorMap.set(boxStableKey(box), { items: currentInterior[box.id] ?? [], H: box.H });
+        const key = boxStableKey(box);
+        stableInteriorMap.set(key, { items: currentInterior[box.id] ?? [], H: box.H });
+        const cells = currentCellInterior[box.id];
+        if (cells) stableCellMap.set(key, cells);
+        if (partitionsRef.current.get(box.id)) stablePartitionsMap.set(key, true);
+        const nf = prevNumFronts.get(box.id) ?? 1;
+        for (let fi = 0; fi < nf; fi++) {
+          const d = currentDoors[makeDoorId(box.id, fi)];
+          if (d) stableDoorMap.set(`${key}:${fi}`, d);
+        }
       }
     }
+
+    // ── Interior, partitions, cells preservation ───────────────────────────
     const baselineInterior = initInteriorFromBoxes(boxes, plinth);
     const newInterior: InteriorById = {};
-    for (const box of boxes) {
-      if (box.level === 'plinth') continue;
-      const prev = stableInteriorMap.get(boxStableKey(box));
+    const newCellInteriorById: CellInteriorById = {};
+    const newPartitionsMap = new Map<string, boolean>();
+    const newNumFrontsMap = new Map<string, number>();
+
+    const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+    const allPositions = bodyBoxes.map(b => b.position);
+    boxLevelMapRef.current = new Map(bodyBoxes.map(b => [b.id, b.level]));
+
+    for (const box of bodyBoxes) {
+      const key = boxStableKey(box);
+      const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+      newNumFrontsMap.set(box.id, numFronts);
+
+      // Interior
+      const prev = stableInteriorMap.get(key);
       if (!prev) {
         newInterior[box.id] = baselineInterior[box.id] ?? [];
       } else if (prev.H === box.H) {
@@ -361,48 +432,46 @@ export function useCabinet(): {
       } else {
         newInterior[box.id] = filterItemsForHeight(prev.items, box.H);
       }
-    }
 
-    // ── Door preservation ──────────────────────────────────────────────────
-    plinthRef.current = plinth;
-    const currentDoors = doorsRef.current;
-    const prevNumFronts = numFrontsRef.current;
-
-    // Stable map: "${boxStableKey}:${fi}" → Door
-    const stableDoorMap = new Map<string, Door>();
-    if (prevBoxes) {
-      for (const box of prevBoxes) {
-        if (box.level === 'plinth') continue;
-        const nf = prevNumFronts.get(box.id) ?? 1;
-        for (let fi = 0; fi < nf; fi++) {
-          const d = currentDoors[makeDoorId(box.id, fi)];
-          if (d) stableDoorMap.set(`${boxStableKey(box)}:${fi}`, d);
-        }
+      // Partitions only valid for numFronts > 1
+      if (stablePartitionsMap.get(key) && numFronts > 1) {
+        newPartitionsMap.set(box.id, true);
+        newCellInteriorById[box.id] = stableCellMap.get(key) ?? [[], []];
       }
     }
 
-    const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
-    const allPositions = bodyBoxes.map(b => b.position);
-    boxLevelMapRef.current = new Map(bodyBoxes.map(b => [b.id, b.level]));
+    plinthRef.current = plinth;
 
-    const newNumFrontsMap = new Map<string, number>();
+    // ── Doors (height/coversSkirt aware of external drawers) ────────────────
     const newDoors: DoorById = {};
+    const skirtCoveringIds = new Set<string>();
 
     for (const box of bodyBoxes) {
-      const coversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
+      const numFronts = newNumFrontsMap.get(box.id)!;
+      const hasPartition = newPartitionsMap.has(box.id);
+      const bodyItems = newInterior[box.id] ?? [];
+      const cellItems = newCellInteriorById[box.id];
+
+      const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
       const isBottomMost = box.level === 'bottom' || box.level === 'single';
-      const hasBottomGap = !(isBottomMost && plinth > 0 && !coversSkirt);
+      const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
       const hasTopGap = box.level === 'top' || box.level === 'single';
-      const panelH = getDoorHeight(box.H, doorGapMm, hasBottomGap, hasTopGap);
 
-      const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
-      const frontW = getDoorWidth(box.W, numFronts, doorGapMm);
-      newNumFrontsMap.set(box.id, numFronts);
-
-      const items = newInterior[box.id] ?? [];
+      const frontW = hasPartition
+        ? (box.W - tBody) / 2
+        : getDoorWidth(box.W, numFronts, doorGapMm);
 
       for (let fi = 0; fi < numFronts; fi++) {
         const doorId = makeDoorId(box.id, fi);
+        const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
+        const panelH = calcMainDoorHeight(box.H, itemsForFront, doorGapMm, hasBottomGap, hasTopGap);
+
+        // coversSkirt transfer: if there's a lowest external drawer, it
+        // inherits coversSkirt and the door loses it.
+        const skirtDrawer = getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt);
+        if (skirtDrawer) skirtCoveringIds.add(skirtDrawer.id);
+        const coversSkirt = originalCoversSkirt && skirtDrawer === null;
+
         const oldDoor = stableDoorMap.get(`${boxStableKey(box)}:${fi}`);
         const hingeSide = numFronts > 1
           ? salonHingeSide(fi, numFronts)
@@ -411,7 +480,7 @@ export function useCabinet(): {
         if (!oldDoor) {
           const defaults = computeDefaultHingePositions(panelH);
           const rawHinges: Hinge[] = defaults.map(p => ({ id: newItemId(), positionFromBottom: p, isManual: false }));
-          const { hinges } = adjustHingesForInterior(rawHinges, items, panelH);
+          const { hinges } = adjustHingesForInterior(rawHinges, itemsForFront, panelH);
           newDoors[doorId] = {
             id: doorId, boxId: box.id, frontIndex: fi,
             height: panelH, width: frontW,
@@ -420,49 +489,41 @@ export function useCabinet(): {
         } else {
           const recomputed = recomputeDoorHinges(
             { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm },
-            items, plinth,
+            itemsForFront, plinth,
           );
           newDoors[doorId] = recomputed;
         }
       }
     }
 
-    // ── Partition preservation ─────────────────────────────────────────────
-    const stablePartitionsMap = new Map<string, boolean>();
-    if (prevBoxes) {
-      for (const box of prevBoxes) {
-        if (box.level === 'plinth') continue;
-        if (partitionsRef.current.get(box.id)) stablePartitionsMap.set(boxStableKey(box), true);
-      }
-    }
-    const newPartitionsMap = new Map<string, boolean>();
+    // ── External-drawer front cuts ────────────────────────────────────────
+    const externalDrawerCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
-      if (stablePartitionsMap.get(boxStableKey(box))) {
-        const nf = newNumFrontsMap.get(box.id) ?? 1;
-        if (nf > 1) newPartitionsMap.set(box.id, true);
+      const numFronts = newNumFrontsMap.get(box.id)!;
+      const hasPartition = newPartitionsMap.has(box.id);
+      const bodyItems = newInterior[box.id] ?? [];
+      const cellItems = newCellInteriorById[box.id];
+      const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
+      const frontW = hasPartition
+        ? (box.W - tBody) / 2
+        : getDoorWidth(box.W, numFronts, doorGapMm);
+
+      for (let fi = 0; fi < numFronts; fi++) {
+        const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
+        const cuts = calcExternalDrawerFrontCuts(
+          itemsForFront, frontW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+        );
+        externalDrawerCuts.push(...cuts);
       }
     }
+
+    // ── Finalize ────────────────────────────────────────────────────────────
+    tBodyRef.current = tBody;
     partitionsRef.current = newPartitionsMap;
     setPartitionsById(new Map(newPartitionsMap));
-
-    // ── Cell interior preservation ─────────────────────────────────────────
-    const stableCellMap = new Map<string, InteriorItem[][]>();
-    if (prevBoxes) {
-      for (const box of prevBoxes) {
-        if (box.level === 'plinth') continue;
-        const cellItems = cellInteriorRef.current[box.id];
-        if (cellItems) stableCellMap.set(boxStableKey(box), cellItems);
-      }
-    }
-    const newCellInteriorById: CellInteriorById = {};
-    for (const box of bodyBoxes) {
-      if (!newPartitionsMap.get(box.id)) continue;
-      newCellInteriorById[box.id] = stableCellMap.get(boxStableKey(box)) ?? [[], []];
-    }
     cellInteriorRef.current = newCellInteriorById;
     setCellInteriorById(newCellInteriorById);
-
-    tBodyRef.current = tBody;
+    skirtCoveringDrawerIdsRef.current = skirtCoveringIds;
     baseCutsRef.current = cuts;
 
     numFrontsRef.current = newNumFrontsMap;
@@ -470,7 +531,9 @@ export function useCabinet(): {
     prevBoxesRef.current = boxes;
     setInterior(newInterior);
     setDoors(newDoors, boxes, newNumFrontsMap);
-    const allCuts = [...cuts, ...computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody)];
+
+    const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody);
+    const allCuts = [...cuts, ...partitionCuts, ...externalDrawerCuts];
     setResult({ boxes, cuts: allCuts, doors });
   }
 
