@@ -477,30 +477,32 @@ describe('redistributeShelves — hanger logic', () => {
     expect(shelf.heightFromFloor).toBeCloseTo(120.8, 1); // (61.5+180)/2 = 120.75
   });
 
-  it('rod ≥80 + drawer with gap >80 → standard hanger logic', () => {
-    // Rod at 180, drawer top at 50 → gap = 130 (>80). First shelf at 100.
-    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 180 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
-    const { items, warnings } = addShelfRedistributed([rod, drawer], 200);
+  it('rod + drawer below rod → shelf always below drawer (consistent regardless of gap)', () => {
+    // Body 250, rod at 200, drawer at 80 (top 100). gap = 100 (≥80, no warning).
+    // Drawer top serves as hanger floor → first shelf below drawer at 80/2 = 40.
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 200 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20 };
+    const { items, warnings } = addShelfRedistributed([rod, drawer], 250);
     const shelf = items.find(i => i.type === 'shelf')!;
-    expect(shelf.heightFromFloor).toBeCloseTo(100);
+    expect(shelf.heightFromFloor).toBeCloseTo(40);
     expect(warnings).toEqual([]);
   });
 
   it('rod + drawer gap in 70–80 → first shelf below drawer, no warning', () => {
-    // Rod at 100, drawer top at 25 → gap = 75 (in 70–80 range).
-    // First shelf below drawer (centered between floor and drawer bottom).
-    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 100 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 5, drawerHeight: 20 };
-    const { items, warnings } = addShelfRedistributed([rod, drawer], 180);
+    // Body 200, rod at 155, drawer at 60 (top 80). gap = 75 (70–80, no warning).
+    // Drawer top is the hanger floor; first shelf below drawer at 60/2 = 30.
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 155 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const { items, warnings } = addShelfRedistributed([rod, drawer], 200);
     const shelf = items.find(i => i.type === 'shelf')!;
-    // drawer.heightFromFloor = 5, so shelf at 5/2 = 2.5
-    expect(shelf.heightFromFloor).toBeCloseTo(2.5);
+    expect(shelf.heightFromFloor).toBeCloseTo(30);
     expect(warnings).toEqual([]);
   });
 
   it('rod + drawer gap <70 → rod_drawer_close warning', () => {
-    // Rod at 100, drawer top at 50 → gap = 50 (<70).
+    // Rod at 100, drawer at 30 (top 50). gap = 50 (<70) → rod_drawer_close.
+    // Shelf still placed below drawer at 30/2 = 15. Tight spacing may also
+    // trigger a small_zone warning (acceptable; both warnings are informative).
     const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 100 };
     const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
     const { items, warnings } = addShelfRedistributed([rod, drawer], 180);
@@ -511,9 +513,18 @@ describe('redistributeShelves — hanger logic', () => {
       expect(w.rodId).toBe('r');
       expect(w.drawerId).toBe('d');
     }
-    // First shelf still placed below drawer (drawer.heightFromFloor=30 > 0)
     const shelf = items.find(i => i.type === 'shelf')!;
     expect(shelf.heightFromFloor).toBeCloseTo(15);
+  });
+
+  it('bug2: shelf placement is identical regardless of add order', () => {
+    // Same items, two orderings; the shelf must end up in the same place.
+    const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 200 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20 };
+    const a = addShelfRedistributed([rod, drawer], 250).items.find(i => i.type === 'shelf')!;
+    const b = addShelfRedistributed([drawer, rod], 250).items.find(i => i.type === 'shelf')!;
+    expect(a.heightFromFloor).toBe(b.heightFromFloor);
+    expect(a.heightFromFloor).toBeLessThan(80); // below drawer in both cases
   });
 
   it('multiple shelves with hanger: first = hanger, rest = round-robin', () => {
@@ -543,20 +554,28 @@ describe('redistributeShelves — hanger logic', () => {
   });
 });
 
-describe('redistributeShelves — small zone warnings', () => {
-  it('emits small_zone warning when a free zone is <25cm', () => {
-    // Body 200. Two drawers tightly packed leave a tiny gap between them.
-    // Drawer 1 at [10,30], drawer 2 at [40,60]: gap [30,40] = 10cm.
+describe('redistributeShelves — small zone warnings (post-placement)', () => {
+  it('emits small_zone warning when two items are <25cm apart', () => {
+    // Body 200. Two drawers leave a 10cm gap between them.
+    // d1 physical [10, 30], d2 physical [40, 60] → gap 10cm < 25.
     const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
     const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 40, drawerHeight: 20 };
     const { warnings } = addShelfRedistributed([d1, d2], 200);
     expect(warnings.some(w => w.kind === 'small_zone')).toBe(true);
   });
 
-  it('no small_zone warning when all zones are ≥25cm', () => {
+  it('no small_zone warning when all items are ≥25cm apart', () => {
     const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
     const { warnings } = addShelfRedistributed([drawer], 180);
     expect(warnings.filter(w => w.kind === 'small_zone')).toHaveLength(0);
+  });
+
+  it('bug1: cramming 3 shelves in a 70cm body → small_zone warning', () => {
+    // Inter-shelf gaps after round-robin are ~15.7cm (<25cm).
+    let items = addShelfRedistributed([], 70).items;
+    items = addShelfRedistributed(items, 70).items;
+    const result = addShelfRedistributed(items, 70);
+    expect(result.warnings.some(w => w.kind === 'small_zone')).toBe(true);
   });
 });
 

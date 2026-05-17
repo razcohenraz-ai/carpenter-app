@@ -394,30 +394,21 @@ export function redistributeShelves(
     } else {
       const drawer = findDrawerJustBelowRod(others, rodH);
       if (drawer) {
+        // Drawer top serves as the de-facto hanger floor regardless of the gap
+        // → first shelf always goes below the drawer (consistent placement, no
+        // dependency on add order). Warn separately if the rod-to-drawer gap
+        // is too small for an efficient hanger zone.
         const drawerTop = drawer.heightFromFloor + drawer.drawerHeight;
         const gap = rodH - drawerTop;
-
         if (gap < HANGER_MIN_GAP) {
-          // <70: rod is too close to the drawer — inefficient as hanger.
-          // The drawer top acts as the de-facto hanger floor (no extra shelf),
-          // and the first auto shelf goes below the drawer when there is room.
           warnings.push({ kind: 'rod_drawer_close', gap, rodId: rod.id, drawerId: drawer.id });
-          if (drawer.heightFromFloor > 0) {
-            hangerShelf = { ...remainingAuto[0]!, heightFromFloor: drawer.heightFromFloor / 2 };
-            remainingAuto = remainingAuto.slice(1);
-          }
-        } else if (gap < HANGER_DROP) {
-          // 70–80: drawer top serves as the hanger floor; first shelf goes below it
-          if (drawer.heightFromFloor > 0) {
-            hangerShelf = { ...remainingAuto[0]!, heightFromFloor: drawer.heightFromFloor / 2 };
-            remainingAuto = remainingAuto.slice(1);
-          }
-        } else {
-          // ≥80: standard hanger — first shelf 80cm below rod
-          hangerShelf = { ...remainingAuto[0]!, heightFromFloor: rodH - HANGER_DROP };
+        }
+        if (drawer.heightFromFloor > 0 && remainingAuto.length > 0) {
+          hangerShelf = { ...remainingAuto[0]!, heightFromFloor: drawer.heightFromFloor / 2 };
           remainingAuto = remainingAuto.slice(1);
         }
-      } else {
+      } else if (remainingAuto.length > 0) {
+        // No drawer below rod → standard hanger at rod − 80
         hangerShelf = { ...remainingAuto[0]!, heightFromFloor: rodH - HANGER_DROP };
         remainingAuto = remainingAuto.slice(1);
       }
@@ -433,15 +424,6 @@ export function redistributeShelves(
 
   const allZones = computeFreeZones(blockers, containerH, shelfThickness);
   const validZones = allZones.filter(z => z.hi - z.lo >= MIN_AUTO_SHELF_ZONE);
-
-  if (remainingAuto.length > 0) {
-    for (const z of allZones) {
-      const size = z.hi - z.lo;
-      if (size > 0 && size < MIN_AUTO_SHELF_ZONE) {
-        warnings.push({ kind: 'small_zone', zoneSize: size });
-      }
-    }
-  }
 
   const placedShelves: ShelfItem[] = [];
 
@@ -487,10 +469,41 @@ export function redistributeShelves(
     : placedShelves
   ).map(s => ({ ...s, heightFromFloor: roundCm(s.heightFromFloor) }));
 
-  return {
-    items: [...others, ...manual, ...finalShelves],
-    warnings,
-  };
+  const finalItems: InteriorItem[] = [...others, ...manual, ...finalShelves];
+
+  // Final-layout gap check: if any pair of adjacent items is closer than 25cm,
+  // emit a single small_zone warning. Uses physical zones (drawer height,
+  // ±1.5cm around rod centre, shelf thickness).
+  if (hasSmallGap(finalItems, shelfThickness)) {
+    warnings.push({ kind: 'small_zone' });
+  }
+
+  return { items: finalItems, warnings };
+}
+
+function physicalZone(
+  item: InteriorItem,
+  shelfThickness: number,
+): { lo: number; hi: number } {
+  if (item.type === 'drawer') {
+    return { lo: item.heightFromFloor, hi: item.heightFromFloor + item.drawerHeight };
+  }
+  if (item.type === 'rod') {
+    return { lo: item.heightFromFloor - 1.5, hi: item.heightFromFloor + 1.5 };
+  }
+  return { lo: item.heightFromFloor, hi: item.heightFromFloor + shelfThickness };
+}
+
+function hasSmallGap(items: InteriorItem[], shelfThickness: number): boolean {
+  if (items.length < 2) return false;
+  const sorted = [...items].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const cur  = physicalZone(sorted[i]!,     shelfThickness);
+    const next = physicalZone(sorted[i + 1]!, shelfThickness);
+    const gap  = next.lo - cur.hi;
+    if (gap > 0 && gap < MIN_AUTO_SHELF_ZONE) return true;
+  }
+  return false;
 }
 
 export function addShelfRedistributed(

@@ -38,10 +38,10 @@ export type InteriorWarning =
   | { kind: 'drawerOverlap'; itemIds: [string, string] };
 
 /** Warnings emitted by shelf-redistribution and default-placement logic.
- *  - small_zone: a free zone smaller than the auto-distribution minimum (25cm)
+ *  - small_zone: at least one pair of adjacent items is closer than 25cm
  *  - rod_low: rod placed below 80cm — no proper hanger drop possible
  *  - rod_drawer_close: drawer top is less than 70cm below rod (inefficient) */
 export type ShelfWarning =
-  | { kind: 'small_zone'; zoneSize: number }
+  | { kind: 'small_zone' }
   | { kind: 'rod_low'; rodHeight: number; rodId: string }
   | { kind: 'rod_drawer_close'; gap: number; rodId: string; drawerId: string };
