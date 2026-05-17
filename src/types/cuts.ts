@@ -5,7 +5,8 @@ export type CutGroup =
   | "shell"    // outer envelope panels
   | "body"     // inner carcass panels
   | "door"     // door panels
-  | "drawer"   // drawer box parts
+  | "front"    // external-drawer face panels (part of the cabinet facade)
+  | "drawer"   // drawer box parts (sides, back, bottom)
   | "back"     // back panels (usually 6mm)
   | "plinth";  // plinth / kick-board strips
 

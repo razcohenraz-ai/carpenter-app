@@ -1,3 +1,5 @@
+import type { MaterialId } from './materials';
+
 export type BodyLevel = 'single' | 'top' | 'middle' | 'bottom';
 
 interface BaseInteriorItem {
@@ -11,10 +13,21 @@ export interface ShelfItem extends BaseInteriorItem {
   isManuallyPositioned?: boolean; // true once user has moved this shelf by hand
 }
 
+/** Drawer mount type:
+ *  - `internal`: drawer sits behind the cabinet front; the door is unaffected.
+ *  - `external`: drawer has its own face panel that is part of the cabinet
+ *    facade; the door above is shortened to make room, and the drawer-front
+ *    cut is produced separately. Multiple externals stack from the bottom. */
+export type DrawerMount = 'internal' | 'external';
+
 export interface DrawerItem extends BaseInteriorItem {
   type: 'drawer';
   heightFromFloor: number; // cm from body bottom to bottom of drawer
   drawerHeight: number;    // cm
+  mount: DrawerMount;
+  /** Per-drawer override of the global frontMaterial. Only meaningful when
+   *  mount === 'external' (internal drawers have no facade panel). */
+  frontThicknessOverride?: MaterialId;
 }
 
 export interface RodItem extends BaseInteriorItem {

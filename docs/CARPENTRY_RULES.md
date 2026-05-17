@@ -270,6 +270,48 @@
 
 ---
 
+## מגירות חיצוניות (external drawers)
+
+### הבחנה internal / external
+- **internal**: מגירה רגילה, יושבת בתוך הגוף מאחורי הדלת. אין השפעה על החזית.
+- **external**: מגירה עם חזית עצמאית שמשתלבת בקדמת הארון (כמו מגירות עליונות במטבח). הדלת מעליה מתקצרת.
+
+### גובה החזית
+- חזית מגירה external = `drawerHeight` בלבד (לא +רווחים; הרווחים מתווספים מסביב).
+- אם המגירה הנמוכה ביותר מקבלת `coversSkirt` (ראה למטה): חזית מקבלת תוספת `(plinthH − 1) + gapCm`.
+
+### חישוב גובה הדלת הראשית
+- `mainDoorHeight = getDoorHeight(box.H, gap, hasBottomGap, hasTopGap) − calcExternalStackHeight(items, gap)`
+- `calcExternalStackHeight = sum(drawerHeights) + N × gap`
+- בלי external drawers: `mainDoorHeight = getDoorHeight(...)` (התנהגות קיימת).
+
+### מקרי קצה לדלת מקוצרת
+- `mainDoorHeight > 10` — תקין, אין אזהרה.
+- `0 < mainDoorHeight < 10` — דלת ראשית נמוכה מ-10 ס"מ; לא נוחה לאחיזה. אזהרת `main_door_too_short`. **לא חוסם** (החופש בידי הנגר).
+- `mainDoorHeight ≤ 0` — אין מקום לדלת ראשית. שידת מגירות מלאה. שלב 2 ידלג על יצירת `Door`.
+
+### צירים על דלת מקוצרת
+- מספר הצירים לפי הטבלה הקיימת, אבל לפי `mainDoorHeight` ולא לפי `box.H`. דלת בגובה 60 ס"מ → 2 צירים, לא 3.
+- מיקום הציר התחתון: יחסי לתחתית הדלת המקוצרת (`min(10, mainDoorH/4)`). הקוד הקיים של `recomputeDoorHinges` יעשה זאת אוטומטית כש-`door.height = mainDoorH`.
+
+### העברת `coversSkirt` למגירה הנמוכה
+- אם הדלת המקורית הייתה `coversSkirt=true` ויש לפחות external drawer אחד בגוף:
+  - הדלת המקורית **מאבדת** את `coversSkirt` (היא לא מגיעה עד הצוקל; המגירה כן).
+  - המגירה הנמוכה ביותר (הקטנה ב-`heightFromFloor`) **מקבלת** את `coversSkirt` — היינו, חזיתה מתארכת לכיסוי הצוקל.
+- הפונקציה `getSkirtCoveringDrawer(items, mainDoorCoversSkirt)` מחזירה את המגירה המתאימה.
+
+### אינטראקציה עם מחיצות פנימיות
+- **מגירה ב-`cellInteriorById[boxId][cellIndex]`**: רוחב = W_cell, מקצרת רק את החזית של frontIndex המתאים לתא:
+  - cellIndex 0 (ימני) → frontIndex = numFronts − 1
+  - cellIndex 1 (שמאלי) → frontIndex = 0
+- **מגירה ב-`interiorById` בגוף עם numFronts>1 ללא מחיצה**: רוחב גוף מלא, מקצרת את **כל** החזיתות באותו גוף בגובה זהה.
+
+### מצב כיום (שלב 1)
+- ליבה בלבד: `mount` בשדה, helpers ב-`doorUtils.ts`, חיתוכים ב-`externalDrawerCuts.ts`, 30 בדיקות.
+- אין UI ואין wiring ב-`useCabinet`. מגירות חדשות שנוצרות ב-`defaultDrawerPlacement` עדיין `mount: 'internal'` תמיד.
+
+---
+
 ## עומק גופים פנימיים (חוב טכני)
 
 **כרגע**: גופים מקבלים את העומק המלא שהוזן.

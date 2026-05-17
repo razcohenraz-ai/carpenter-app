@@ -1,5 +1,5 @@
 import type { Box, BoxPosition } from '../../types/geometry';
-import type { InteriorItem, InteriorById } from '../../types/interior';
+import type { InteriorItem, InteriorById, DrawerItem } from '../../types/interior';
 import type { Door, DoorById, Hinge } from '../../types/doors';
 import type { MaterialId } from '../../types/materials';
 import { newItemId } from '../interior/interiorUtils';
@@ -276,6 +276,113 @@ export function getDoorWidth(innerW: number, numCols: number, gapMm: number): nu
 export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true, hasTopGap = true): number {
   const gapCm = gapMm / 10;
   return boxH - (hasTopGap ? gapCm : 0) - (hasBottomGap ? gapCm : 0);
+}
+
+// ── External drawer fronts ────────────────────────────────────────────────────
+// An "external" drawer has its own face panel that is part of the cabinet
+// facade. Multiple externals stack from the bottom of the box upward; each
+// drawer occupies `drawerHeight` cm and is separated from the front above it
+// (next drawer or main door) by `gapMm` (the door gap).
+//
+// Layout within the front area (cm from box bottom, ignoring bottom gap):
+//   [drawer 1] [gap] [drawer 2] [gap] ... [drawer N] [gap] [main door]
+// `calcExternalStackHeight` returns the offset where the main door starts —
+// i.e. sum(drawerHeights) + N * gap. `calcMainDoorHeight` returns the
+// resulting main-door panel height.
+//
+// `internal` drawers have no facade panel and do not affect door geometry.
+
+/** Comfort threshold for the main door above an external-drawer stack. */
+export const MIN_COMFORTABLE_MAIN_DOOR_H_CM = 10;
+
+/** Returns the external drawers in the list, sorted by `heightFromFloor` ascending
+ *  (lowest first — i.e. the drawer at the bottom of the front stack). */
+export function getExternalDrawers(items: InteriorItem[]): DrawerItem[] {
+  return items
+    .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+}
+
+/** Total height occupied by external-drawer fronts and the gap above each one
+ *  (the gap above the topmost drawer separates it from the main door above).
+ *  Returns 0 when there are no external drawers. */
+export function calcExternalStackHeight(items: InteriorItem[], gapMm: number): number {
+  const externals = getExternalDrawers(items);
+  const n = externals.length;
+  if (n === 0) return 0;
+  const gapCm = gapMm / 10;
+  const sum = externals.reduce((s, d) => s + d.drawerHeight, 0);
+  return sum + n * gapCm;
+}
+
+/** Height of the main door panel after external-drawer fronts (if any) are
+ *  subtracted from the available front area. With no externals, equals
+ *  `getDoorHeight(boxH, gapMm, hasBottomGap, hasTopGap)`. May be ≤0 when the
+ *  externals fill or exceed the box (the caller decides whether to emit a
+ *  door at all). */
+export function calcMainDoorHeight(
+  boxH: number,
+  items: InteriorItem[],
+  gapMm: number,
+  hasBottomGap = true,
+  hasTopGap = true,
+): number {
+  const frontAreaH = getDoorHeight(boxH, gapMm, hasBottomGap, hasTopGap);
+  return frontAreaH - calcExternalStackHeight(items, gapMm);
+}
+
+export type MainDoorWarning = 'main_door_too_short' | 'main_door_absent';
+
+/** Validates the computed main-door height. `<=0` means there is no room for a
+ *  main door (caller should skip creating a Door for that frontIndex). `<10cm`
+ *  is a usability concern (hard to grip) — door is still created, warning is
+ *  emitted. */
+export function validateMainDoorHeight(mainDoorH: number): MainDoorWarning | null {
+  if (mainDoorH <= 0) return 'main_door_absent';
+  if (mainDoorH < MIN_COMFORTABLE_MAIN_DOOR_H_CM) return 'main_door_too_short';
+  return null;
+}
+
+/** True if `mount === 'external'`. */
+export function isExternalDrawer(item: InteriorItem): item is DrawerItem {
+  return item.type === 'drawer' && item.mount === 'external';
+}
+
+/** Maps a cell index (0=right, 1=left) to a frontIndex within a body with
+ *  `numFronts` horizontal fronts. Mirrors the convention in `CellInteriorById`:
+ *  right cell = highest frontIndex, left cell = 0. */
+export function cellIndexToFrontIndex(cellIndex: 0 | 1, numFronts: number): number {
+  return cellIndex === 0 ? numFronts - 1 : 0;
+}
+
+/** Returns the external drawer that should carry the original door's
+ *  `coversSkirt` (the lowest one, by `heightFromFloor`), or null if there are
+ *  no externals or the main door does not cover skirt. The main door is
+ *  expected to lose `coversSkirt` in that case — the field is transferred. */
+export function getSkirtCoveringDrawer(
+  items: InteriorItem[],
+  mainDoorCoversSkirt: boolean,
+): DrawerItem | null {
+  if (!mainDoorCoversSkirt) return null;
+  const externals = getExternalDrawers(items);
+  return externals[0] ?? null;
+}
+
+/** Effective front-material thickness for an external drawer, mirroring
+ *  `getDoorThicknessCm` for doors. Falls back to 1.8 cm if the override is
+ *  invalid. Returns the global thickness for internal drawers (their
+ *  `frontThicknessOverride` is meaningless and ignored). */
+export function getDrawerFrontThicknessCm(
+  drawer: DrawerItem,
+  globalFrontMaterialId: string,
+): number {
+  if (drawer.mount !== 'external') {
+    try { return getMaterial(globalFrontMaterialId as MaterialId).thickness / 10; }
+    catch { return 1.8; }
+  }
+  const matId = (drawer.frontThicknessOverride ?? globalFrontMaterialId) as MaterialId;
+  try { return getMaterial(matId).thickness / 10; }
+  catch { return 1.8; }
 }
 
 // ── Effective door thickness ──────────────────────────────────────────────────

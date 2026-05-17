@@ -180,6 +180,31 @@
 
 ---
 
+## 2026-05-17 — מגירות חיצוניות (external drawers) — שלב 1
+
+**ההחלטה**: הוספת תמיכה במגירות חיצוניות (חזית עצמאית בקדמת הארון) ב-3 רובדים:
+1. **טיפוס**: `DrawerItem.mount: 'internal' | 'external'` (חובה) + `frontThicknessOverride?: MaterialId` (אופציונלי, רלוונטי רק ל-external).
+2. **גובה דלת**: `calcMainDoorHeight(box.H, items, gap, ...)` מקצרת את הדלת הראשית לפי `calcExternalStackHeight`. אם `≤0`: אין דלת ראשית; אם `<10 ס"מ`: אזהרה (לא חוסם).
+3. **חיתוך**: `calcExternalDrawerFrontCuts` מייצר חזית פר-מגירה ב-`CutGroup` חדש `'front'`. המגירה הנמוכה ביותר מקבלת `coversSkirt` (מחושב, לא מאוחסן).
+
+**הנימוק**:
+- שידות מטבח, ארונות עליונים, ארונות שמשלבים דלת ומגירות הם תרחישים נפוצים. אי-תמיכה דרשה work-arounds.
+- הפרדה internal/external מאפשרת לקיים את שני התרחישים תחת אותו טיפוס.
+- ניטרליות לסדר הוספה: גם אם הוסיפו מגירה לפני/אחרי דלת, התוצאה זהה (`mainDoorHeight` מחושב מ-items, לא מסדר).
+- **שלב 1 = ליבה בלבד** — אין wiring ב-`useCabinet` או UI. מאפשר לוודא נכונות לוגית לפני אינטגרציה מורכבת.
+
+**אינטראקציה עם מחיצות**: cellIndex 0 (תא ימני) → frontIndex = numFronts-1; cellIndex 1 → frontIndex = 0. נתמך ע"י `cellIndexToFrontIndex`.
+
+**מקרי קצה**: 2 externals שממלאים גוף (אין דלת), 3 externals שמשאירים 3 ס"מ (אזהרה), 4 externals שעוברים את גוף (mainDoorHeight שלילי, אין דלת) — כולם מכוסים בבדיקות.
+
+**שלב 2 (עתידי)**:
+- `useCabinet.calculate()` יקרא `calcMainDoorHeight` במקום `getDoorHeight` ויעביר `coversSkirt` למגירה הנמוכה ביותר.
+- `useCabinet.calculate()` יקרא `calcExternalDrawerFrontCuts` פר-גוף וימזג ל-`cuts`.
+- UI: toggle `mount` בעורך מגירה; שדה `frontThicknessOverride` עם clear button (כמו ב-DoorEditor).
+- אזהרות `main_door_*` יוצגו ב-UI (היכן בדיוק — נחליט).
+
+---
+
 ## 2026-05-17 — אזהרות חלוקת מדפים: טקסט סטטי ≤25 תווים
 
 **ההחלטה**: אזהרות `ShelfWarning` מוצגות עם טקסט סטטי קצר (≤25 תווים), ללא פרמטרים דינמיים.

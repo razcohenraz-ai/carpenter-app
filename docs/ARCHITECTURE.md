@@ -119,7 +119,9 @@ interface Door {
 type InteriorItem = ShelfItem | DrawerItem | RodItem;
 // כולם: { id, type, heightFromFloor }
 // ShelfItem גם: { isManuallyPositioned?: boolean }  ← true לאחר גרירה/שינוי ידני
-// DrawerItem גם: { drawerHeight }
+// DrawerItem גם: { drawerHeight, mount, frontThicknessOverride? }
+//   - mount: 'internal' (רגיל) | 'external' (עם חזית עצמאית בקדמת הארון)
+//   - frontThicknessOverride?: MaterialId — דריסת עובי לחזית external (כמו thicknessOverride של Door)
 
 // תאים (גוף עם מחיצה):
 type CellInteriorById = Record<string, InteriorItem[][]>;
@@ -154,6 +156,23 @@ defaultRodPlacement(bodyH, existingItems)
 - `physicalZone(item, shelfThickness)` — אזור פיזי של פריט: מדף=[h,h+1.8], מגירה=[h,h+dH], מוט=[h-1.5,h+1.5].
 - `hasSmallGap(items, shelfThickness)` — True אם יש זוג פריטים סמוכים בפער 0<gap<25 ס"מ.
 - קבועים: `HANGER_DROP=80`, `HANGER_MIN_GAP=70`, `MIN_AUTO_SHELF_ZONE=25`, `ROD_CEILING_CLEARANCE=10`.
+
+### External drawers — ליבה ב-`core/doors/doorUtils.ts`
+- `getExternalDrawers(items)` — סינון + מיון לפי `heightFromFloor` עולה (נמוך ראשון).
+- `calcExternalStackHeight(items, gapMm)` — `sum(drawerHeights) + N × gapCm` (גובה ערימת חזיתות + רווח מעל כל אחת).
+- `calcMainDoorHeight(boxH, items, gapMm, hasBottomGap, hasTopGap)` — `getDoorHeight(...) − calcExternalStackHeight(...)`. יכול להחזיר ≤0.
+- `validateMainDoorHeight(h)` → `'main_door_absent' | 'main_door_too_short' | null`.
+- `isExternalDrawer(item)` — type-guard.
+- `cellIndexToFrontIndex(cellIndex, numFronts)` — מיפוי תא→frontIndex.
+- `getSkirtCoveringDrawer(items, mainDoorCoversSkirt)` — המגירה הנמוכה ביותר שמקבלת `coversSkirt` במקום הדלת.
+- `getDrawerFrontThicknessCm(drawer, globalFrontMaterialId)` — עובי חזית מגירה ב-cm (עם override רק ל-external).
+- קבועים: `MIN_COMFORTABLE_MAIN_DOOR_H_CM=10`.
+
+### External drawer cuts — `core/cuts/externalDrawerCuts.ts`
+- `calcExternalDrawerFrontCuts(items, frontWidthCm, gapMm, plinthCm, mainDoorCoversSkirt, frontThicknessMm, perDrawerThicknessMm?)` → `CutItem[]`
+- מייצר `CutItem` אחד לכל external drawer, בקבוצה `'front'`, עם `note` עובי ב-mm.
+- המגירה הנמוכה ביותר מקבלת קיצור חזית עם `coversSkirt` (אם הדלת המקורית הייתה skirt-cover).
+- **שלב 1**: הפונקציה זמינה אך עדיין לא קרואה מ-`useCabinet`.
 
 ## עקרונות ארכיטקטוניים
 

@@ -197,7 +197,7 @@ export function defaultDrawerPlacement(
   if (drawers.length > 0) {
     const heightFromFloor = roundCm(Math.max(0, drawers[0]!.heightFromFloor - drawerH - 3));
     return {
-      drawer: { type: 'drawer', id: newId, heightFromFloor, drawerHeight: drawerH },
+      drawer: { type: 'drawer', id: newId, heightFromFloor, drawerHeight: drawerH, mount: 'internal' },
       warnings,
     };
   }
@@ -211,6 +211,7 @@ export function defaultDrawerPlacement(
         id: newId,
         heightFromFloor: roundCm(Math.max(0, (bodyH - drawerH) / 2)),
         drawerHeight: drawerH,
+        mount: 'internal',
       },
       warnings,
     };
@@ -221,7 +222,7 @@ export function defaultDrawerPlacement(
   const desiredH = rodH - HANGER_DROP - drawerH;
   if (desiredH >= 0) {
     return {
-      drawer: { type: 'drawer', id: newId, heightFromFloor: roundCm(desiredH), drawerHeight: drawerH },
+      drawer: { type: 'drawer', id: newId, heightFromFloor: roundCm(desiredH), drawerHeight: drawerH, mount: 'internal' },
       warnings,
     };
   }
@@ -233,7 +234,7 @@ export function defaultDrawerPlacement(
     warnings.push({ kind: 'rod_drawer_close', gap: actualGap, rodId: rod.id, drawerId: newId });
   }
   return {
-    drawer: { type: 'drawer', id: newId, heightFromFloor: placedH, drawerHeight: drawerH },
+    drawer: { type: 'drawer', id: newId, heightFromFloor: placedH, drawerHeight: drawerH, mount: 'internal' },
     warnings,
   };
 }

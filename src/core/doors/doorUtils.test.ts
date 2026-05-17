@@ -333,7 +333,7 @@ describe('adjustHingesForInterior', () => {
     // doorH=200, 3 hinges, middle at ~133; use custom hinge at 113.3 for test
     const doorH = 200;
     const hinges = [h(10), h(113.3), h(190)];
-    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20 }];
+    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
     const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, doorH);
     expect(warnings).toHaveLength(0);
     // upPos = 100+20+1 = 121, downPos = 100-1 = 99
@@ -344,7 +344,7 @@ describe('adjustHingesForInterior', () => {
   it('drawer 100-120, hinge at 105 → moves to 99 (1cm below drawer bottom)', () => {
     const doorH = 200;
     const hinges = [h(10), h(105), h(190)];
-    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20 }];
+    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
     const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, doorH);
     expect(warnings).toHaveLength(0);
     // upPos = 121, downPos = 99
@@ -355,7 +355,7 @@ describe('adjustHingesForInterior', () => {
   it('adjusted hinge is always ≥1cm from drawer edges', () => {
     // Exhaustive: try 5 hinge positions inside or near drawer [100, 120]
     const doorH = 200;
-    const drawer: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' };
     const drawerBottom = 100, drawerTop = 120;
 
     for (const startPos of [95, 99.5, 110, 120.5, 125]) {
@@ -375,7 +375,7 @@ describe('adjustHingesForInterior', () => {
   it('hinge outside drawer range → no move', () => {
     const doorH = 200;
     const hinges = [h(10), h(130), h(190)];
-    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20 }];
+    const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
     // hinge at 130 is 10cm above drawer top (120) — outside conflict zone
     const { hinges: out } = adjustHingesForInterior(hinges, items, doorH);
     expect(out[1]!.positionFromBottom).toBeCloseTo(130);

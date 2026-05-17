@@ -36,6 +36,11 @@
 
 ## חובות טכניים ידועים
 
+### External drawers — שלב 2 לא הושלם
+שלב 1 הוסיף ליבה מלאה למגירות חיצוניות (חזית עצמאית): טיפוסים (`mount`, `frontThicknessOverride`), helpers ב-`doorUtils.ts` (`calcMainDoorHeight`, `calcExternalStackHeight`, `validateMainDoorHeight`, `getSkirtCoveringDrawer`, ועוד), וכן `calcExternalDrawerFrontCuts` בקבוצת חיתוך חדשה `'front'`.
+
+**מה חסר**: wiring ב-`useCabinet.calculate()` — קיצור דלת ראשית אוטומטי, העברת `coversSkirt` למגירה הנמוכה, ומיזוג חיתוכי החזיתות לרשימת ה-cuts הסופית. וגם UI: toggle `mount` בעורך מגירה ושדה `frontThicknessOverride`. עד אז, מגירות חדשות נוצרות תמיד `mount: 'internal'`.
+
 ### עומק גופים פנימיים
 הגופים מקבלים כרגע את עומק הארון המלא שהוזן. בפועל, העומק הפנימי הנגיש קטן יותר מ-3 סיבות:
 1. **הדלת** תופסת ~2 ס"מ מהעומק הקדמי

@@ -102,6 +102,35 @@ helpers ב-`interiorUtils.ts`. `physicalZone(item)` מחזיר את ה-bounding 
 
 הטקסטים סטטיים ב-translations (≤25 תווים) — השדות לא מוצגים, רק זמינים לעיבוד עתידי.
 
+### DrawerMount / internal / external
+שדה `mount: 'internal' | 'external'` ב-`DrawerItem`.
+- **internal**: מגירה רגילה בתוך הגוף, מאחורי הדלת. הדלת לא מושפעת. ברירת המחדל של `defaultDrawerPlacement`.
+- **external**: מגירה עם **חזית עצמאית** שמשולבת בקדמת הארון (כמו מטבח עם מגירות עליונות). הדלת מעליה מתקצרת, וחזית המגירה היא לוח חדש ב-cutting list מקבוצת `'front'`.
+
+### calcExternalStackHeight
+פונקציה ב-`core/doors/doorUtils.ts` שמחזירה את ה-offset מקרקעית אזור החזיתות לבסיס הדלת הראשית. כולל את גובה החזיתות + רווח מעל כל אחת. עבור N מגירות חיצוניות: `sum(drawerHeights) + N × gapCm`. אם אין external — 0.
+
+### calcMainDoorHeight
+פונקציה ב-`core/doors/doorUtils.ts` שמחזירה את גובה הדלת הראשית אחרי קיצור עקב external drawers. ללא external = `getDoorHeight(box.H, gap, hasBottomGap, hasTopGap)`. עם external = הנ"ל - `calcExternalStackHeight`. יכול להחזיר ≤0 (אז `validateMainDoorHeight` יחזיר `main_door_absent`).
+
+### MainDoorWarning
+טיפוס `'main_door_absent' | 'main_door_too_short'`. מוחזר מ-`validateMainDoorHeight`:
+- `main_door_absent` — `mainDoorH ≤ 0`. אין מקום לדלת ראשית (שידת מגירות מלאה). שלב 2 ידלג על יצירת `Door` עבור frontIndex זה.
+- `main_door_too_short` — `0 < mainDoorH < 10` ס"מ. הדלת תיווצר אבל לא נוחה לאחיזה.
+
+### front (CutGroup)
+קבוצת חיתוכים חדשה ב-`CutGroup` (`shell | body | door | front | drawer | back | plinth`). יועדה ל-**חזיתות external drawers בלבד**. דלתות רגילות נשארות ב-`door`. רכיבי מגירה פנימיים (צד, גב, תחתית) נשארים ב-`drawer`.
+
+### frontThicknessOverride
+שדה אופציונלי על `DrawerItem` (רלוונטי רק ל-`mount === 'external'`). דריסה ידנית של עובי חזית המגירה — באותו דפוס כמו `Door.thicknessOverride`. internal drawers מתעלמים ממנו.
+
+### cellIndexToFrontIndex
+מיפוי בין index של תא ב-`CellInteriorById` לבין frontIndex של הדלת המתאימה:
+- `cellIndex 0` (תא ימני) → `frontIndex = numFronts - 1` (החזית הימנית ביותר)
+- `cellIndex 1` (תא שמאלי) → `frontIndex = 0` (החזית השמאלית ביותר)
+
+מבטיח שמגירה חיצונית בתא מקצרת רק את החזית המתאימה לתא שלה.
+
 ### thicknessOverride
 דריסה ידנית של MaterialId לחזית בודדת, עוקפת את frontMaterial הגלובלי.
 

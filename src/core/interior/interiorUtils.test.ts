@@ -147,7 +147,7 @@ describe('defaultShelfPlacement', () => {
 
   it('drawer occupies [20,40] → shelf in largest free space', () => {
     const items: InteriorItem[] = [
-      { type: 'drawer', id: 'a', heightFromFloor: 20, drawerHeight: 20 },
+      { type: 'drawer', id: 'a', heightFromFloor: 20, drawerHeight: 20, mount: 'internal' },
     ];
     const shelf = defaultShelfPlacement(items, 100);
     // free: [0,20] (20) and [40,100] (60)
@@ -246,7 +246,7 @@ describe('defaultRodPlacement', () => {
   it('rod with drawer below: default position fine → no warning', () => {
     // Body 200, drawer at 30 (top=50). Default rod at 190.
     // requiredH = 50 + 80 = 130. defaultH=190 already ≥ requiredH → place at 190.
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20, mount: 'internal' };
     const { rod, warnings } = defaultRodPlacement(200, [drawer]);
     expect(rod.heightFromFloor).toBeCloseTo(190);
     expect(warnings).toEqual([]);
@@ -255,7 +255,7 @@ describe('defaultRodPlacement', () => {
   it('rod with drawer high enough to push rod up', () => {
     // Body 150, drawer at 50 (top=70). defaultH=140. requiredH = 70 + 80 = 150.
     // 150 ≤ bodyH → place at max(140, 150) = 150.
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 50, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 50, drawerHeight: 20, mount: 'internal' };
     const { rod, warnings } = defaultRodPlacement(150, [drawer]);
     expect(rod.heightFromFloor).toBeCloseTo(150);
     expect(warnings).toEqual([]);
@@ -264,7 +264,7 @@ describe('defaultRodPlacement', () => {
   it('rod with drawer that leaves no room: rod at default, warning emitted', () => {
     // Body 170, drawer at 75 (top=95). defaultH=160. requiredH = 95 + 80 = 175 > bodyH.
     // Place at 160. gap = 160 - 95 = 65 → warn (gap < 70).
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 75, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 75, drawerHeight: 20, mount: 'internal' };
     const { rod, warnings } = defaultRodPlacement(170, [drawer]);
     expect(rod.heightFromFloor).toBeCloseTo(160);
     expect(warnings).toHaveLength(1);
@@ -277,7 +277,7 @@ describe('defaultRodPlacement', () => {
   it('rod with drawer that leaves marginal room (gap 70-79): rod at default, no warning', () => {
     // Body 175, drawer at 25 (top=45). defaultH=165. requiredH = 45 + 80 = 125 ≤ bodyH.
     // Place at max(165, 125) = 165. gap = 165 - 45 = 120. No warning.
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 25, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 25, drawerHeight: 20, mount: 'internal' };
     const { rod, warnings } = defaultRodPlacement(175, [drawer]);
     expect(rod.heightFromFloor).toBeCloseTo(165);
     expect(warnings).toEqual([]);
@@ -290,7 +290,7 @@ describe('validateInterior', () => {
   it('valid items → no warnings', () => {
     const items: InteriorItem[] = [
       { type: 'shelf', id: 'a', heightFromFloor: 50 },
-      { type: 'drawer', id: 'b', heightFromFloor: 10, drawerHeight: 20 },
+      { type: 'drawer', id: 'b', heightFromFloor: 10, drawerHeight: 20, mount: 'internal' },
     ];
     expect(validateInterior(items, 100)).toHaveLength(0);
   });
@@ -307,7 +307,7 @@ describe('validateInterior', () => {
 
   it('drawer top exceeds body → outOfBounds warning', () => {
     const items: InteriorItem[] = [
-      { type: 'drawer', id: 'a', heightFromFloor: 85, drawerHeight: 20 },
+      { type: 'drawer', id: 'a', heightFromFloor: 85, drawerHeight: 20, mount: 'internal' },
     ];
     const warnings = validateInterior(items, 100);
     expect(warnings.some(w => w.kind === 'outOfBounds')).toBe(true);
@@ -315,8 +315,8 @@ describe('validateInterior', () => {
 
   it('overlapping drawers → drawerOverlap warning', () => {
     const items: InteriorItem[] = [
-      { type: 'drawer', id: 'a', heightFromFloor: 30, drawerHeight: 20 }, // [30,50]
-      { type: 'drawer', id: 'b', heightFromFloor: 40, drawerHeight: 20 }, // [40,60] overlaps
+      { type: 'drawer', id: 'a', heightFromFloor: 30, drawerHeight: 20, mount: 'internal' }, // [30,50]
+      { type: 'drawer', id: 'b', heightFromFloor: 40, drawerHeight: 20, mount: 'internal' }, // [40,60] overlaps
     ];
     const warnings = validateInterior(items, 100);
     expect(warnings.some(w => w.kind === 'drawerOverlap')).toBe(true);
@@ -324,8 +324,8 @@ describe('validateInterior', () => {
 
   it('non-overlapping drawers → no drawerOverlap warning', () => {
     const items: InteriorItem[] = [
-      { type: 'drawer', id: 'a', heightFromFloor: 30, drawerHeight: 20 }, // [30,50]
-      { type: 'drawer', id: 'b', heightFromFloor: 53, drawerHeight: 20 }, // [53,73] 3cm gap
+      { type: 'drawer', id: 'a', heightFromFloor: 30, drawerHeight: 20, mount: 'internal' }, // [30,50]
+      { type: 'drawer', id: 'b', heightFromFloor: 53, drawerHeight: 20, mount: 'internal' }, // [53,73] 3cm gap
     ];
     expect(validateInterior(items, 100).filter(w => w.kind === 'drawerOverlap')).toHaveLength(0);
   });
@@ -388,7 +388,7 @@ describe('addShelfRedistributed', () => {
   });
 
   it('ח: drawer stays put when shelf added', () => {
-    const drawer: InteriorItem = { type: 'drawer', id: 'dr', heightFromFloor: 30, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'dr', heightFromFloor: 30, drawerHeight: 20, mount: 'internal' };
     const { items } = addShelfRedistributed([drawer], 180);
     const foundDrawer = items.find(i => i.id === 'dr')!;
     expect(foundDrawer.type).toBe('drawer');
@@ -400,7 +400,7 @@ describe('redistributeShelves — free-zone awareness', () => {
   it('bug: shelf no longer lands inside drawer (body 88.2, drawer at 34.1 h20)', () => {
     // Drawer zone [34.1, 54.1]. Free zones: [0,34.1] and [54.1,88.2] — equal size.
     // Tiebreaker: prefer higher zone → [54.1, 88.2]. Shelf at center = 71.15.
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 34.1, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 34.1, drawerHeight: 20, mount: 'internal' };
     const { items } = addShelfRedistributed([drawer], 88.2);
     const shelf = items.find(i => i.type === 'shelf')!;
     expect(shelf.heightFromFloor).toBeGreaterThanOrEqual(54.1);
@@ -410,7 +410,7 @@ describe('redistributeShelves — free-zone awareness', () => {
   it('drawer + shelf → redistribution moves shelf above drawer', () => {
     // Body 180, drawer at [60,80]. Free zones: [0,60] and [80,180].
     // Largest: [80,180]. One auto shelf → center = 130.
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20, mount: 'internal' };
     const shelf: InteriorItem  = { type: 'shelf',  id: 's', heightFromFloor: 90 };
     const { items } = redistributeShelves([drawer, shelf], 180);
     const found = items.find(i => i.id === 's')!;
@@ -435,8 +435,8 @@ describe('redistributeShelves — free-zone awareness', () => {
     // [0,10] (10) — too small, [30,150] (120), [170,200] (30).
     // Round-robin between [30,150] and [170,200]: shelf 1 → big zone (center 90),
     // shelf 2 → small zone (center 185).
-    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
-    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 150, drawerHeight: 20 };
+    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20, mount: 'internal' };
+    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 150, drawerHeight: 20, mount: 'internal' };
     let items: InteriorItem[] = [d1, d2];
     items = addShelfRedistributed(items, 200).items;
     items = addShelfRedistributed(items, 200).items;
@@ -481,7 +481,7 @@ describe('redistributeShelves — hanger logic', () => {
     // Body 250, rod at 200, drawer at 80 (top 100). gap = 100 (≥80, no warning).
     // Drawer top serves as hanger floor → first shelf below drawer at 80/2 = 40.
     const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 200 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20, mount: 'internal' };
     const { items, warnings } = addShelfRedistributed([rod, drawer], 250);
     const shelf = items.find(i => i.type === 'shelf')!;
     expect(shelf.heightFromFloor).toBeCloseTo(40);
@@ -492,7 +492,7 @@ describe('redistributeShelves — hanger logic', () => {
     // Body 200, rod at 155, drawer at 60 (top 80). gap = 75 (70–80, no warning).
     // Drawer top is the hanger floor; first shelf below drawer at 60/2 = 30.
     const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 155 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20, mount: 'internal' };
     const { items, warnings } = addShelfRedistributed([rod, drawer], 200);
     const shelf = items.find(i => i.type === 'shelf')!;
     expect(shelf.heightFromFloor).toBeCloseTo(30);
@@ -504,7 +504,7 @@ describe('redistributeShelves — hanger logic', () => {
     // Shelf still placed below drawer at 30/2 = 15. Tight spacing may also
     // trigger a small_zone warning (acceptable; both warnings are informative).
     const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 100 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 30, drawerHeight: 20, mount: 'internal' };
     const { items, warnings } = addShelfRedistributed([rod, drawer], 180);
     expect(warnings.some(w => w.kind === 'rod_drawer_close')).toBe(true);
     const w = warnings.find(w => w.kind === 'rod_drawer_close')!;
@@ -520,7 +520,7 @@ describe('redistributeShelves — hanger logic', () => {
   it('bug2: shelf placement is identical regardless of add order', () => {
     // Same items, two orderings; the shelf must end up in the same place.
     const rod: InteriorItem = { type: 'rod', id: 'r', heightFromFloor: 200 };
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 80, drawerHeight: 20, mount: 'internal' };
     const a = addShelfRedistributed([rod, drawer], 250).items.find(i => i.type === 'shelf')!;
     const b = addShelfRedistributed([drawer, rod], 250).items.find(i => i.type === 'shelf')!;
     expect(a.heightFromFloor).toBe(b.heightFromFloor);
@@ -558,14 +558,14 @@ describe('redistributeShelves — small zone warnings (post-placement)', () => {
   it('emits small_zone warning when two items are <25cm apart', () => {
     // Body 200. Two drawers leave a 10cm gap between them.
     // d1 physical [10, 30], d2 physical [40, 60] → gap 10cm < 25.
-    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20 };
-    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 40, drawerHeight: 20 };
+    const d1: InteriorItem = { type: 'drawer', id: 'd1', heightFromFloor: 10, drawerHeight: 20, mount: 'internal' };
+    const d2: InteriorItem = { type: 'drawer', id: 'd2', heightFromFloor: 40, drawerHeight: 20, mount: 'internal' };
     const { warnings } = addShelfRedistributed([d1, d2], 200);
     expect(warnings.some(w => w.kind === 'small_zone')).toBe(true);
   });
 
   it('no small_zone warning when all items are ≥25cm apart', () => {
-    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20 };
+    const drawer: InteriorItem = { type: 'drawer', id: 'd', heightFromFloor: 60, drawerHeight: 20, mount: 'internal' };
     const { warnings } = addShelfRedistributed([drawer], 180);
     expect(warnings.filter(w => w.kind === 'small_zone')).toHaveLength(0);
   });
@@ -641,7 +641,7 @@ describe('filterItemsForHeight', () => {
 
   it('removes drawer whose top exceeds new height', () => {
     const items: InteriorItem[] = [
-      { type: 'drawer', id: 'a', heightFromFloor: 70, drawerHeight: 20 }, // top=90
+      { type: 'drawer', id: 'a', heightFromFloor: 70, drawerHeight: 20, mount: 'internal' }, // top=90
     ];
     expect(filterItemsForHeight(items, 85)).toHaveLength(0);
     expect(filterItemsForHeight(items, 95)).toHaveLength(1);

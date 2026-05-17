@@ -7,6 +7,29 @@
 
 ## [Unreleased]
 
+### נוסף
+- **מגירות חיצוניות (external drawers) — שלב 1: ליבה בלבד.** `DrawerItem` קיבל שדה `mount: 'internal' | 'external'` (חובה) ו-`frontThicknessOverride?: MaterialId` (אופציונלי, רלוונטי רק ל-external). מגירה חיצונית היא מגירה עם חזית עצמאית שמשולבת בקדמת הארון.
+- helpers ליבה חדשים ב-`core/doors/doorUtils.ts`:
+  - `getExternalDrawers(items)` — מסנן ומיין external drawers (הנמוך ראשון)
+  - `calcExternalStackHeight(items, gapMm)` — גובה ערימת חזיתות המגירות + רווח מעל כל אחת
+  - `calcMainDoorHeight(boxH, items, gapMm, hasBottomGap, hasTopGap)` — גובה הדלת הראשית אחרי קיצור
+  - `validateMainDoorHeight(h)` — `'main_door_absent'` (≤0), `'main_door_too_short'` (<10), או null
+  - `cellIndexToFrontIndex(cellIndex, numFronts)` — מיפוי תא→frontIndex (0=ימני→numFronts-1, 1=שמאלי→0)
+  - `getSkirtCoveringDrawer(items, mainDoorCoversSkirt)` — המגירה החיצונית הנמוכה ביותר (לקבלת coversSkirt)
+  - `getDrawerFrontThicknessCm(drawer, globalId)` — עובי חזית מגירה (עם override אם external)
+- קובץ חדש `core/cuts/externalDrawerCuts.ts`:
+  - `calcExternalDrawerFrontCuts(items, frontWidthCm, gapMm, plinthCm, mainDoorCoversSkirt, frontThicknessMm, perDrawerThicknessMm?)` — מייצר `CutItem` לכל external drawer בקבוצה `'front'` (קבוצה חדשה ב-`CutGroup`)
+- 30 בדיקות חדשות (`externalDrawer.test.ts`) מכסות: ערימה ריקה/יחיד/מרובה, mainDoorHeight חיובי/אפס/שלילי, אזהרות, coversSkirt transfer, override עובי, מיפוי תאים.
+
+### ידוע (לא יעבוד עד שלב 2)
+- שלב 1 רק מוסיף **לוגיקת ליבה**. אין wiring ב-`useCabinet` או ב-UI:
+  - `defaultDrawerPlacement` עדיין מציב מגירות חדשות עם `mount: 'internal'` בלבד.
+  - הדלת הראשית בעת חישוב לא מקוצרת אוטומטית כשיש external drawers בגוף — `useCabinet.calculate()` עדיין משתמש ב-`getDoorHeight(box.H, ...)` ישירות. שלב 2 ידרוש: החלפה ל-`calcMainDoorHeight(box.H, items, gapMm, ...)` והעברת `coversSkirt` למגירה הנמוכה.
+  - `calcExternalDrawerFrontCuts` לא נקרא משום מקום ב-`useCabinet`. שלב 2 ידרוש לקרוא אותו פר-גוף ולמזג את הפלט ל-`cuts`.
+  - אין UI להחלפת `mount` או `frontThicknessOverride` של מגירה. השדה זמין רק בנתונים.
+  - אזהרות `main_door_absent` / `main_door_too_short` עוד לא מוצגות באף מקום.
+- האזהרה "מוט נמוך — מתחת ל-80" וחבריה (`ShelfWarning`) שמופקות מ-`redistributeShelves` עדיין לא מתחברות ל-`main_door_*` warnings החדשות — שני מנגנונים נפרדים.
+
 ### תוקן
 - מיקום מדף בלתי-עקבי לפי סדר ההוספה: "מוט → מגירה → מדף" יצר מדף בדיוק על ראש המגירה (gap=80 → hanger ב-rod-80 = drawerTop), בעוד "מגירה → מוט → מדף" יצר מדף מתחת למגירה. עכשיו: כשיש מגירה מתחת למוט (בכל gap), המדף הראשון תמיד מוצב מתחת למגירה (drawer top משמש כרצפת התלייה). תוצאה: התנהגות עקבית ללא תלות בסדר ההוספה
 - אזהרת `small_zone` עכשיו מבוססת על בדיקת מרחקים אחרי placement (לא רק על חללים חופשיים בין blockers): בודקת את כל הפריטים הסמוכים אחרי המיון, ואם יש זוג עם מרחק <25 ס"מ (לפי האזורים הפיזיים: מדף=1.8 ס"מ, מגירה=גובה המגירה, מוט=±1.5 ס"מ) → אזהרה. תופסת מקרים כמו 3 מדפים בגוף 70 (gap ~15.7 בין מדפים)
