@@ -70,35 +70,36 @@ export default function CabinetFrontsSketch({
             doorsByBoxId.set(door.boxId, list);
           }
 
-          // Group external-drawer fronts by (boxId, frontIndex). Body-wide
-          // externals (no cellIndex) reuse the same DrawerFront for every
-          // frontIndex of that box.
-          const drawerFrontsByBoxFi = new Map<string, DrawerFront[]>();
+          // Split drawer fronts by scope:
+          //   bodyFrontsByBox     — body-wide (rendered once per box, full body width)
+          //   cellFrontsByBoxFi  — partition-cell (rendered behind its matching frontIndex)
+          const bodyFrontsByBox = new Map<string, DrawerFront[]>();
+          const cellFrontsByBoxFi = new Map<string, DrawerFront[]>();
           if (drawerFrontsById) {
-            // First collect all per-cell and per-body fronts
-            const bodyFrontsByBox = new Map<string, DrawerFront[]>();
-            const cellFrontsByKey = new Map<string, DrawerFront[]>();
             for (const f of Object.values(drawerFrontsById)) {
               if (f.cellIndex !== undefined) {
                 const k = `${f.boxId}:${f.frontIndex}`;
-                const arr = cellFrontsByKey.get(k) ?? [];
+                const arr = cellFrontsByBoxFi.get(k) ?? [];
                 arr.push(f);
-                cellFrontsByKey.set(k, arr);
+                cellFrontsByBoxFi.set(k, arr);
               } else {
                 const arr = bodyFrontsByBox.get(f.boxId) ?? [];
                 arr.push(f);
                 bodyFrontsByBox.set(f.boxId, arr);
               }
             }
-            // Then materialize: per-front fronts = body fronts ∪ per-cell fronts
-            for (const door of Object.values(doorsById)) {
-              const key = `${door.boxId}:${door.frontIndex}`;
-              const fromCells = cellFrontsByKey.get(key) ?? [];
-              const fromBody = bodyFrontsByBox.get(door.boxId) ?? [];
-              const combined = [...fromCells, ...fromBody]
-                .sort((a, b) => a.positionFromBoxBottom - b.positionFromBoxBottom);
-              if (combined.length > 0) drawerFrontsByBoxFi.set(key, combined);
-            }
+          }
+
+          // Stack-top (cm from box bottom) that pushes a door upward.
+          // For frontIndex `fi` of `boxId`: cell-fronts of that fi + all
+          // body-wide fronts of that box.
+          function stackTopForDoor(boxId: string, fi: number): number {
+            const list: DrawerFront[] = [
+              ...(cellFrontsByBoxFi.get(`${boxId}:${fi}`) ?? []),
+              ...(bodyFrontsByBox.get(boxId) ?? []),
+            ];
+            if (list.length === 0) return 0;
+            return Math.max(...list.map(f => f.positionFromBoxBottom + f.height + f.gapMm / 10));
           }
 
           return [...doorsByBoxId.entries()].flatMap(([boxId, doors]) => {
@@ -107,22 +108,20 @@ export default function CabinetFrontsSketch({
 
             const sortedDoors = [...doors].sort((a, b) => a.frontIndex - b.frontIndex);
 
-            return sortedDoors.map(door => {
+            const doorNodes = sortedDoors.map(door => {
               const panelW   = door.width * geo.scale;
               const gapPx    = (door.gapMm ?? 0) / 10 * geo.scale;
               const fi       = door.frontIndex;
               // fi=0 is rightmost → highest x in LTR SVG coordinates
               const panelX   = rect.x + rect.w - (fi + 1) * (panelW + gapPx);
               const panelH   = door.height * geo.scale;
-              // Drawer fronts attached to this (box, fi) push the main door up.
-              const myFronts = drawerFrontsByBoxFi.get(`${boxId}:${fi}`) ?? [];
-              const stackTopCm = myFronts.length === 0
-                ? 0
-                : Math.max(...myFronts.map(f => f.positionFromBoxBottom + f.height + f.gapMm / 10));
-              const stackPx  = stackTopCm * geo.scale;
+              const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
               const panelY   = rect.y + rect.h - stackPx - panelH;
               const toSvgY   = (fromBottom: number) => rect.y + rect.h - fromBottom * geo.scale;
               const num      = displayNumbers.get(door.id) ?? '';
+              // Per-cell drawer fronts only — body-wide are drawn once at the
+              // end and must NOT be duplicated here.
+              const myCellFronts = cellFrontsByBoxFi.get(`${boxId}:${fi}`) ?? [];
 
               if (!door.hasDoor) {
                 return (
@@ -185,8 +184,8 @@ export default function CabinetFrontsSketch({
                     {num}
                   </text>
 
-                  {/* External-drawer fronts stacked below the main door */}
-                  {myFronts.map(front => {
+                  {/* Per-cell drawer fronts — drawn behind the matching door */}
+                  {myCellFronts.map(front => {
                     const fH      = front.height * geo.scale;
                     const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
                     const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
@@ -223,6 +222,48 @@ export default function CabinetFrontsSketch({
                 </g>
               );
             });
+
+            // Body-wide drawer fronts — one rect per drawer spanning the full
+            // body width, drawn once per box (not per frontIndex).
+            const bodyFronts = bodyFrontsByBox.get(boxId) ?? [];
+            const bodyFrontNodes = bodyFronts.map(front => {
+              const fH      = front.height * geo.scale;
+              const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
+              const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
+              const fX      = rect.x;
+              const fW      = rect.w;
+              const interactive = onDrawerFrontClick !== undefined;
+              const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
+              return (
+                <g
+                  key={`body-f-${front.id}`}
+                  {...(onClick ? { onClick, style: { cursor: 'pointer' } } : {})}
+                >
+                  <rect
+                    x={fX} y={fY}
+                    width={fW} height={visualH}
+                    className={styles.drawerFrontRect}
+                  />
+                  {visualH > fH && (
+                    <line
+                      x1={fX} y1={fY + fH}
+                      x2={fX + fW} y2={fY + fH}
+                      className={styles.skirtLine}
+                    />
+                  )}
+                  <text
+                    x={fX + fW / 2}
+                    y={fY + fH / 2 + 3}
+                    textAnchor="middle"
+                    className={styles.drawerFrontLabel}
+                  >
+                    {t.interior.drawer}
+                  </text>
+                </g>
+              );
+            });
+
+            return [...doorNodes, ...bodyFrontNodes];
           });
         })()}
 

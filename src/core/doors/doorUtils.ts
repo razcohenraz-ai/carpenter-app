@@ -467,12 +467,12 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
 
     const externals = getExternalDrawers(bodyItems);
     if (externals.length === 0) continue;
-    const frontW = getDoorWidth(box.W, numFronts, doorGapMm);
+    // Body-wide drawer: a single front panel that spans the full body width
+    // regardless of how many door fronts share the body above it. (When the
+    // body is partitioned, the cell branch above runs instead.) The
+    // `frontIndex: 0` tag is informational — body-wide fronts are detected
+    // by `cellIndex === undefined` and rendered once per box.
     const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
-    // Body without partition: the same set of externals applies to every
-    // frontIndex; we still emit one DrawerFront per drawer (keyed by drawerId)
-    // and tag it with the rightmost frontIndex (0) — the renderer iterates
-    // all fronts of the body and reuses the same drawer when needed.
     let positionFromBoxBottom = 0;
     for (const drawer of externals) {
       const isSkirt = drawer.id === skirtDrawerId;
@@ -483,7 +483,7 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
         frontIndex: 0,
         positionFromBoxBottom,
         height: drawer.drawerHeight,
-        width: frontW,
+        width: box.W,
         coversSkirt: isSkirt,
         gapMm: doorGapMm,
         ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),

@@ -588,6 +588,10 @@ export function useCabinet(): {
     }
 
     // ── External-drawer front cuts ────────────────────────────────────────
+    // For a body without partition: one cut per external drawer at the full
+    // body width (numFronts splits doors, not drawers — a body-wide drawer
+    // sits below all door fronts as a single facade panel).
+    // For a partitioned body: one cut per drawer per cell, at cell width.
     const externalDrawerCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
       const numFronts = newNumFrontsMap.get(box.id)!;
@@ -595,16 +599,28 @@ export function useCabinet(): {
       const bodyItems = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
       const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
-      const frontW = hasPartition
-        ? (box.W - tBody) / 2
-        : getDoorWidth(box.W, numFronts, doorGapMm);
 
-      for (let fi = 0; fi < numFronts; fi++) {
-        const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
-        const cuts = calcExternalDrawerFrontCuts(
-          itemsForFront, frontW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+      if (hasPartition) {
+        const cellW = (box.W - tBody) / 2;
+        for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
+          const itemsForCell = cellItems?.[ci] ?? [];
+          externalDrawerCuts.push(
+            ...calcExternalDrawerFrontCuts(
+              itemsForCell, cellW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+            ),
+          );
+        }
+      } else {
+        // Single body-wide call — duplicating per frontIndex would emit
+        // numFronts copies at the wrong (door-sized) width.
+        // numFronts is referenced via `getItemsForFront` only when partition
+        // is on; here we deliberately use the raw body items.
+        void numFronts;
+        externalDrawerCuts.push(
+          ...calcExternalDrawerFrontCuts(
+            bodyItems, box.W, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+          ),
         );
-        externalDrawerCuts.push(...cuts);
       }
     }
 

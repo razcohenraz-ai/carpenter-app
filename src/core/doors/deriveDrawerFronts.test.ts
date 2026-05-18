@@ -70,6 +70,24 @@ describe('deriveDrawerFronts — body-wide externals', () => {
     expect(front!.frontIndex).toBe(0);
     expect(front!.cellIndex).toBeUndefined();
     expect(front!.coversSkirt).toBe(false);
+    expect(front!.width).toBe(60); // body-wide, full box.W
+  });
+
+  it('bug-regression: numFronts>1 without partition → single DrawerFront at full body width', () => {
+    // Bug: in a 240cm cabinet with 3 bodies of 80cm (each numFronts=2),
+    // adding an external drawer to a non-partitioned body produced 2 separate
+    // fronts at door width. The fix: one DrawerFront per drawer at box.W.
+    const result = deriveDrawerFronts({
+      bodyBoxes: [box('b0', 80, 200)],
+      interiorById: { b0: [ext('d1', 10, 20)] },
+      cellInteriorById: {},
+      partitionsById: new Map(),  // ← no partition
+      numFrontsPerBox: new Map([['b0', 2]]),  // ← 2 doors but 1 drawer-front
+      ...baseInput,
+    });
+    expect(Object.keys(result)).toEqual(['d1']);
+    expect(result['d1']!.width).toBe(80);     // full body, NOT door width (~39.8)
+    expect(result['d1']!.cellIndex).toBeUndefined();
   });
 
   it('3 externals stack: positions follow sum + i×gap', () => {

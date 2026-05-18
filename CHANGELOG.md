@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### תוקן
+- חזית מגירה חיצונית בגוף בלי מחיצה הייתה מפוצלת לפי `numFronts`; כעת חזית יחידה ברוחב הגוף. הבאג היה בשלושה מקומות והוצרך תיקון תלת-ראשי:
+  - `deriveDrawerFronts` (core/doors/doorUtils.ts) קבע `width = getDoorWidth(box.W, numFronts, gap)` (~39.8 ס"מ עבור גוף 80 עם 2 חזיתות) → תוקן ל-`width = box.W`.
+  - `useCabinet.calculate()` קרא ל-`calcExternalDrawerFrontCuts` בלולאת `for fi = 0..numFronts-1` עם אותם `bodyItems` ו-`frontW = doorW`, מה שהפיק N עותקי CutItem ברוחב דלת → תוקן ל-קריאה יחידה לגוף ללא מחיצה (`frontW = box.W`). למחיצה נשאר per-cell.
+  - `CabinetFrontsSketch` עשה materialization שמוסיף כל body-wide DrawerFront לכל `(boxId, frontIndex)` ב-`drawerFrontsByBoxFi`, ואז צייר אותו פעם בכל איטרציה של דלת ברוחב `panelW` → תוקן: body-wide נצבר ב-`bodyFrontsByBox` ומצויר פעם אחת לגוף ברוחב `rect.w`; cell-bound נצבר ב-`cellFrontsByBoxFi` ומצויר behind ה-frontIndex המתאים. `stackTopForDoor(boxId, fi)` מצרף את שניהם לחישוב גובה הדלת.
+
 ### נוסף — שלב 2.2: תצוגה ויזואלית של מגירות חיצוניות
 - **`DrawerFront` entity** נגזר ב-`deriveDrawerFronts` ב-`core/doors/doorUtils.ts`, נחשב מחדש בכל `calculate()`, ונשמר ב-`drawerFrontsById` כ-state נחשף מ-`useCabinet`.
 - **BoxBodySketch**: external drawers מצוירות בתחתית הגוף, סדורות מלמטה למעלה לפי `heightFromFloor`, בצבע fronts (אופציונליות נפרדות מ-internal drawers הקיימות). תווית "מגירה" + גובה ב-cm. תמיכה ב-`onExternalDrawerClick` לפתיחת מודאל.
