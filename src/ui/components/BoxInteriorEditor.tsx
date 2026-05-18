@@ -128,6 +128,10 @@ export default function BoxInteriorEditor({
   function updateHeight(id: string, raw: string): void {
     const h = parseFloat(raw);
     if (isNaN(h)) return;
+    // Fixed shelves (above external drawers) derive their height from drawer
+    // geometry — silently ignore manual edits.
+    const target = localItems.find(i => i.id === id);
+    if (target?.type === 'shelf' && target.isFixedAboveExternals === true) return;
     update(localItems.map(i => {
       if (i.id !== id) return i;
       if (i.type === 'shelf') return { ...i, heightFromFloor: h, isManuallyPositioned: true };
@@ -210,7 +214,10 @@ export default function BoxInteriorEditor({
   function updateCellHeight(ci: number, id: string, raw: string): void {
     const h = parseFloat(raw);
     if (isNaN(h)) return;
-    updateCell(ci, (localCellItems[ci] ?? []).map(i => {
+    const cellItems = localCellItems[ci] ?? [];
+    const target = cellItems.find(i => i.id === id);
+    if (target?.type === 'shelf' && target.isFixedAboveExternals === true) return;
+    updateCell(ci, cellItems.map(i => {
       if (i.id !== id) return i;
       if (i.type === 'shelf') return { ...i, heightFromFloor: h, isManuallyPositioned: true };
       return { ...i, heightFromFloor: h };
@@ -377,13 +384,22 @@ export default function BoxInteriorEditor({
     }
     return (
       <ul className={styles.list}>
-        {sorted.map(item => (
+        {sorted.map(item => {
+          const isFixedShelf = item.type === 'shelf' && item.isFixedAboveExternals === true;
+          return (
           <li
             key={item.id}
             className={`${styles.item} ${getHasWarning(item) ? styles.itemWarn : ''}`}
           >
             <span className={styles.itemIcon}>{typeIcon[item.type]}</span>
-            <span className={styles.itemType}>{typeLabel[item.type]}</span>
+            <span className={styles.itemType}>
+              {typeLabel[item.type]}
+              {isFixedShelf && (
+                <span className={styles.fixedTag} title={t.interior.fixedShelfTooltip}>
+                  {' '}{t.interior.fixedShelfLabel}
+                </span>
+              )}
+            </span>
 
             <label className={styles.fieldLabel}>
               {t.interior.heightFromFloor}
@@ -392,6 +408,7 @@ export default function BoxInteriorEditor({
                 className={styles.numInput}
                 value={item.heightFromFloor}
                 step={1}
+                readOnly={isFixedShelf}
                 onChange={e => onUpdateH(item.id, e.target.value)}
                 onFocus={e => e.target.select()}
               />
@@ -424,7 +441,8 @@ export default function BoxInteriorEditor({
               <span key={i} className={styles.warning}>⚠ {msg}</span>
             ))}
           </li>
-        ))}
+          );
+        })}
       </ul>
     );
   }

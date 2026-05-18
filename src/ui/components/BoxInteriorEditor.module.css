@@ -143,6 +143,12 @@
   min-width: 60px;
 }
 
+.fixedTag {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-muted);
+}
+
 .fieldLabel {
   display: flex;
   align-items: center;

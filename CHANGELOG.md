@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### נוסף — מדף קבוע אוטומטי מעל ערימת מגירות חיצוניות
+- **`ShelfItem.isFixedAboveExternals?: boolean`** — שדה חדש אופציונלי שמסמן מדף שנוצר אוטומטית מעל ערימת external drawers. ShelfItem רגיל לא מקבל את הדגל.
+- **`core/interior/fixedShelfUtils.ts`** (חדש): `calcFixedShelfHeight(externals, gapMm, shelfThickness)` מחזיר את `heightFromFloor` (= תחתית המדף = `top of highest drawer − shelfThickness`); `hasFixedShelf(items)`; `findFixedShelf(items)`; `syncFixedShelf(oldItems, newItems, gapMm, shelfThickness)` שמיישם את ה-decision table: יצירה אוטומטית רק בהוספת המגירה הראשונה (`newCount=1 ∧ oldCount=0`); עדכון `heightFromFloor` כשערימת המגירות משתנה; מחיקה כשהאחרונה הוסרה; כיבוד הסרה ידנית (לא יוצר מחדש).
+- **`redistributeShelves`**: סינון משותף ל-`isManuallyPositioned === true` ול-`isFixedAboveExternals === true` — שניהם נחשבים "frozen" ולא משתתפים בחלוקה. המשתנה `manual` ב-helper שונה ל-`frozen` (אותה התנהגות, שם מדויק יותר).
+- **`useCabinet`**: `setBoxInterior` ו-`setCellItems` קוראים ל-`syncFixedShelf` לפני שמירת ה-items, עם `gapMm` מ-`lastInputRef` ו-`shelfThickness` מ-`tBodyRef`.
+- **`BoxBodySketch`**: מדף קבוע מצויר עם `stroke-dasharray: 6 2` ועובי 2 (class חדש `.fixedShelfLine`). לא ניתן לגרירה. ה-label מציג את התרגום "קבוע" במקום הגובה המספרי.
+- **`BoxInteriorEditor`**: שדה הגובה של מדף קבוע מסומן `readOnly`; קריאות `updateHeight`/`updateCellHeight` על מדף קבוע מתעלמות בשקט (גובה נגזר). תווית "קבוע" מתווספת לטיפוס בעמודת הפריט.
+- 2 מפתחות תרגום חדשים: `fixedShelfLabel` ("קבוע" / "Fixed") ו-`fixedShelfTooltip` (טקסט מלא של ההסבר).
+- 17 בדיקות חדשות ב-`fixedShelfUtils.test.ts` מכסות את כל ה-decision table ו-edge cases (drawer height change, internal drawers, coexistence with manual shelves).
+
+### ידוע — לטיפול בעתיד
+- אם מדף רגיל קיים בטווח 5 ס"מ ממיקום המדף הקבוע → אזהרת warning. דורש מנגנון אזהרות חדש או הרחבת קיים. דחוי לפיצ'ר נפרד.
+
 ### תוקן
 - חזית מגירה חיצונית בגוף בלי מחיצה הייתה מפוצלת לפי `numFronts`; כעת חזית יחידה ברוחב הגוף. הבאג היה בשלושה מקומות והוצרך תיקון תלת-ראשי:
   - `deriveDrawerFronts` (core/doors/doorUtils.ts) קבע `width = getDoorWidth(box.W, numFronts, gap)` (~39.8 ס"מ עבור גוף 80 עם 2 חזיתות) → תוקן ל-`width = box.W`.

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import type { InteriorItem, DrawerItem } from '../../types/interior';
+import type { InteriorItem, DrawerItem, ShelfItem } from '../../types/interior';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './BoxBodySketch.module.css';
 
@@ -180,26 +180,32 @@ export default function BoxBodySketch({
       {renderableItems.map(item => {
         const h = resolvedH(item);
         const isDragging = drag?.itemId === item.id;
-        const dragProps = dragging ? {
+        // Fixed shelves (auto-generated above external drawers) are not
+        // draggable — their position is derived from drawer geometry.
+        const isFixedShelf = item.type === 'shelf' && (item as ShelfItem).isFixedAboveExternals === true;
+        const dragProps = dragging && !isFixedShelf ? {
           onPointerDown: (e: React.PointerEvent<SVGElement>) => onPointerDown(e, item),
           style: { cursor: 'ns-resize' } as React.CSSProperties,
         } : {};
 
         if (item.type === 'shelf') {
           const y = toY(h);
+          const lineClass = isFixedShelf ? styles.fixedShelfLine : styles.shelfLine;
           return (
             <g key={item.id} {...dragProps}>
               <line x1={bX} y1={y} x2={bX + bW} y2={y}
-                className={styles.shelfLine}
+                className={lineClass}
                 opacity={isDragging ? 0.4 : 1}
               />
-              {/* Wider invisible hit area */}
-              <line x1={bX} y1={y} x2={bX + bW} y2={y}
-                stroke="transparent" strokeWidth={10}
-              />
+              {/* Wider invisible hit area (suppressed for fixed shelves) */}
+              {!isFixedShelf && (
+                <line x1={bX} y1={y} x2={bX + bW} y2={y}
+                  stroke="transparent" strokeWidth={10}
+                />
+              )}
               {showLabels && !isDragging && (
                 <text x={bX + bW + 3} y={y + 4} className={styles.label}>
-                  {Math.round(item.heightFromFloor)}
+                  {isFixedShelf ? t.interior.fixedShelfLabel : Math.round(item.heightFromFloor)}
                 </text>
               )}
             </g>

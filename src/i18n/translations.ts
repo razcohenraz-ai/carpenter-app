@@ -100,6 +100,8 @@ export interface Translations {
     drawerFrontThicknessLabel: string;
     defaultMaterial: string;
     deleteDrawer: string;
+    fixedShelfLabel: string;
+    fixedShelfTooltip: string;
   };
 
   doors: {
@@ -251,6 +253,8 @@ const he: Translations = {
     drawerFrontThicknessLabel: 'עובי חזית מגירה',
     defaultMaterial: 'ברירת מחדל',
     deleteDrawer: 'מחק מגירה',
+    fixedShelfLabel: 'קבוע',
+    fixedShelfTooltip: 'מדף קבוע מעל מגירה חיצונית — נוצר אוטומטית',
   },
 
   doors: {
@@ -401,6 +405,8 @@ const en: Translations = {
     drawerFrontThicknessLabel: 'Drawer front thickness',
     defaultMaterial: 'Default',
     deleteDrawer: 'Delete drawer',
+    fixedShelfLabel: 'Fixed',
+    fixedShelfTooltip: 'Fixed shelf above external drawer — auto-generated',
   },
 
   doors: {

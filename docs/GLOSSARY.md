@@ -73,8 +73,14 @@
 ### isManuallyPositioned
 שדה `boolean?` על `ShelfItem`. `true` לאחר שהמשתמש גרר את המדף או שינה את גובהו בשדה. מדף כזה נשאר במקומו כשמדפים אחרים מתחלקים מחדש עקב הוספה/מחיקה.
 
+### isFixedAboveExternals
+שדה `boolean?` על `ShelfItem`. `true` למדף שנוצר אוטומטית מעל ערימת external drawers. נגזר ע"י `syncFixedShelf` (`core/interior/fixedShelfUtils.ts`); לא משתתף ב-`redistributeShelves`; לא ניתן לגרירה ב-`BoxBodySketch`; שדה הגובה ב-`BoxInteriorEditor` הוא `readOnly`. הסרה ידנית כן אפשרית, ואחרי הסרה ידנית — לא נוצר מחדש.
+
 ### redistributeShelves
-פונקציה ב-`interiorUtils.ts` שמחלקת מחדש את כל המדפים עם `isManuallyPositioned !== true`. הלוגיקה: hanger logic (מדף ראשון מתחת למוט/מגירה) → round-robin בין כל האזורים החופשיים ≥25 ס"מ. מחזירה `{ items, warnings }`. מדפים ידניים ופריטים שאינם מדפים לא נגעים.
+פונקציה ב-`interiorUtils.ts` שמחלקת מחדש את המדפים עם `isManuallyPositioned !== true` **וגם** `isFixedAboveExternals !== true` (שני סוגי frozen מסוננים יחד). הלוגיקה: hanger logic (מדף ראשון מתחת למוט/מגירה) → round-robin בין כל האזורים החופשיים ≥25 ס"מ. מחזירה `{ items, warnings }`. מדפים ידניים, מדפים קבועים ופריטים שאינם מדפים לא נגעים.
+
+### syncFixedShelf
+פונקציה ב-`core/interior/fixedShelfUtils.ts` שמסנכרנת את המדף הקבוע מעל external drawers בעת שינוי פריטים. signature: `(oldItems, newItems, gapMm, shelfThickness) → items`. decision table: `newCount=0` → הסר אם קיים; `existing` → עדכן heightFromFloor; `first external` → צור חדש; אחרת → השאר ללא שינוי (כיבוד הסרה ידנית). נקרא מ-`useCabinet.setBoxInterior` ו-`setCellItems`.
 
 ### round-robin (חלוקת מדפים)
 אלגוריתם החלוקה: ממיין את האזורים החופשיים התקפים (≥25 ס"מ) לפי גודל יורד. למדף i מקצה אזור `i % numZones`. בתוך כל אזור, חלוקה שווה. תוצאה: מדפים מתפזרים על פני כל הגוף, לא מצטופפים באזור אחד.

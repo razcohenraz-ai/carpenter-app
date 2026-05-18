@@ -404,11 +404,20 @@ export function redistributeShelves(
 ): { items: InteriorItem[]; warnings: ShelfWarning[] } {
   const warnings: ShelfWarning[] = [];
 
-  const manual = items.filter(
-    (i): i is ShelfItem => i.type === 'shelf' && i.isManuallyPositioned === true,
+  // "Frozen" shelves never move: user-positioned (isManuallyPositioned) and
+  // the auto-generated fixed shelf above external drawers (isFixedAboveExternals).
+  // Both are treated as blockers by computeFreeZones, so auto shelves only
+  // land in the gaps left between them.
+  const frozen = items.filter(
+    (i): i is ShelfItem =>
+      i.type === 'shelf' &&
+      (i.isManuallyPositioned === true || i.isFixedAboveExternals === true),
   );
   const auto = items.filter(
-    (i): i is ShelfItem => i.type === 'shelf' && i.isManuallyPositioned !== true,
+    (i): i is ShelfItem =>
+      i.type === 'shelf' &&
+      i.isManuallyPositioned !== true &&
+      i.isFixedAboveExternals !== true,
   );
   const others = items.filter(i => i.type !== 'shelf');
 
@@ -450,10 +459,10 @@ export function redistributeShelves(
   }
 
   // ── Round-robin zone distribution ─────────────────────────────────────────
-  // Blockers (drawers, rods, manual shelves, and the hanger shelf if placed)
+  // Blockers (drawers, rods, frozen shelves, and the hanger shelf if placed)
   // define free zones. Zones ≥ 25cm receive auto shelves in round-robin order,
   // starting with the largest. Multiple shelves in one zone divide it evenly.
-  const blockers: InteriorItem[] = [...others, ...manual];
+  const blockers: InteriorItem[] = [...others, ...frozen];
   if (hangerShelf) blockers.push(hangerShelf);
 
   const allZones = computeFreeZones(blockers, containerH, shelfThickness);
@@ -503,7 +512,7 @@ export function redistributeShelves(
     : placedShelves
   ).map(s => ({ ...s, heightFromFloor: roundCm(s.heightFromFloor) }));
 
-  const finalItems: InteriorItem[] = [...others, ...manual, ...finalShelves];
+  const finalItems: InteriorItem[] = [...others, ...frozen, ...finalShelves];
 
   // Final-layout gap check: if any pair of adjacent items is closer than 25cm,
   // emit a single small_zone warning. Uses physical zones (drawer height,

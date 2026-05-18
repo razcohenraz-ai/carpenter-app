@@ -9,8 +9,13 @@ interface BaseInteriorItem {
 
 export interface ShelfItem extends BaseInteriorItem {
   type: 'shelf';
-  heightFromFloor: number; // cm from body bottom
+  heightFromFloor: number; // cm from body bottom — bottom edge of the shelf
   isManuallyPositioned?: boolean; // true once user has moved this shelf by hand
+  /** true for the auto-generated fixed shelf above an external-drawer stack.
+   *  Such shelves are derived from drawer geometry, never participate in
+   *  redistribution, and are not user-draggable. Manual removal is respected
+   *  (the shelf will not be re-created automatically while externals remain). */
+  isFixedAboveExternals?: boolean;
 }
 
 /** Drawer mount type:

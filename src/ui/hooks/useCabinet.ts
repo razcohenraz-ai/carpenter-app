@@ -20,6 +20,7 @@ import {
 } from '../../core/doors/doorUtils';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { newItemId } from '../../core/interior/interiorUtils';
+import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
@@ -163,12 +164,18 @@ export function useCabinet(): {
 
   function setBoxInterior(boxId: string, items: InteriorItem[]): void {
     const prevItems = interiorRef.current[boxId] ?? [];
-    const newInterior = { ...interiorRef.current, [boxId]: items };
+    // Reconcile the auto fixed shelf (above external drawers) BEFORE storing.
+    // syncFixedShelf inspects external-drawer transitions and creates/updates/
+    // removes the shelf so downstream consumers (sketches, cuts) see a
+    // coherent items list.
+    const gapMm = lastInputRef.current?.doorGapMm ?? 2;
+    const synced = syncFixedShelf(prevItems, items, gapMm, tBodyRef.current);
+    const newInterior = { ...interiorRef.current, [boxId]: synced };
     setInterior(newInterior);
 
     // External-drawer change → door height, coversSkirt and 'front' cuts may
     // all flip; run the full pipeline rather than a surgical update (Q3).
-    if (externalStackChanged(prevItems, items) && lastInputRef.current) {
+    if (externalStackChanged(prevItems, synced) && lastInputRef.current) {
       calculate(lastInputRef.current);
       return;
     }
@@ -178,7 +185,7 @@ export function useCabinet(): {
     for (let fi = 0; fi < nf; fi++) {
       const doorId = makeDoorId(boxId, fi);
       const door = doorsRef.current[doorId];
-      if (door) updatedDoors[doorId] = recomputeDoorHinges(door, items, plinthRef.current);
+      if (door) updatedDoors[doorId] = recomputeDoorHinges(door, synced, plinthRef.current);
     }
     doorsRef.current = updatedDoors;
     setDoorsById(updatedDoors);
@@ -252,13 +259,16 @@ export function useCabinet(): {
   function setCellItems(boxId: string, cellIndex: number, items: InteriorItem[]): void {
     const current = cellInteriorRef.current[boxId] ?? [[], []];
     const prevItems = current[cellIndex] ?? [];
-    const updated: InteriorItem[][] = current.map((c, i) => i === cellIndex ? items : c);
+    // Each cell maintains its own fixed shelf independently.
+    const gapMm = lastInputRef.current?.doorGapMm ?? 2;
+    const synced = syncFixedShelf(prevItems, items, gapMm, tBodyRef.current);
+    const updated: InteriorItem[][] = current.map((c, i) => i === cellIndex ? synced : c);
     const newCellInterior = { ...cellInteriorRef.current, [boxId]: updated };
     cellInteriorRef.current = newCellInterior;
     setCellInteriorById(newCellInterior);
 
     // Mount toggle inside a cell → full recalculate (same rationale as setBoxInterior).
-    if (externalStackChanged(prevItems, items) && lastInputRef.current) {
+    if (externalStackChanged(prevItems, synced) && lastInputRef.current) {
       calculate(lastInputRef.current);
     }
   }
