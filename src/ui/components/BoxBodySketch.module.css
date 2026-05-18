@@ -48,3 +48,24 @@
   opacity: 0.5;
 }
 
+.externalDrawerRect {
+  fill: var(--color-fronts);
+  opacity: 0.45;
+  stroke: var(--color-fronts);
+  stroke-width: 1.25;
+}
+
+.externalDrawerFaceHint {
+  stroke: var(--color-fronts);
+  stroke-width: 0.5;
+  opacity: 0.8;
+}
+
+.externalDrawerLabel {
+  font-size: 8px;
+  fill: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-medium);
+  pointer-events: none;
+}
+

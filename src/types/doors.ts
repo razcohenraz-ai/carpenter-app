@@ -20,3 +20,24 @@ export interface Door {
 }
 
 export type DoorById = Record<string, Door>;
+
+// ── Drawer fronts (derived facade panels of external drawers) ─────────────────
+// A `DrawerFront` is the front-of-cabinet panel that belongs to a `DrawerItem`
+// with `mount === 'external'`. It is **derived** from the items+geometry on
+// every `calculate()`; the persistent source-of-truth is the DrawerItem itself.
+
+export interface DrawerFront {
+  id: string;                    // identical to the source drawerId
+  drawerId: string;              // the DrawerItem this front belongs to
+  boxId: string;
+  frontIndex: number;            // which column-front of the box (same convention as Door)
+  cellIndex?: 0 | 1;             // set when the drawer lives in a partitioned cell
+  positionFromBoxBottom: number; // cm — y-offset of the panel's bottom edge from the box's bottom
+  height: number;                // cm — structural panel height (= drawerHeight; visual extension via coversSkirt)
+  width: number;                 // cm — panel width
+  coversSkirt: boolean;          // true → panel extends down over the plinth (visual only)
+  gapMm: number;                 // gap between fronts; needed for skirt visual extension
+  thicknessOverride?: string;    // materialId; mirrors Door.thicknessOverride for external drawers
+}
+
+export type DrawerFrontById = Record<string, DrawerFront>;

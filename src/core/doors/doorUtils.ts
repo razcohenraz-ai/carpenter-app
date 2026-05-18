@@ -1,6 +1,6 @@
 import type { Box, BoxPosition } from '../../types/geometry';
-import type { InteriorItem, InteriorById, DrawerItem } from '../../types/interior';
-import type { Door, DoorById, Hinge } from '../../types/doors';
+import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
+import type { Door, DoorById, DrawerFront, DrawerFrontById, Hinge } from '../../types/doors';
 import type { MaterialId } from '../../types/materials';
 import { newItemId } from '../interior/interiorUtils';
 import { getMaterial } from '../../catalog';
@@ -391,6 +391,117 @@ export function externalStackSignature(items: InteriorItem[]): string {
  *  whether to trigger a full `calculate()` versus a surgical state update. */
 export function externalStackChanged(prev: InteriorItem[], next: InteriorItem[]): boolean {
   return externalStackSignature(prev) !== externalStackSignature(next);
+}
+
+// ── Derive DrawerFront entities for the whole cabinet ─────────────────────────
+// One DrawerFront per external drawer per applicable (box, frontIndex). For a
+// body without partition, externals appear once on the body-wide front (and
+// span every frontIndex in that body). For a partition body, externals in
+// cell 0 attach to frontIndex 0; cell 1 attaches to frontIndex numFronts−1.
+// Returns a map keyed by drawerId (drawerFronts are derived 1:1 from drawers).
+
+export interface DeriveDrawerFrontsInput {
+  bodyBoxes: Box[];
+  interiorById: InteriorById;
+  cellInteriorById: CellInteriorById;
+  partitionsById: Map<string, boolean>;
+  numFrontsPerBox: Map<string, number>;
+  doorCoversPlinth: boolean;
+  doorGapMm: number;
+  tBody: number;
+}
+
+export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontById {
+  const {
+    bodyBoxes, interiorById, cellInteriorById, partitionsById,
+    numFrontsPerBox, doorCoversPlinth, doorGapMm, tBody,
+  } = input;
+  const result: DrawerFrontById = {};
+  const gapCm = doorGapMm / 10;
+
+  for (const box of bodyBoxes) {
+    const numFronts = numFrontsPerBox.get(box.id) ?? 1;
+    const hasPartition = partitionsById.get(box.id) === true;
+    const bodyItems = interiorById[box.id] ?? [];
+    const cellItems = cellInteriorById[box.id];
+
+    const originalCoversSkirt = doorCoversPlinth && (box.level === 'bottom' || box.level === 'single');
+
+    // Two paths: partition (per cell) or single (body-wide).
+    if (hasPartition && cellItems) {
+      const cellW = (box.W - tBody) / 2;
+      // Cell 0 (right) → frontIndex 0; Cell 1 (left) → frontIndex numFronts−1
+      for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
+        const items = cellItems[ci] ?? [];
+        const externals = getExternalDrawers(items);
+        if (externals.length === 0) continue;
+        const fi = ci === 0 ? 0 : numFronts - 1;
+        const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
+
+        // Position drawers from the bottom of the front area upward.
+        // Use 0 as the body-bottom origin; the renderer applies the body's own
+        // bottom-gap when converting to SVG.
+        let positionFromBoxBottom = 0;
+        for (const drawer of externals) {
+          const isSkirt = drawer.id === skirtDrawerId;
+          const front: DrawerFront = {
+            id: drawer.id,
+            drawerId: drawer.id,
+            boxId: box.id,
+            frontIndex: fi,
+            cellIndex: ci,
+            positionFromBoxBottom,
+            height: drawer.drawerHeight,
+            width: cellW,
+            coversSkirt: isSkirt,
+            gapMm: doorGapMm,
+            ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),
+          };
+          result[drawer.id] = front;
+          positionFromBoxBottom += drawer.drawerHeight + gapCm;
+        }
+      }
+      // Skip body-wide externals when partition is on; only cell items apply.
+      continue;
+    }
+
+    const externals = getExternalDrawers(bodyItems);
+    if (externals.length === 0) continue;
+    const frontW = getDoorWidth(box.W, numFronts, doorGapMm);
+    const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
+    // Body without partition: the same set of externals applies to every
+    // frontIndex; we still emit one DrawerFront per drawer (keyed by drawerId)
+    // and tag it with the rightmost frontIndex (0) — the renderer iterates
+    // all fronts of the body and reuses the same drawer when needed.
+    let positionFromBoxBottom = 0;
+    for (const drawer of externals) {
+      const isSkirt = drawer.id === skirtDrawerId;
+      const front: DrawerFront = {
+        id: drawer.id,
+        drawerId: drawer.id,
+        boxId: box.id,
+        frontIndex: 0,
+        positionFromBoxBottom,
+        height: drawer.drawerHeight,
+        width: frontW,
+        coversSkirt: isSkirt,
+        gapMm: doorGapMm,
+        ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),
+      };
+      result[drawer.id] = front;
+      positionFromBoxBottom += drawer.drawerHeight + gapCm;
+    }
+  }
+
+  return result;
+}
+
+/** Visual height of a drawer front, mirroring `getDoorVisualHeight`: adds the
+ *  plinth-covering extension when the drawer inherited `coversSkirt`. */
+export function getDrawerFrontVisualHeight(front: DrawerFront, plinthH: number): number {
+  if (!front.coversSkirt || !(plinthH > 0)) return front.height;
+  const gapCm = front.gapMm / 10;
+  return front.height + (plinthH - 1) + gapCm;
 }
 
 /** Returns the external drawer that should carry the original door's

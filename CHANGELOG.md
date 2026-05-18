@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+### נוסף — שלב 2.2: תצוגה ויזואלית של מגירות חיצוניות
+- **`DrawerFront` entity** נגזר ב-`deriveDrawerFronts` ב-`core/doors/doorUtils.ts`, נחשב מחדש בכל `calculate()`, ונשמר ב-`drawerFrontsById` כ-state נחשף מ-`useCabinet`.
+- **BoxBodySketch**: external drawers מצוירות בתחתית הגוף, סדורות מלמטה למעלה לפי `heightFromFloor`, בצבע fronts (אופציונליות נפרדות מ-internal drawers הקיימות). תווית "מגירה" + גובה ב-cm. תמיכה ב-`onExternalDrawerClick` לפתיחת מודאל.
+- **CabinetSketch + CabinetFrontsSketch**: external drawers מצוירות כפנלים נפרדים בצבע חזית. ב-CabinetFrontsSketch הדלת הראשית נדחפת למעלה לפי גובה ערימת המגירות, וחזיתות המגירה ממוקמות מתחתיה. המגירה הנמוכה עם `coversSkirt` מתארכת ויזואלית מטה (שימוש ב-`getDrawerFrontVisualHeight`).
+- **DoorsList**: חזיתות מגירה מופיעות אחרי הדלתות של אותו גוף, ממוינות מלמעלה למטה. תווית "(מגירה)" מתווספת לכל שורה. ההוספה ניתנת ללחיצה ופותחת את ה-modal.
+- **ExternalDrawerEditor (modal חדש)**: שדה גובה מגירה (input מספרי בס"מ עם commit ב-blur/Enter), בחירת `frontThicknessOverride` (dropdown של MaterialIds + אפשרות "ברירת מחדל"), כפתורי "מחק מגירה" וביטול.
+- **useCabinet API חדש**: `setDrawerHeight(drawerId, h)`, `setDrawerFrontThickness(drawerId, materialId | undefined)`, `deleteDrawer(drawerId)`. כל אחת מאתרת את המגירה (interior או cell) ומחילה את העדכון; שינוי גובה מפעיל `calculate()` מלא דרך ה-detection הקיים ב-`externalStackChanged`.
+- 11 מפתחות תרגום חדשים (HE/EN): `drawerFrontLabel`, `editExternalDrawerTitle`, `drawerHeightLabel`, `drawerFrontThicknessLabel`, `defaultMaterial`, `deleteDrawer`.
+- 16 בדיקות חדשות (`deriveDrawerFronts.test.ts`): רשימה ריקה, body-wide, partition cells (מיפוי frontIndex), coversSkirt לוגיקה, thicknessOverride passthrough, mixed internals/externals, `getDrawerFrontVisualHeight`.
+
+### ידוע (סטטוס מעודכן ל-2.2)
+- חיווט מלא של תצוגה ויזואלית — ✅ נעשה ב-2.2.
+- ExternalDrawerEditor (גובה + override + מחיקה) — ✅ נעשה ב-2.2.
+- אזהרות `main_door_absent` / `main_door_too_short` — עדיין לא מוצגות (פתוח ל-2.3 או אחרי).
+- חיתוכי הדלת הראשית מ-`calcCuts` עדיין לא משתקפים את הקיצור (חוב טכני שהוזכר ב-2.1; לא נגעו ב-2.2).
+- מצב partition + numFronts > 2: ה-frontIndex האמצעי לא מקבל cell ולכן external drawers לא ניתנים להוספה שם — תועדה כמגבלה ב-CARPENTRY_RULES.
+
 ### נוסף — שלב 2.1: חיווט מגירות חיצוניות ל-state ול-UI
 - `useCabinet.calculate()` משתמש ב-`calcMainDoorHeight` במקום `getDoorHeight` — הדלת מתקצרת אוטומטית כשיש external drawers בגוף (או בתא, במצב מחיצה).
 - העברת `coversSkirt` אוטומטית מהדלת הראשית למגירה החיצונית הנמוכה ביותר. הדלת מאבדת את הדגל; ה-`drawerId` נשמר ב-`skirtCoveringDrawerIdsRef` ל-2.2 (תצוגה).

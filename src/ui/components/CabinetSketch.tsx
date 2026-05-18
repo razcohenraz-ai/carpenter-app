@@ -132,49 +132,59 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
           const toSvgY = (h: number) => rect.y + rect.h - h * geo.scale;
 
-          return items.map(item => {
+          // External drawers in this box stack from the bottom upward.
+          const externals = items
+            .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+            .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+          const externalIds = new Set(externals.map(d => d.id));
+
+          const nonExternalNodes = items.map(item => {
+            if (externalIds.has(item.id)) return null;
             if (item.type === 'shelf') {
               const y = toSvgY(item.heightFromFloor);
               return (
-                <line
-                  key={item.id}
-                  x1={rect.x}
-                  y1={y}
-                  x2={rect.x + rect.w}
-                  y2={y}
-                  className={styles.shelfLine}
-                />
+                <line key={item.id} x1={rect.x} y1={y} x2={rect.x + rect.w} y2={y}
+                  className={styles.shelfLine} />
               );
             }
             if (item.type === 'rod') {
               const y = toSvgY(item.heightFromFloor);
               return (
-                <line
-                  key={item.id}
-                  x1={rect.x}
-                  y1={y}
-                  x2={rect.x + rect.w}
-                  y2={y}
-                  className={styles.rodLine}
-                />
+                <line key={item.id} x1={rect.x} y1={y} x2={rect.x + rect.w} y2={y}
+                  className={styles.rodLine} />
               );
             }
             if (item.type === 'drawer') {
               const yBottom = toSvgY(item.heightFromFloor);
               const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
               return (
-                <rect
-                  key={item.id}
-                  x={rect.x + 2}
-                  y={yTop}
-                  width={rect.w - 4}
-                  height={yBottom - yTop}
-                  className={styles.drawerRect}
-                />
+                <rect key={item.id} x={rect.x + 2} y={yTop}
+                  width={rect.w - 4} height={yBottom - yTop}
+                  className={styles.drawerRect} />
               );
             }
             return null;
           });
+
+          // Stack externals from the body floor; gap between them follows
+          // the door-gap convention used by deriveDrawerFronts (default 2mm).
+          const gapCm = 0.2;
+          let cumulative = 0;
+          const externalNodes = externals.map(drawer => {
+            const yBottom = toSvgY(cumulative);
+            const yTop    = toSvgY(cumulative + drawer.drawerHeight);
+            cumulative += drawer.drawerHeight + gapCm;
+            return (
+              <rect
+                key={`ext-${drawer.id}`}
+                x={rect.x} y={yTop}
+                width={rect.w} height={yBottom - yTop}
+                className={styles.externalDrawerRect}
+              />
+            );
+          });
+
+          return [...nonExternalNodes, ...externalNodes];
         })}
 
         {/* Cell interior items for partitioned boxes */}
@@ -196,7 +206,13 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
               {cells.flatMap((cellItems, ci) => {
                 const xLeft  = ci === 0 ? partitionX : rect.x;
                 const xRight = ci === 0 ? rect.x + rect.w : partitionX;
-                return cellItems.map(item => {
+                const externals = cellItems
+                  .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+                  .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+                const externalIds = new Set(externals.map(d => d.id));
+
+                const internalNodes = cellItems.map(item => {
+                  if (externalIds.has(item.id)) return null;
                   if (item.type === 'shelf') {
                     const y = toSvgY(item.heightFromFloor);
                     return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.shelfLine} />;
@@ -209,17 +225,31 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
                     const yBottom = toSvgY(item.heightFromFloor);
                     const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
                     return (
-                      <rect
-                        key={item.id}
-                        x={xLeft + 2} y={yTop}
-                        width={xRight - xLeft - 4}
-                        height={yBottom - yTop}
-                        className={styles.drawerRect}
-                      />
+                      <rect key={item.id} x={xLeft + 2} y={yTop}
+                        width={xRight - xLeft - 4} height={yBottom - yTop}
+                        className={styles.drawerRect} />
                     );
                   }
                   return null;
                 });
+
+                const gapCm = 0.2;
+                let cumulative = 0;
+                const externalNodes = externals.map(drawer => {
+                  const yBottom = toSvgY(cumulative);
+                  const yTop    = toSvgY(cumulative + drawer.drawerHeight);
+                  cumulative += drawer.drawerHeight + gapCm;
+                  return (
+                    <rect
+                      key={`ext-${drawer.id}`}
+                      x={xLeft} y={yTop}
+                      width={xRight - xLeft} height={yBottom - yTop}
+                      className={styles.externalDrawerRect}
+                    />
+                  );
+                });
+
+                return [...internalNodes, ...externalNodes];
               })}
             </g>
           );

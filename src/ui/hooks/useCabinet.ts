@@ -16,13 +16,14 @@ import {
   getSkirtCoveringDrawer,
   externalStackChanged,
   getItemsForFront,
+  deriveDrawerFronts,
 } from '../../core/doors/doorUtils';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
-import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
-import type { Door, DoorById, Hinge } from '../../types/doors';
+import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
+import type { Door, DoorById, DrawerFrontById, Hinge } from '../../types/doors';
 
 // ── Partition helpers ─────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ export function useCabinet(): {
   removePartition: (boxId: string) => void;
   setCellItems: (boxId: string, cellIndex: number, items: InteriorItem[]) => void;
   doorsById: DoorById;
+  drawerFrontsById: DrawerFrontById;
   displayNumbers: Map<string, string>;
   numFrontsPerBox: Map<string, number>;
   partitionsById: Map<string, boolean>;
@@ -105,6 +107,9 @@ export function useCabinet(): {
   setDoorHasDoor: (doorId: string, hasDoor: boolean) => void;
   setDoorThickness: (doorId: string, materialId: string) => void;
   setCoversSkirt: (value: boolean) => void;
+  setDrawerHeight: (drawerId: string, drawerHeight: number) => void;
+  setDrawerFrontThickness: (drawerId: string, materialId: string | undefined) => void;
+  deleteDrawer: (drawerId: string) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -113,6 +118,7 @@ export function useCabinet(): {
   const [displayNumbers, setDisplayNumbers] = useState<Map<string, string>>(new Map());
   const [numFrontsPerBox, setNumFrontsPerBox] = useState<Map<string, number>>(new Map());
   const [partitionsById, setPartitionsById] = useState<Map<string, boolean>>(new Map());
+  const [drawerFrontsById, setDrawerFrontsByIdState] = useState<DrawerFrontById>({});
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -128,9 +134,11 @@ export function useCabinet(): {
   // toggle reaches setBoxInterior/setCellItems (see Q3 of stage 2.1).
   const lastInputRef = useRef<CabinetInput | null>(null);
   // IDs of external drawers that inherited coversSkirt from their main door.
-  // Used by future visualization in stage 2.2; tracked here so it survives
-  // recalcs without re-derivation.
+  // Read by 2.2 visualization through `drawerFrontsById` (each DrawerFront
+  // carries its own `coversSkirt` flag); kept here for legacy callers that
+  // want the raw set.
   const skirtCoveringDrawerIdsRef = useRef<Set<string>>(new Set());
+  const drawerFrontsRef = useRef<DrawerFrontById>({});
 
   function setInterior(v: InteriorById): void {
     interiorRef.current = v;
@@ -144,6 +152,11 @@ export function useCabinet(): {
       const nm = nfMap ?? numFrontsRef.current;
       setDisplayNumbers(assignDoorDisplayNumbers(boxes, nm));
     }
+  }
+
+  function setDrawerFronts(v: DrawerFrontById): void {
+    drawerFrontsRef.current = v;
+    setDrawerFrontsByIdState(v);
   }
 
   // ── Interior ──────────────────────────────────────────────────────────────
@@ -353,6 +366,84 @@ export function useCabinet(): {
     setDoorsById(newDoors);
   }
 
+  // ── Drawer (external) mutations ───────────────────────────────────────────
+  // These mutate an existing DrawerItem in interior or cell-interior state and
+  // re-run the full pipeline (drawer height / coversSkirt / cuts all flip).
+
+  function _findDrawerLocation(drawerId: string): { boxId: string; cellIndex?: 0 | 1 } | null {
+    for (const [boxId, items] of Object.entries(interiorRef.current)) {
+      if (items.some(i => i.id === drawerId)) return { boxId };
+    }
+    for (const [boxId, cells] of Object.entries(cellInteriorRef.current)) {
+      for (let ci = 0; ci < cells.length; ci++) {
+        if ((cells[ci] ?? []).some(i => i.id === drawerId)) return { boxId, cellIndex: ci as 0 | 1 };
+      }
+    }
+    return null;
+  }
+
+  function _updateDrawerInItems(
+    items: InteriorItem[],
+    drawerId: string,
+    patch: Partial<DrawerItem>,
+  ): InteriorItem[] {
+    return items.map(i => {
+      if (i.id !== drawerId || i.type !== 'drawer') return i;
+      const merged = { ...i, ...patch } as DrawerItem;
+      // Drop frontThicknessOverride when explicitly cleared (undefined).
+      if ('frontThicknessOverride' in patch && patch.frontThicknessOverride === undefined) {
+        delete (merged as { frontThicknessOverride?: MaterialId }).frontThicknessOverride;
+      }
+      return merged;
+    });
+  }
+
+  function setDrawerHeight(drawerId: string, drawerHeight: number): void {
+    if (!Number.isFinite(drawerHeight) || drawerHeight <= 0) return;
+    const loc = _findDrawerLocation(drawerId);
+    if (!loc) return;
+    if (loc.cellIndex === undefined) {
+      const prev = interiorRef.current[loc.boxId] ?? [];
+      const next = _updateDrawerInItems(prev, drawerId, { drawerHeight });
+      setBoxInterior(loc.boxId, next);
+    } else {
+      const prev = cellInteriorRef.current[loc.boxId]?.[loc.cellIndex] ?? [];
+      const next = _updateDrawerInItems(prev, drawerId, { drawerHeight });
+      setCellItems(loc.boxId, loc.cellIndex, next);
+    }
+  }
+
+  function setDrawerFrontThickness(drawerId: string, materialId: string | undefined): void {
+    const loc = _findDrawerLocation(drawerId);
+    if (!loc) return;
+    // `exactOptionalPropertyTypes`: build the patch with the field present
+    // only when a materialId is provided; absence signals "clear".
+    const patch: Partial<DrawerItem> = materialId !== undefined
+      ? { frontThicknessOverride: materialId as MaterialId }
+      : { frontThicknessOverride: undefined as unknown as MaterialId };
+    if (loc.cellIndex === undefined) {
+      const prev = interiorRef.current[loc.boxId] ?? [];
+      const next = _updateDrawerInItems(prev, drawerId, patch);
+      setBoxInterior(loc.boxId, next);
+    } else {
+      const prev = cellInteriorRef.current[loc.boxId]?.[loc.cellIndex] ?? [];
+      const next = _updateDrawerInItems(prev, drawerId, patch);
+      setCellItems(loc.boxId, loc.cellIndex, next);
+    }
+  }
+
+  function deleteDrawer(drawerId: string): void {
+    const loc = _findDrawerLocation(drawerId);
+    if (!loc) return;
+    if (loc.cellIndex === undefined) {
+      const prev = interiorRef.current[loc.boxId] ?? [];
+      setBoxInterior(loc.boxId, prev.filter(i => i.id !== drawerId));
+    } else {
+      const prev = cellInteriorRef.current[loc.boxId]?.[loc.cellIndex] ?? [];
+      setCellItems(loc.boxId, loc.cellIndex, prev.filter(i => i.id !== drawerId));
+    }
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -517,6 +608,18 @@ export function useCabinet(): {
       }
     }
 
+    // ── Drawer fronts (derived from external drawers) ──────────────────────
+    const newDrawerFronts = deriveDrawerFronts({
+      bodyBoxes,
+      interiorById: newInterior,
+      cellInteriorById: newCellInteriorById,
+      partitionsById: newPartitionsMap,
+      numFrontsPerBox: newNumFrontsMap,
+      doorCoversPlinth,
+      doorGapMm,
+      tBody,
+    });
+
     // ── Finalize ────────────────────────────────────────────────────────────
     tBodyRef.current = tBody;
     partitionsRef.current = newPartitionsMap;
@@ -531,6 +634,7 @@ export function useCabinet(): {
     prevBoxesRef.current = boxes;
     setInterior(newInterior);
     setDoors(newDoors, boxes, newNumFrontsMap);
+    setDrawerFronts(newDrawerFronts);
 
     const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody);
     const allCuts = [...cuts, ...partitionCuts, ...externalDrawerCuts];
@@ -541,9 +645,10 @@ export function useCabinet(): {
     result, calculate,
     interiorById, setBoxInterior,
     cellInteriorById, addPartition, removePartition, setCellItems,
-    doorsById, displayNumbers, numFrontsPerBox,
+    doorsById, drawerFrontsById, displayNumbers, numFrontsPerBox,
     partitionsById, setBoxPartitions,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
+    setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
   };
 }

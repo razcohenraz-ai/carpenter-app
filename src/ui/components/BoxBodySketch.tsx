@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { InteriorItem, DrawerItem } from '../../types/interior';
+import { useTranslation } from '../hooks/useTranslation';
 import styles from './BoxBodySketch.module.css';
 
 interface Props {
@@ -13,6 +14,10 @@ interface Props {
   showDimensions?: boolean;
   onItemMove?: (id: string, newH: number) => void;
   numPartitions?: number;  // number of vertical partition lines to draw
+  /** Inter-front gap in mm; used to lay out the external drawer stack. */
+  gapMm?: number;
+  /** Click handler for an external drawer; opens the editor modal in the parent. */
+  onExternalDrawerClick?: (drawerId: string) => void;
 }
 
 interface DragState {
@@ -57,10 +62,20 @@ function computeDragBounds(
 export default function BoxBodySketch({
   bodyH, bodyW, bodyD, items, svgWidth, svgHeight,
   showLabels = false, showDimensions = false, onItemMove,
-  numPartitions = 0,
+  numPartitions = 0, gapMm = 2, onExternalDrawerClick,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const { t } = useTranslation();
+
+  // Partition externals from internals so the renderer can handle each kind
+  // separately: internals keep their existing in-body rendering (and drag),
+  // externals stack from the bottom of the body upward.
+  const externalDrawers = items
+    .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor); // bottom-first
+  const externalIds = new Set(externalDrawers.map(d => d.id));
+  const renderableItems = items.filter(i => !externalIds.has(i.id));
 
   const padTop   = showDimensions ? DIM_PAD_TOP   : PAD;
   const padRight = showDimensions ? DIM_PAD_RIGHT : PAD;
@@ -162,7 +177,7 @@ export default function BoxBodySketch({
         );
       })()}
 
-      {items.map(item => {
+      {renderableItems.map(item => {
         const h = resolvedH(item);
         const isDragging = drag?.itemId === item.id;
         const dragProps = dragging ? {
@@ -235,6 +250,48 @@ export default function BoxBodySketch({
 
         return null;
       })}
+
+      {/* External drawers — stacked from bottom-of-body upward */}
+      {(() => {
+        if (externalDrawers.length === 0) return null;
+        const gapCm = gapMm / 10;
+        let cumulative = 0; // cm from box bottom
+        return externalDrawers.map(drawer => {
+          const yBottom = toY(cumulative);
+          const yTop    = toY(cumulative + drawer.drawerHeight);
+          const rectH   = yBottom - yTop;
+          const interactive = onExternalDrawerClick !== undefined;
+          const onClick = interactive ? () => onExternalDrawerClick!(drawer.id) : undefined;
+          const node = (
+            <g
+              key={drawer.id}
+              {...(onClick ? { onClick, style: { cursor: 'pointer' } } : {})}
+            >
+              <rect
+                x={bX} y={yTop}
+                width={bW} height={rectH}
+                className={styles.externalDrawerRect}
+              />
+              {/* Subtle double-line near the top of the front to hint a panel face */}
+              <line
+                x1={bX + 2} y1={yTop + 2}
+                x2={bX + bW - 2} y2={yTop + 2}
+                className={styles.externalDrawerFaceHint}
+              />
+              {showLabels && rectH >= 12 && (
+                <text
+                  x={bX + bW / 2} y={(yTop + yBottom) / 2 + 3}
+                  textAnchor="middle" className={styles.externalDrawerLabel}
+                >
+                  {t.interior.drawer} {Math.round(drawer.drawerHeight)}
+                </text>
+              )}
+            </g>
+          );
+          cumulative += drawer.drawerHeight + gapCm;
+          return node;
+        });
+      })()}
 
       {numPartitions > 0 && Array.from({ length: numPartitions }, (_, i) => {
         const x = bX + bW * (i + 1) / (numPartitions + 1);

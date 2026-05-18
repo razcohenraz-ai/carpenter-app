@@ -64,3 +64,13 @@
 .hingeMini {
   flex-shrink: 0;
 }
+
+.itemClickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.itemClickable:hover {
+  border-color: var(--color-fronts);
+  background: var(--color-surface-raised);
+}

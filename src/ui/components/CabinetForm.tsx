@@ -13,6 +13,7 @@ import BoxInteriorEditor from './BoxInteriorEditor';
 import DoorThumbnail from './DoorThumbnail';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
+import ExternalDrawerEditor from './ExternalDrawerEditor';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -79,15 +80,17 @@ export default function CabinetForm(): React.JSX.Element {
     result, calculate,
     interiorById, setBoxInterior,
     cellInteriorById, addPartition, removePartition, setCellItems,
-    doorsById, displayNumbers, numFrontsPerBox,
+    doorsById, drawerFrontsById, displayNumbers, numFrontsPerBox,
     partitionsById,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
+    setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
   } = useCabinet();
 
   const [view, setView]               = useState<'main' | 'editor' | 'doorEditor'>('main');
   const [editingBox, setEditingBox]   = useState<Box | null>(null);
   const [editingDoorId, setEditingDoorId] = useState<string | null>(null);
+  const [editingDrawerId, setEditingDrawerId] = useState<string | null>(null);
   const [sketchMode, setSketchMode]   = useState<'bodies' | 'fronts'>('bodies');
 
   function openEditor(box: Box): void {
@@ -99,6 +102,26 @@ export default function CabinetForm(): React.JSX.Element {
     setEditingDoorId(boxId);
     setView('doorEditor');
   }
+
+  // Lookup of all DrawerItems by id (across body interiors and partitioned
+  // cells), so the modal can read drawerHeight/frontThicknessOverride from
+  // the source-of-truth and the doors list can compute per-front thickness.
+  const drawerById = React.useMemo(() => {
+    const out: Record<string, import('../../types/interior').DrawerItem> = {};
+    for (const items of Object.values(interiorById)) {
+      for (const item of items) {
+        if (item.type === 'drawer') out[item.id] = item;
+      }
+    }
+    for (const cells of Object.values(cellInteriorById)) {
+      for (const cellItems of cells) {
+        for (const item of cellItems) {
+          if (item.type === 'drawer') out[item.id] = item;
+        }
+      }
+    }
+    return out;
+  }, [interiorById, cellInteriorById]);
 
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
@@ -545,6 +568,8 @@ export default function CabinetForm(): React.JSX.Element {
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
               doorsById={doorsById}
               displayNumbers={displayNumbers}
+              drawerFrontsById={drawerFrontsById}
+              onDrawerFrontClick={setEditingDrawerId}
             />
           )}
 
@@ -608,6 +633,8 @@ export default function CabinetForm(): React.JSX.Element {
             : <DoorsList
                 bodyBoxes={bodyBoxes}
                 doorsById={doorsById}
+                drawerFrontsById={drawerFrontsById}
+                drawerById={drawerById}
                 displayNumbers={displayNumbers}
                 globalMaterialId={form.frontMaterialId}
                 plinthHeight={parseFloat(form.plinth) || 0}
@@ -616,9 +643,19 @@ export default function CabinetForm(): React.JSX.Element {
                 {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
                 {...(parsedW > 0 ? { cabinetW: parsedW, cabinetH: parseFloat(form.H) || 0, cabinetD: parseFloat(form.D) || 0 } : {})}
                 frontMaterialThickness={frontThicknessCm}
+                onDrawerFrontClick={setEditingDrawerId}
               />
           }
         </>
+      )}
+      {editingDrawerId && drawerById[editingDrawerId] && (
+        <ExternalDrawerEditor
+          drawer={drawerById[editingDrawerId]!}
+          onSetHeight={h => setDrawerHeight(editingDrawerId, h)}
+          onSetThicknessOverride={mid => setDrawerFrontThickness(editingDrawerId, mid)}
+          onDelete={() => { deleteDrawer(editingDrawerId); setEditingDrawerId(null); }}
+          onClose={() => setEditingDrawerId(null)}
+        />
       )}
     </form>
   );

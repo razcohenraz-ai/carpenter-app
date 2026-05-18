@@ -62,6 +62,13 @@
   stroke-width: 1;
 }
 
+.externalDrawerRect {
+  fill: var(--color-fronts);
+  opacity: 0.4;
+  stroke: var(--color-fronts);
+  stroke-width: 1;
+}
+
 .envelopePanel {
   fill: var(--color-fronts);
   opacity: 0.35;

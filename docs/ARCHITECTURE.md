@@ -15,7 +15,7 @@
 src/
 ├── types/              הגדרות TypeScript (ממשקים, סוגים)
 │   ├── geometry.ts     Box, Dimensions, BoxPosition, BoxLevel
-│   ├── doors.ts        Door, Hinge, DoorById
+│   ├── doors.ts        Door, Hinge, DoorById, DrawerFront, DrawerFrontById
 │   ├── interior.ts     InteriorItem, ShelfItem (+ isManuallyPositioned), DrawerItem, RodItem, CellInteriorById
 │   ├── cuts.ts         CutItem, CutGroup, SheetUsage
 │   ├── materials.ts    Material, MaterialId
@@ -62,8 +62,9 @@ src/
         ├── CabinetSketch.tsx       סקיצת ארון חיה
         ├── CabinetFrontsSketch.tsx סקיצת חזיתות
         ├── DoorEditor.tsx          עורך חזית (צירים)
-        ├── DoorsList.tsx           רשימת חזיתות
+        ├── DoorsList.tsx           רשימת חזיתות (כולל drawer fronts עם תיוג "(מגירה)")
         ├── DoorThumbnail.tsx       מיניאטורת חזית
+        ├── ExternalDrawerEditor.tsx מודאל עריכת מגירה חיצונית (גובה, override, מחיקה)
         └── [*.module.css]          סגנונות מבודדים
 ```
 
@@ -75,8 +76,10 @@ CabinetForm (input)
         → decomposeBoxes()     → boxes: Box[]
         → calcCuts()           → cuts: CutItem[]
         → calcDoors()          → doors: DoorCalcResult
-        → door preservation    → doorsById: DoorById
+        → door preservation    → doorsById: DoorById (heights from calcMainDoorHeight)
         → interior preservation → interiorById: InteriorById
+        → external drawer cuts → cuts (group 'front')
+        → deriveDrawerFronts()  → drawerFrontsById: DrawerFrontById
         → cell interior preservation → cellInteriorById: CellInteriorById
         → partition preservation → partitionsById: Map<string,boolean>
     → setState → תצוגה מתעדכנת
@@ -166,13 +169,16 @@ defaultRodPlacement(bodyH, existingItems)
 - `cellIndexToFrontIndex(cellIndex, numFronts)` — מיפוי תא→frontIndex.
 - `getSkirtCoveringDrawer(items, mainDoorCoversSkirt)` — המגירה הנמוכה ביותר שמקבלת `coversSkirt` במקום הדלת.
 - `getDrawerFrontThicknessCm(drawer, globalFrontMaterialId)` — עובי חזית מגירה ב-cm (עם override רק ל-external).
+- `deriveDrawerFronts(input)` — מייצר `DrawerFrontById` מ-(boxes, interiorById, cellInteriorById, partitionsById, numFrontsPerBox, doorCoversPlinth, doorGapMm, tBody). חישוב פוזיציה לפי `positionFromBoxBottom` עולה.
+- `getDrawerFrontVisualHeight(front, plinthH)` — מקביל ל-`getDoorVisualHeight`: מוסיף `(plinth-1) + gapCm` כשה-front יורש `coversSkirt`.
+- `externalStackChanged`, `externalStackSignature`, `getItemsForFront` — נחשפים גם ל-`useCabinet` (חיווט mount-toggle detection).
 - קבועים: `MIN_COMFORTABLE_MAIN_DOOR_H_CM=10`.
 
 ### External drawer cuts — `core/cuts/externalDrawerCuts.ts`
 - `calcExternalDrawerFrontCuts(items, frontWidthCm, gapMm, plinthCm, mainDoorCoversSkirt, frontThicknessMm, perDrawerThicknessMm?)` → `CutItem[]`
 - מייצר `CutItem` אחד לכל external drawer, בקבוצה `'front'`, עם `note` עובי ב-mm.
 - המגירה הנמוכה ביותר מקבלת קיצור חזית עם `coversSkirt` (אם הדלת המקורית הייתה skirt-cover).
-- **שלב 1**: הפונקציה זמינה אך עדיין לא קרואה מ-`useCabinet`.
+- נצרך ב-`useCabinet.calculate()` (2.1) ומצרף את ה-cuts לפלט.
 
 ## עקרונות ארכיטקטוניים
 

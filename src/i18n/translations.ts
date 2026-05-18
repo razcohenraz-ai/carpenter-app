@@ -94,6 +94,12 @@ export interface Translations {
     drawerExternal: string;
     drawerInternalDesc: string;
     drawerExternalDesc: string;
+    drawerFrontLabel: string;
+    editExternalDrawerTitle: string;
+    drawerHeightLabel: string;
+    drawerFrontThicknessLabel: string;
+    defaultMaterial: string;
+    deleteDrawer: string;
   };
 
   doors: {
@@ -239,6 +245,12 @@ const he: Translations = {
     drawerExternal: 'מגירה חיצונית',
     drawerInternalDesc: 'יושבת מאחורי הדלת',
     drawerExternalDesc: 'חזית פיזית משלה',
+    drawerFrontLabel: '(מגירה)',
+    editExternalDrawerTitle: 'עריכת מגירה חיצונית',
+    drawerHeightLabel: 'גובה מגירה (ס"מ)',
+    drawerFrontThicknessLabel: 'עובי חזית מגירה',
+    defaultMaterial: 'ברירת מחדל',
+    deleteDrawer: 'מחק מגירה',
   },
 
   doors: {
@@ -383,6 +395,12 @@ const en: Translations = {
     drawerExternal: 'External drawer',
     drawerInternalDesc: 'Sits behind the door',
     drawerExternalDesc: 'Has its own physical front',
+    drawerFrontLabel: '(drawer)',
+    editExternalDrawerTitle: 'Edit external drawer',
+    drawerHeightLabel: 'Drawer height (cm)',
+    drawerFrontThicknessLabel: 'Drawer front thickness',
+    defaultMaterial: 'Default',
+    deleteDrawer: 'Delete drawer',
   },
 
   doors: {
