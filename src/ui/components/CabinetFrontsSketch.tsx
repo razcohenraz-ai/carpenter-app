@@ -17,12 +17,13 @@ interface Props {
   doorsById: DoorById;
   displayNumbers: Map<string, string>;
   drawerFrontsById?: DrawerFrontById;
+  partitionsById?: Map<string, boolean>;
   onDrawerFrontClick?: (drawerId: string) => void;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
-  drawerFrontsById, onDrawerFrontClick,
+  drawerFrontsById, partitionsById, onDrawerFrontClick,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -112,8 +113,17 @@ export default function CabinetFrontsSketch({
               const panelW   = door.width * geo.scale;
               const gapPx    = (door.gapMm ?? 0) / 10 * geo.scale;
               const fi       = door.frontIndex;
-              // fi=0 is rightmost → highest x in LTR SVG coordinates
-              const panelX   = rect.x + rect.w - (fi + 1) * (panelW + gapPx);
+              const hasPartition = partitionsById?.get(boxId) === true;
+              // Partition body (numFronts=2): each door anchored to its side
+              // (gap from rect edge), partition fills the middle. Without this
+              // branch, the formula assumes a single gap between doors and
+              // pushes both doors to the right side of the body.
+              // Non-partition: existing formula — symmetric for any numFronts.
+              const panelX = hasPartition
+                ? (fi === 0
+                    ? rect.x + rect.w - panelW - gapPx
+                    : rect.x + gapPx)
+                : rect.x + rect.w - (fi + 1) * (panelW + gapPx);
               const panelH   = door.height * geo.scale;
               const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
               const panelY   = rect.y + rect.h - stackPx - panelH;

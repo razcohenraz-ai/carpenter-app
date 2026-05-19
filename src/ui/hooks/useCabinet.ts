@@ -10,6 +10,7 @@ import {
   assignDoorDisplayNumbers,
   shouldCoverSkirt,
   getDoorWidth,
+  getPartitionDoorWidth,
   makeDoorId,
   salonHingeSide,
   calcMainDoorHeight,
@@ -559,8 +560,10 @@ export function useCabinet(): {
       const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
       const hasTopGap = box.level === 'top' || box.level === 'single';
 
+      // Partition body (numFronts=2): symmetric layout with 4 gaps + partition.
+      // See getPartitionDoorWidth for the derivation.
       const frontW = hasPartition
-        ? (box.W - tBody) / 2
+        ? getPartitionDoorWidth(box.W, tBody, doorGapMm)
         : getDoorWidth(box.W, numFronts, doorGapMm);
 
       for (let fi = 0; fi < numFronts; fi++) {
@@ -613,7 +616,9 @@ export function useCabinet(): {
       const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
 
       if (hasPartition) {
-        const cellW = (box.W - tBody) / 2 - 2 * DRAWER_FRONT_SIDE_GAP_CM;
+        // Cell drawer-front matches the partition door above it minus the
+        // 2×rail clearance — keeps drawer-front edges aligned with door edges.
+        const cellW = getPartitionDoorWidth(box.W, tBody, doorGapMm) - 2 * DRAWER_FRONT_SIDE_GAP_CM;
         for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
           const itemsForCell = cellItems?.[ci] ?? [];
           externalDrawerCuts.push(

@@ -166,7 +166,9 @@ describe('deriveDrawerFronts — partition cells', () => {
     expect(result['l']!.cellIndex).toBe(1);
   });
 
-  it('cell width = (box.W − tBody) / 2 − 4mm (2mm rail clearance each side)', () => {
+  it('cell width = (W − tBody − 4×gap) / 2 − 4mm rail clearance', () => {
+    // Matches the partition door width (symmetric layout) minus drawer rails.
+    // W=120, tBody=1.8, gap=2mm: door = (120 − 1.8 − 0.8)/2 = 58.7; drawer = 58.3.
     const result = deriveDrawerFronts({
       bodyBoxes: [box('b0', 120, 200)],
       interiorById: {},
@@ -175,11 +177,27 @@ describe('deriveDrawerFronts — partition cells', () => {
       numFrontsPerBox: new Map([['b0', 2]]),
       ...baseInput,
     });
-    // cellW = (120 − 1.8)/2 = 59.1; minus 2×0.2 = 58.7
-    expect(result['r']!.width).toBeCloseTo((120 - 1.8) / 2 - 0.4);
+    expect(result['r']!.width).toBeCloseTo((120 - 1.8 - 0.8) / 2 - 0.4);
   });
 
-  it('cell width minus 4mm regardless of doorGapMm', () => {
+  it('W=80 + partition + gap=2mm → drawer front width 38.3', () => {
+    // Bug-regression: prior to the symmetric-partition fix, cell drawer width
+    // was (W − tBody)/2 − 4mm = 38.7. The correct value tracks the new
+    // door width: (W − tBody − 4·gap)/2 − 4mm = 38.3.
+    const result = deriveDrawerFronts({
+      bodyBoxes: [box('b0', 80, 200)],
+      interiorById: {},
+      cellInteriorById: { b0: [[ext('r', 0, 20)], []] },
+      partitionsById: new Map([['b0', true]]),
+      numFrontsPerBox: new Map([['b0', 2]]),
+      ...baseInput,
+    });
+    expect(result['r']!.width).toBeCloseTo(38.3);
+  });
+
+  it('cell width with gap=0 collapses to (W − tBody) / 2 − 4mm', () => {
+    // When doorGap is zero, the partition-door formula reduces to (W-tBody)/2,
+    // so the cell drawer front is just that minus rail clearance.
     const result = deriveDrawerFronts({
       bodyBoxes: [box('b0', 120, 200)],
       interiorById: {},
@@ -187,7 +205,7 @@ describe('deriveDrawerFronts — partition cells', () => {
       partitionsById: new Map([['b0', true]]),
       numFrontsPerBox: new Map([['b0', 2]]),
       doorCoversPlinth: false,
-      doorGapMm: 0,  // no door gap, but rail clearance still applies
+      doorGapMm: 0,
       tBody: 1.8,
     });
     expect(result['r']!.width).toBeCloseTo((120 - 1.8) / 2 - 0.4);

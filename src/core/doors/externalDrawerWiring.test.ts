@@ -8,6 +8,8 @@ import {
   externalStackSignature,
   getItemsForFront,
   getDoorHeight,
+  getDoorWidth,
+  getPartitionDoorWidth,
 } from './doorUtils';
 import { calcExternalDrawerFrontCuts } from '../cuts/externalDrawerCuts';
 
@@ -198,5 +200,36 @@ describe('externalStackSignature', () => {
       { type: 'rod',   id: 'r', heightFromFloor: 80 },
     ];
     expect(externalStackSignature(ext)).toBe(externalStackSignature(mixed));
+  });
+});
+
+// ── Door width across partition modes ────────────────────────────────────────
+// Regression: prior to the fix, partition bodies used `(box.W - tBody) / 2`
+// (no gap budget), which produced asymmetric, right-aligned rendering.
+
+describe('getPartitionDoorWidth', () => {
+  it('W=80, tBody=1.8, gap=2mm → 38.7 (= (80 − 1.8 − 0.8)/2)', () => {
+    expect(getPartitionDoorWidth(80, 1.8, 2)).toBeCloseTo(38.7);
+  });
+
+  it('layout sums back to box.W: 2·door + tBody + 4·gap = W', () => {
+    const W = 80, tBody = 1.8, gapMm = 2;
+    const doorW = getPartitionDoorWidth(W, tBody, gapMm);
+    expect(2 * doorW + tBody + 4 * (gapMm / 10)).toBeCloseTo(W);
+  });
+
+  it('zero gap collapses to the old behavior (W − tBody) / 2', () => {
+    expect(getPartitionDoorWidth(80, 1.8, 0)).toBeCloseTo((80 - 1.8) / 2);
+  });
+
+  it('partition doorWidth is strictly smaller than non-partition doorWidth at gap>0', () => {
+    // Same W and gap, 2 doors. Non-partition: (W - 3·gap)/2; partition: (W - tBody - 4·gap)/2.
+    // The partition layout pays the partition's width AND an extra gap.
+    const W = 80, gapMm = 2;
+    const noPartition = getDoorWidth(W, 2, gapMm);
+    const partition   = getPartitionDoorWidth(W, 1.8, gapMm);
+    expect(partition).toBeLessThan(noPartition);
+    // Specifically: difference = (tBody + gap) / 2 = (1.8 + 0.2)/2 = 1.0
+    expect(noPartition - partition).toBeCloseTo(1.0);
   });
 });

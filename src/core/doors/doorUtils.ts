@@ -278,6 +278,16 @@ export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true, 
   return boxH - (hasTopGap ? gapCm : 0) - (hasBottomGap ? gapCm : 0);
 }
 
+// Door width for a body with a vertical partition (numFronts=2 + partition).
+// Layout from left to right: gap | door | gap | partition | gap | door | gap.
+// Total: 2·doorWidth + tBody + 4·gap = boxW → doorWidth = (boxW − tBody − 4·gap) / 2.
+// (Without subtracting 4·gap the rendering ended up right-aligned because the
+//  outer gaps + the partition's pair of gaps were not budgeted.)
+export function getPartitionDoorWidth(boxW: number, tBody: number, gapMm: number): number {
+  const gapCm = gapMm / 10;
+  return (boxW - tBody - 4 * gapCm) / 2;
+}
+
 // ── External drawer fronts ────────────────────────────────────────────────────
 // An "external" drawer has its own face panel that is part of the cabinet
 // facade. Multiple externals stack from the bottom of the box upward; each
@@ -437,8 +447,10 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
     // Two paths: partition (per cell) or single (body-wide). Drawer-front
     // width is always reduced by 2×DRAWER_FRONT_SIDE_GAP_CM regardless of
     // doorGapMm — drawer rails need a fixed technical gap on each side.
+    // In partition mode the cell front must align vertically with the cell
+    // door above it: same width as the door minus the 2×rail clearance.
     if (hasPartition && cellItems) {
-      const cellW = (box.W - tBody) / 2 - 2 * DRAWER_FRONT_SIDE_GAP_CM;
+      const cellW = getPartitionDoorWidth(box.W, tBody, doorGapMm) - 2 * DRAWER_FRONT_SIDE_GAP_CM;
       // Cell 0 (right) → frontIndex 0; Cell 1 (left) → frontIndex numFronts−1
       for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
         const items = cellItems[ci] ?? [];

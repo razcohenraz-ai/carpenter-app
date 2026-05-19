@@ -569,6 +569,7 @@ export default function CabinetForm(): React.JSX.Element {
               doorsById={doorsById}
               displayNumbers={displayNumbers}
               drawerFrontsById={drawerFrontsById}
+              partitionsById={partitionsById}
               onDrawerFrontClick={setEditingDrawerId}
             />
           )}
