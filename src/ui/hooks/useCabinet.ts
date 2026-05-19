@@ -17,6 +17,7 @@ import {
   externalStackChanged,
   getItemsForFront,
   deriveDrawerFronts,
+  DRAWER_FRONT_SIDE_GAP_CM,
 } from '../../core/doors/doorUtils';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { newItemId } from '../../core/interior/interiorUtils';
@@ -599,9 +600,10 @@ export function useCabinet(): {
 
     // ── External-drawer front cuts ────────────────────────────────────────
     // For a body without partition: one cut per external drawer at the full
-    // body width (numFronts splits doors, not drawers — a body-wide drawer
-    // sits below all door fronts as a single facade panel).
-    // For a partitioned body: one cut per drawer per cell, at cell width.
+    // body width minus 2×rail clearance (numFronts splits doors, not drawers
+    // — a body-wide drawer sits below all door fronts as a single facade
+    // panel). For a partitioned body: one cut per drawer per cell, also less
+    // 2×rail clearance. The 2mm-per-side gap is independent of doorGapMm.
     const externalDrawerCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
       const numFronts = newNumFrontsMap.get(box.id)!;
@@ -611,7 +613,7 @@ export function useCabinet(): {
       const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
 
       if (hasPartition) {
-        const cellW = (box.W - tBody) / 2;
+        const cellW = (box.W - tBody) / 2 - 2 * DRAWER_FRONT_SIDE_GAP_CM;
         for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
           const itemsForCell = cellItems?.[ci] ?? [];
           externalDrawerCuts.push(
@@ -626,9 +628,10 @@ export function useCabinet(): {
         // numFronts is referenced via `getItemsForFront` only when partition
         // is on; here we deliberately use the raw body items.
         void numFronts;
+        const bodyDrawerW = box.W - 2 * DRAWER_FRONT_SIDE_GAP_CM;
         externalDrawerCuts.push(
           ...calcExternalDrawerFrontCuts(
-            bodyItems, box.W, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+            bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
           ),
         );
       }

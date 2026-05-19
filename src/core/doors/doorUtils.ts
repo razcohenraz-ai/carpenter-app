@@ -295,6 +295,13 @@ export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true, 
 /** Comfort threshold for the main door above an external-drawer stack. */
 export const MIN_COMFORTABLE_MAIN_DOOR_H_CM = 10;
 
+/** Per-side clearance for a drawer front (cm). Drawer rails need a fixed
+ *  technical gap on each side regardless of the cabinet-wide `doorGapMm`
+ *  setting — so a drawer front is always 2×0.2 = 0.4cm narrower than the
+ *  available width (body or cell). This is independent of whether the
+ *  cabinet has a shell. */
+export const DRAWER_FRONT_SIDE_GAP_CM = 0.2;
+
 /** Returns the external drawers in the list, sorted by `heightFromFloor` ascending
  *  (lowest first — i.e. the drawer at the bottom of the front stack). */
 export function getExternalDrawers(items: InteriorItem[]): DrawerItem[] {
@@ -427,9 +434,11 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
 
     const originalCoversSkirt = doorCoversPlinth && (box.level === 'bottom' || box.level === 'single');
 
-    // Two paths: partition (per cell) or single (body-wide).
+    // Two paths: partition (per cell) or single (body-wide). Drawer-front
+    // width is always reduced by 2×DRAWER_FRONT_SIDE_GAP_CM regardless of
+    // doorGapMm — drawer rails need a fixed technical gap on each side.
     if (hasPartition && cellItems) {
-      const cellW = (box.W - tBody) / 2;
+      const cellW = (box.W - tBody) / 2 - 2 * DRAWER_FRONT_SIDE_GAP_CM;
       // Cell 0 (right) → frontIndex 0; Cell 1 (left) → frontIndex numFronts−1
       for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
         const items = cellItems[ci] ?? [];
@@ -468,10 +477,12 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
     const externals = getExternalDrawers(bodyItems);
     if (externals.length === 0) continue;
     // Body-wide drawer: a single front panel that spans the full body width
-    // regardless of how many door fronts share the body above it. (When the
-    // body is partitioned, the cell branch above runs instead.) The
-    // `frontIndex: 0` tag is informational — body-wide fronts are detected
-    // by `cellIndex === undefined` and rendered once per box.
+    // (less the 2mm-per-side rail clearance) regardless of how many door
+    // fronts share the body above it. (When the body is partitioned, the
+    // cell branch above runs instead.) The `frontIndex: 0` tag is
+    // informational — body-wide fronts are detected by `cellIndex === undefined`
+    // and rendered once per box.
+    const bodyDrawerW = box.W - 2 * DRAWER_FRONT_SIDE_GAP_CM;
     const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
     let positionFromBoxBottom = 0;
     for (const drawer of externals) {
@@ -483,7 +494,7 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
         frontIndex: 0,
         positionFromBoxBottom,
         height: drawer.drawerHeight,
-        width: box.W,
+        width: bodyDrawerW,
         coversSkirt: isSkirt,
         gapMm: doorGapMm,
         ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),

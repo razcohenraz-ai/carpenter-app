@@ -70,13 +70,13 @@ describe('deriveDrawerFronts — body-wide externals', () => {
     expect(front!.frontIndex).toBe(0);
     expect(front!.cellIndex).toBeUndefined();
     expect(front!.coversSkirt).toBe(false);
-    expect(front!.width).toBe(60); // body-wide, full box.W
+    expect(front!.width).toBeCloseTo(60 - 0.4); // body width minus 2×rail clearance
   });
 
   it('bug-regression: numFronts>1 without partition → single DrawerFront at full body width', () => {
     // Bug: in a 240cm cabinet with 3 bodies of 80cm (each numFronts=2),
     // adding an external drawer to a non-partitioned body produced 2 separate
-    // fronts at door width. The fix: one DrawerFront per drawer at box.W.
+    // fronts at door width. The fix: one DrawerFront per drawer at box.W − 4mm.
     const result = deriveDrawerFronts({
       bodyBoxes: [box('b0', 80, 200)],
       interiorById: { b0: [ext('d1', 10, 20)] },
@@ -86,8 +86,24 @@ describe('deriveDrawerFronts — body-wide externals', () => {
       ...baseInput,
     });
     expect(Object.keys(result)).toEqual(['d1']);
-    expect(result['d1']!.width).toBe(80);     // full body, NOT door width (~39.8)
+    expect(result['d1']!.width).toBeCloseTo(80 - 0.4);  // body W minus 2×rail clearance
     expect(result['d1']!.cellIndex).toBeUndefined();
+  });
+
+  it('body-wide width = box.W − 4mm regardless of shell presence', () => {
+    // Drawer-front side gap is a constant rail-clearance rule, independent
+    // of doorGapMm (which is 0 when there's no envelope).
+    const result = deriveDrawerFronts({
+      bodyBoxes: [box('b0', 100, 200)],
+      interiorById: { b0: [ext('d', 0, 20)] },
+      cellInteriorById: {},
+      partitionsById: new Map(),
+      numFrontsPerBox: new Map([['b0', 1]]),
+      doorCoversPlinth: false,
+      doorGapMm: 0,  // no shell-style gap
+      tBody: 1.8,
+    });
+    expect(result['d']!.width).toBeCloseTo(100 - 0.4);  // 99.6
   });
 
   it('3 externals stack: positions follow sum + i×gap', () => {
@@ -150,7 +166,7 @@ describe('deriveDrawerFronts — partition cells', () => {
     expect(result['l']!.cellIndex).toBe(1);
   });
 
-  it('cell width = (box.W − tBody) / 2', () => {
+  it('cell width = (box.W − tBody) / 2 − 4mm (2mm rail clearance each side)', () => {
     const result = deriveDrawerFronts({
       bodyBoxes: [box('b0', 120, 200)],
       interiorById: {},
@@ -159,7 +175,22 @@ describe('deriveDrawerFronts — partition cells', () => {
       numFrontsPerBox: new Map([['b0', 2]]),
       ...baseInput,
     });
-    expect(result['r']!.width).toBeCloseTo((120 - 1.8) / 2);
+    // cellW = (120 − 1.8)/2 = 59.1; minus 2×0.2 = 58.7
+    expect(result['r']!.width).toBeCloseTo((120 - 1.8) / 2 - 0.4);
+  });
+
+  it('cell width minus 4mm regardless of doorGapMm', () => {
+    const result = deriveDrawerFronts({
+      bodyBoxes: [box('b0', 120, 200)],
+      interiorById: {},
+      cellInteriorById: { b0: [[ext('r', 10, 20)], []] },
+      partitionsById: new Map([['b0', true]]),
+      numFrontsPerBox: new Map([['b0', 2]]),
+      doorCoversPlinth: false,
+      doorGapMm: 0,  // no door gap, but rail clearance still applies
+      tBody: 1.8,
+    });
+    expect(result['r']!.width).toBeCloseTo((120 - 1.8) / 2 - 0.4);
   });
 
   it('partition mode ignores body-wide externals', () => {

@@ -184,11 +184,15 @@ export default function CabinetFrontsSketch({
                     {num}
                   </text>
 
-                  {/* Per-cell drawer fronts — drawn behind the matching door */}
+                  {/* Per-cell drawer fronts — drawn behind the matching door.
+                      Width uses front.width (already includes 2×rail clearance),
+                      centred within the door panel for a clean inset look. */}
                   {myCellFronts.map(front => {
                     const fH      = front.height * geo.scale;
                     const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
                     const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
+                    const fW      = front.width * geo.scale;
+                    const fX      = panelX + (panelW - fW) / 2;
                     const interactive = onDrawerFrontClick !== undefined;
                     const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
                     return (
@@ -197,19 +201,19 @@ export default function CabinetFrontsSketch({
                         {...(onClick ? { onClick, style: { cursor: 'pointer' } } : {})}
                       >
                         <rect
-                          x={panelX} y={fY}
-                          width={panelW} height={visualH}
+                          x={fX} y={fY}
+                          width={fW} height={visualH}
                           className={styles.drawerFrontRect}
                         />
                         {visualH > fH && (
                           <line
-                            x1={panelX} y1={fY + fH}
-                            x2={panelX + panelW} y2={fY + fH}
+                            x1={fX} y1={fY + fH}
+                            x2={fX + fW} y2={fY + fH}
                             className={styles.skirtLine}
                           />
                         )}
                         <text
-                          x={panelX + panelW / 2}
+                          x={fX + fW / 2}
                           y={fY + fH / 2 + 3}
                           textAnchor="middle"
                           className={styles.drawerFrontLabel}
@@ -223,15 +227,16 @@ export default function CabinetFrontsSketch({
               );
             });
 
-            // Body-wide drawer fronts — one rect per drawer spanning the full
-            // body width, drawn once per box (not per frontIndex).
+            // Body-wide drawer fronts — one rect per drawer at front.width
+            // (= box.W − 2×rail clearance), drawn once per box (not per
+            // frontIndex) and inset symmetrically from the box edges.
             const bodyFronts = bodyFrontsByBox.get(boxId) ?? [];
             const bodyFrontNodes = bodyFronts.map(front => {
               const fH      = front.height * geo.scale;
               const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
               const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
-              const fX      = rect.x;
-              const fW      = rect.w;
+              const fW      = front.width * geo.scale;
+              const fX      = rect.x + (rect.w - fW) / 2;
               const interactive = onDrawerFrontClick !== undefined;
               const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
               return (

@@ -21,6 +21,7 @@
 - אם מדף רגיל קיים בטווח 5 ס"מ ממיקום המדף הקבוע → אזהרת warning. דורש מנגנון אזהרות חדש או הרחבת קיים. דחוי לפיצ'ר נפרד.
 
 ### תוקן
+- רוחב חזית מגירה חיצונית — הוקטן ב-4 מ"מ (2 מ"מ מכל צד) בכל המקרים, בלי קשר לקיום של מעטפת חיצונית. מקור: מסילות המגירה דורשות רווח טכני קבוע גם בלי `doorGapMm`. קבוע חדש `DRAWER_FRONT_SIDE_GAP_CM = 0.2` ב-`core/doors/doorUtils.ts`; מיושם ב-`deriveDrawerFronts` (גם body-wide גם cell) ובלולאת `calcExternalDrawerFrontCuts` ב-`useCabinet`. `CabinetFrontsSketch` מצייר את חזית המגירה ממורכזת בתוך אזור הדלת (cell) או הגוף (body-wide), עם `front.width` המעודכן.
 - חזית מגירה חיצונית בגוף בלי מחיצה הייתה מפוצלת לפי `numFronts`; כעת חזית יחידה ברוחב הגוף. הבאג היה בשלושה מקומות והוצרך תיקון תלת-ראשי:
   - `deriveDrawerFronts` (core/doors/doorUtils.ts) קבע `width = getDoorWidth(box.W, numFronts, gap)` (~39.8 ס"מ עבור גוף 80 עם 2 חזיתות) → תוקן ל-`width = box.W`.
   - `useCabinet.calculate()` קרא ל-`calcExternalDrawerFrontCuts` בלולאת `for fi = 0..numFronts-1` עם אותם `bodyItems` ו-`frontW = doorW`, מה שהפיק N עותקי CutItem ברוחב דלת → תוקן ל-קריאה יחידה לגוף ללא מחיצה (`frontW = box.W`). למחיצה נשאר per-cell.
