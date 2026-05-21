@@ -7,6 +7,39 @@
 
 ## [Unreleased]
 
+### תוקן — רפקטור חזיתות הסתמך על totalFrontsInCabinet, כעת per-row
+- **שורש הבאג**: הרפקטור הראשון של frontGeometry סופר את **כל** החזיתות בכל הקומות יחד (`totalFrontsInCabinet`). תוצאה: בארון עם 2 קומות, frontWidth קטן בחצי, וכל קומה תפסה רק חצי מהרוחב — קומה עליונה נדחפה שמאלה, תחתונה ימינה.
+- **תיקון**: לוגיקת חישוב הופכת ל-per-row. כל `Box.level` (`'bottom' | 'middle' | 'top' | 'single'`) הוא יחידה אופקית עצמאית: כל row מתפזרת על כל רוחב הארון בנפרד, עם ה-gaps שלה.
+- **API חדש ב-`frontGeometry.ts`**: `computeRowFrontLayout` (החליף את `computeCabinetFrontLayout`), `RowFrontLayout` (החליף את `CabinetFrontLayout`), `getTotalFrontsInRow`, `groupBoxesByRow(boxes): Map<BoxLevel, Box[]>` (חדש; מדלג על `'plinth'`). `getBoxFirstGlobalFrontIndex` מקבל `rowBoxes` (לא `boxes` כולן) ומחזיר אינדקס בתוך ה-row. `computeFrontGeometry`/`computeFrontGeometryForSpan` משתמשים ב-`globalFrontIndexInRow`/`startGlobalIndexInRow`.
+- **`useCabinet`**: מקבץ `bodyBoxes` ל-rows, מחשב `layoutByRow: Map<BoxLevel, RowFrontLayout>` (אחד לכל row), ומעביר ל-`deriveDrawerFronts` ול-renderers. החזירה הציבורית: `frontLayoutByRow` (החליפה את `cabinetFrontLayout`).
+- **`drawerFrontsCalc`**: מקבל `layoutByRow` במקום `layout`. לכל גוף בוחר את ה-layout של ה-row שלו לפי `box.level`.
+- **Renderers (`CabinetSketch`, `CabinetFrontsSketch`)**: מקבלים `frontLayoutByRow` ו-`numFrontsPerBox`. עבור כל גוף בוחרים את ה-layout של ה-row שלו, ומחשבים `boxFirstGlobalIndexInRow` בתוך ה-row.
+- **`cuttingList.ts`**: מצב ה-cabinet ה"פשוט" הוא single-row; ההסבר תועד בהערה.
+- **בדיקות**: 6 בדיקות חדשות ב-`frontGeometry.test.ts` (כולל regression נגד "ארון 80 ס"מ × 2 קומות → 4 חזיתות → 19.75 ס"מ" הבאג); `mkLayout` ב-`deriveDrawerFronts.test.ts` הוחלף ב-`mkLayoutByRow`. סה"כ 406 בדיקות עוברות (היה 401).
+- **תאימות ל-`BoxBodySketch`**: עורך הגוף נשאר ב-body-relative בלי props חדשים (כפי שתוכנן). אין השפעה.
+
+### שונה — איחוד לוגיקת רוחב ומיקום חזיתות לכלל אחיד ברמת הארון
+- **כל החזיתות בארון** (דלתות וחזיתות מגירה) מחושבות כשורה אחת ארוכה ברמת הארון כולו: רווח 2 מ"מ בקצוות החיצוניים (פנימי למעטפת אם קיימת) + רווח 2 מ"מ בין כל זוג חזיתות סמוכות. גבולות בין גופים סמוכים ומחיצות פנימיות **אינם** משפיעים על רוחב/x של החזיתות.
+- **נוסחה אחידה**: `frontWidth = (W_available − (N + 1) × gapCm) / N` כאשר `N = סך numFronts מכל הגופים`.
+- **חזית מגירה body-wide** (גוף ללא מחיצה עם N עמודות): חזית אחת רחבה ש-`width = N × frontWidth + (N − 1) × gapCm`, ממוקמת ב-x של העמודה הראשונה של הגוף (`boxFirstGlobalFrontIndex`).
+- **חזית מגירה בתא של גוף עם מחיצה**: רוחב = `frontWidth` (זהה לדלת באותה עמודה). המחיצה הפיזית מסתתרת מתחת לחזיתות (overlay).
+- **תיעוד**: סקציה חדשה "כלל מיקום ורוחב חזיתות (אחיד)" ב-CARPENTRY_RULES; סקציית "רוחבים בין דלתות" עודכנה ל"תמיד 2 מ"מ" (במקום "עם מעטפת 2 מ"מ / בלי 0").
+
+### נוסף — `src/core/geometry/frontGeometry.ts`
+- מקור יחיד לאמת לחישוב x ו-width של חזיתות. exports: `CabinetFrontLayout`, `computeCabinetFrontLayout`, `computeFrontGeometry`, `computeFrontGeometryForSpan`, `getBoxFirstGlobalFrontIndex`, `getTotalFrontsInCabinet`.
+- `src/core/geometry/frontGeometry.test.ts`: 20 בדיקות חדשות לכל הפונקציות (W=80 בלי מעטפת, W=240 עם 3/6 חזיתות, עם וללא מעטפת, span, אינדקס גלובלי, סגירת הסכום).
+- `src/core/doors/drawerFrontsCalc.ts` (חדש): `deriveDrawerFronts` הועבר מ-`doorUtils.ts` לקובץ עצמאי, וכתב מחדש לפי `frontGeometry`. הקלט החדש: `layout: CabinetFrontLayout` במקום `tBody`.
+
+### הוסר
+- `getDoorWidth`, `getPartitionDoorWidth` ו-`DRAWER_FRONT_SIDE_GAP_CM` מ-`doorUtils.ts`. כל הקוראים (`useCabinet`, `cuttingList`, `deriveDrawerFronts`) משתמשים ב-`frontGeometry` בלבד.
+- ה-prop `partitionsById` ב-`CabinetFrontsSketch` כבר לא משפיע על חישוב `panelX` (נשאר כ-prop אופציונלי לתאימות, אבל לא משמש לחישוב מיקום).
+- בדיקות ל-`getDoorWidth`/`getPartitionDoorWidth` ב-`doorUtils.test.ts` ו-`externalDrawerWiring.test.ts` הוסרו (מוחלפות ב-`frontGeometry.test.ts`).
+
+### השלכות על שיתוף בין סקיצות
+- `CabinetSketch`, `CabinetFrontsSketch` מקבלים `cabinetFrontLayout` + `numFrontsPerBox` ומחשבים את ה-x של כל חזית דרך `computeFrontGeometry` / `computeFrontGeometryForSpan`. תוצאה: חזית מגירה בתצוגה הראשית של הארון ממוקמת ישירות מתחת לדלת (אותו x, אותו width).
+- `BoxBodySketch` (עורך גוף בודד) נשאר עם ציור body-relative — קירוב ויזואלי בלבד, אין לו context של הארון. תועד מפורשות כהחלטה.
+- `cuttingList.ts` (מצב פשוט) משתמש ב-`computeCabinetFrontLayout` במקום `getDoorWidth`.
+
 ### נוסף — מדף קבוע אוטומטי מעל ערימת מגירות חיצוניות
 - **`ShelfItem.isFixedAboveExternals?: boolean`** — שדה חדש אופציונלי שמסמן מדף שנוצר אוטומטית מעל ערימת external drawers. ShelfItem רגיל לא מקבל את הדגל.
 - **`core/interior/fixedShelfUtils.ts`** (חדש): `calcFixedShelfHeight(externals, gapMm, shelfThickness)` מחזיר את `heightFromFloor` (= תחתית המדף = `top of highest drawer − shelfThickness`); `hasFixedShelf(items)`; `findFixedShelf(items)`; `syncFixedShelf(oldItems, newItems, gapMm, shelfThickness)` שמיישם את ה-decision table: יצירה אוטומטית רק בהוספת המגירה הראשונה (`newCount=1 ∧ oldCount=0`); עדכון `heightFromFloor` כשערימת המגירות משתנה; מחיקה כשהאחרונה הוסרה; כיבוד הסרה ידנית (לא יוצר מחדש).

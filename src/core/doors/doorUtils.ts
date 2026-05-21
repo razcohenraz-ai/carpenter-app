@@ -1,6 +1,6 @@
 import type { Box, BoxPosition } from '../../types/geometry';
-import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
-import type { Door, DoorById, DrawerFront, DrawerFrontById, Hinge } from '../../types/doors';
+import type { InteriorItem, InteriorById, DrawerItem } from '../../types/interior';
+import type { Door, DoorById, DrawerFront, Hinge } from '../../types/doors';
 import type { MaterialId } from '../../types/materials';
 import { newItemId } from '../interior/interiorUtils';
 import { getMaterial } from '../../catalog';
@@ -262,12 +262,10 @@ export function salonHingeSide(frontIndex: number, numFronts: number): 'right' |
   return frontIndex < Math.ceil(numFronts / 2) ? 'right' : 'left';
 }
 
-// ── Door panel dimensions (with gap) ─────────────────────────────────────────
-
-export function getDoorWidth(innerW: number, numCols: number, gapMm: number): number {
-  const gapCm = gapMm / 10;
-  return (innerW - (numCols + 1) * gapCm) / numCols;
-}
+// ── Door panel dimensions ────────────────────────────────────────────────────
+// Door WIDTH is no longer computed here — it's a function of the whole cabinet
+// (see `core/geometry/frontGeometry.ts`). This module owns only door HEIGHT
+// and the various per-drawer derivations below.
 
 // hasTopGap: gap between box top and front top. False for 'bottom'/'middle' boxes —
 //   the box above already owns the shared boundary gap (prevents double-counting).
@@ -276,16 +274,6 @@ export function getDoorWidth(innerW: number, numCols: number, gapMm: number): nu
 export function getDoorHeight(boxH: number, gapMm: number, hasBottomGap = true, hasTopGap = true): number {
   const gapCm = gapMm / 10;
   return boxH - (hasTopGap ? gapCm : 0) - (hasBottomGap ? gapCm : 0);
-}
-
-// Door width for a body with a vertical partition (numFronts=2 + partition).
-// Layout from left to right: gap | door | gap | partition | gap | door | gap.
-// Total: 2·doorWidth + tBody + 4·gap = boxW → doorWidth = (boxW − tBody − 4·gap) / 2.
-// (Without subtracting 4·gap the rendering ended up right-aligned because the
-//  outer gaps + the partition's pair of gaps were not budgeted.)
-export function getPartitionDoorWidth(boxW: number, tBody: number, gapMm: number): number {
-  const gapCm = gapMm / 10;
-  return (boxW - tBody - 4 * gapCm) / 2;
 }
 
 // ── External drawer fronts ────────────────────────────────────────────────────
@@ -304,13 +292,6 @@ export function getPartitionDoorWidth(boxW: number, tBody: number, gapMm: number
 
 /** Comfort threshold for the main door above an external-drawer stack. */
 export const MIN_COMFORTABLE_MAIN_DOOR_H_CM = 10;
-
-/** Per-side clearance for a drawer front (cm). Drawer rails need a fixed
- *  technical gap on each side regardless of the cabinet-wide `doorGapMm`
- *  setting — so a drawer front is always 2×0.2 = 0.4cm narrower than the
- *  available width (body or cell). This is independent of whether the
- *  cabinet has a shell. */
-export const DRAWER_FRONT_SIDE_GAP_CM = 0.2;
 
 /** Returns the external drawers in the list, sorted by `heightFromFloor` ascending
  *  (lowest first — i.e. the drawer at the bottom of the front stack). */
@@ -410,114 +391,9 @@ export function externalStackChanged(prev: InteriorItem[], next: InteriorItem[])
   return externalStackSignature(prev) !== externalStackSignature(next);
 }
 
-// ── Derive DrawerFront entities for the whole cabinet ─────────────────────────
-// One DrawerFront per external drawer per applicable (box, frontIndex). For a
-// body without partition, externals appear once on the body-wide front (and
-// span every frontIndex in that body). For a partition body, externals in
-// cell 0 attach to frontIndex 0; cell 1 attaches to frontIndex numFronts−1.
-// Returns a map keyed by drawerId (drawerFronts are derived 1:1 from drawers).
-
-export interface DeriveDrawerFrontsInput {
-  bodyBoxes: Box[];
-  interiorById: InteriorById;
-  cellInteriorById: CellInteriorById;
-  partitionsById: Map<string, boolean>;
-  numFrontsPerBox: Map<string, number>;
-  doorCoversPlinth: boolean;
-  doorGapMm: number;
-  tBody: number;
-}
-
-export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontById {
-  const {
-    bodyBoxes, interiorById, cellInteriorById, partitionsById,
-    numFrontsPerBox, doorCoversPlinth, doorGapMm, tBody,
-  } = input;
-  const result: DrawerFrontById = {};
-  const gapCm = doorGapMm / 10;
-
-  for (const box of bodyBoxes) {
-    const numFronts = numFrontsPerBox.get(box.id) ?? 1;
-    const hasPartition = partitionsById.get(box.id) === true;
-    const bodyItems = interiorById[box.id] ?? [];
-    const cellItems = cellInteriorById[box.id];
-
-    const originalCoversSkirt = doorCoversPlinth && (box.level === 'bottom' || box.level === 'single');
-
-    // Two paths: partition (per cell) or single (body-wide). Drawer-front
-    // width is always reduced by 2×DRAWER_FRONT_SIDE_GAP_CM regardless of
-    // doorGapMm — drawer rails need a fixed technical gap on each side.
-    // In partition mode the cell front must align vertically with the cell
-    // door above it: same width as the door minus the 2×rail clearance.
-    if (hasPartition && cellItems) {
-      const cellW = getPartitionDoorWidth(box.W, tBody, doorGapMm) - 2 * DRAWER_FRONT_SIDE_GAP_CM;
-      // Cell 0 (right) → frontIndex 0; Cell 1 (left) → frontIndex numFronts−1
-      for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
-        const items = cellItems[ci] ?? [];
-        const externals = getExternalDrawers(items);
-        if (externals.length === 0) continue;
-        const fi = ci === 0 ? 0 : numFronts - 1;
-        const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
-
-        // Position drawers from the bottom of the front area upward.
-        // Use 0 as the body-bottom origin; the renderer applies the body's own
-        // bottom-gap when converting to SVG.
-        let positionFromBoxBottom = 0;
-        for (const drawer of externals) {
-          const isSkirt = drawer.id === skirtDrawerId;
-          const front: DrawerFront = {
-            id: drawer.id,
-            drawerId: drawer.id,
-            boxId: box.id,
-            frontIndex: fi,
-            cellIndex: ci,
-            positionFromBoxBottom,
-            height: drawer.drawerHeight,
-            width: cellW,
-            coversSkirt: isSkirt,
-            gapMm: doorGapMm,
-            ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),
-          };
-          result[drawer.id] = front;
-          positionFromBoxBottom += drawer.drawerHeight + gapCm;
-        }
-      }
-      // Skip body-wide externals when partition is on; only cell items apply.
-      continue;
-    }
-
-    const externals = getExternalDrawers(bodyItems);
-    if (externals.length === 0) continue;
-    // Body-wide drawer: a single front panel that spans the full body width
-    // (less the 2mm-per-side rail clearance) regardless of how many door
-    // fronts share the body above it. (When the body is partitioned, the
-    // cell branch above runs instead.) The `frontIndex: 0` tag is
-    // informational — body-wide fronts are detected by `cellIndex === undefined`
-    // and rendered once per box.
-    const bodyDrawerW = box.W - 2 * DRAWER_FRONT_SIDE_GAP_CM;
-    const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
-    let positionFromBoxBottom = 0;
-    for (const drawer of externals) {
-      const isSkirt = drawer.id === skirtDrawerId;
-      const front: DrawerFront = {
-        id: drawer.id,
-        drawerId: drawer.id,
-        boxId: box.id,
-        frontIndex: 0,
-        positionFromBoxBottom,
-        height: drawer.drawerHeight,
-        width: bodyDrawerW,
-        coversSkirt: isSkirt,
-        gapMm: doorGapMm,
-        ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),
-      };
-      result[drawer.id] = front;
-      positionFromBoxBottom += drawer.drawerHeight + gapCm;
-    }
-  }
-
-  return result;
-}
+// Drawer-front derivation lives in `./drawerFrontsCalc.ts` (it needs the
+// cabinet-level front layout from `core/geometry/frontGeometry.ts`, and
+// keeping that import out of this file avoids a cycle).
 
 /** Visual height of a drawer front, mirroring `getDoorVisualHeight`: adds the
  *  plinth-covering extension when the drawer inherited `coversSkirt`. */

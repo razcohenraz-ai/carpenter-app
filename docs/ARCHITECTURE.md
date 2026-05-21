@@ -25,12 +25,15 @@ src/
 │
 ├── core/               לוגיקה טהורה — ללא React, ניתנת לבדיקה
 │   ├── geometry/
-│   │   └── boxDecomposition.ts   פיצול ארון לגופים פיזיים
+│   │   ├── boxDecomposition.ts   פיצול ארון לגופים פיזיים
+│   │   └── frontGeometry.ts      מקור יחיד לחישוב x ו-width של כל החזיתות (ברמת הארון)
 │   ├── doors/
 │   │   ├── doorCalc.ts           חישוב מספר דלתות ושורות
-│   │   └── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorWidth/Height
+│   │   ├── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorHeight, derivation helpers
+│   │   └── drawerFrontsCalc.ts   deriveDrawerFronts — בונה DrawerFront מ-frontGeometry layout
 │   ├── cuts/
-│   │   ├── cuttingList.ts        חישוב רשימת חיתוכים (calcCuts)
+│   │   ├── cuttingList.ts        חישוב רשימת חיתוכים (calcCuts) — משתמש ב-frontGeometry
+│   │   ├── externalDrawerCuts.ts חיתוכי חזיתות מגירות חיצוניות
 │   │   └── sheetCalculator.ts    ספירת לוחות (sheetsNeeded)
 │   ├── interior/
 │   │   └── interiorUtils.ts      init/preserve/validate; redistributeShelves; addShelfRedistributed

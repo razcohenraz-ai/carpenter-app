@@ -13,7 +13,6 @@ import {
   getDoorVisualHeight,
   getDoorStructuralHeight,
   getDoorHeight,
-  getDoorWidth,
 } from './doorUtils';
 import type { Box } from '../../types/geometry';
 import type { Door, Hinge } from '../../types/doors';
@@ -663,20 +662,6 @@ describe('getDoorHeight', () => {
   });
 });
 
-// ── getDoorWidth ──────────────────────────────────────────────────────────────
-
-describe('getDoorWidth', () => {
-  it('gap=0: returns innerW/n unchanged', () => {
-    expect(getDoorWidth(100, 1, 0)).toBe(100);
-    expect(getDoorWidth(100, 2, 0)).toBe(50);
-  });
-  it('gap=2mm, 1 door: 100 − 2×0.2 = 99.6', () => {
-    expect(getDoorWidth(100, 1, 2)).toBeCloseTo(99.6);
-  });
-  it('gap=2mm, 2 doors: (100 − 3×0.2)/2 = 49.7', () => {
-    expect(getDoorWidth(100, 2, 2)).toBeCloseTo(49.7);
-  });
-  it('gap=4mm, 1 door: 100 − 2×0.4 = 99.2', () => {
-    expect(getDoorWidth(100, 1, 4)).toBeCloseTo(99.2);
-  });
-});
+// Door width is no longer a per-box concern — see
+// `src/core/geometry/frontGeometry.test.ts` for the cabinet-level layout
+// tests that supersede the deleted `getDoorWidth`/`getPartitionDoorWidth`.

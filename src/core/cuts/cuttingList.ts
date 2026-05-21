@@ -1,6 +1,7 @@
 import type { CutItem, FurnitureType } from "../../types";
 import { calcDoors } from "../doors/doorCalc";
-import { getDoorHeight, getDoorWidth } from "../doors/doorUtils";
+import { getDoorHeight } from "../doors/doorUtils";
+import { computeRowFrontLayout } from "../geometry/frontGeometry";
 import { roundInternal, roundOutput } from "../utils/round";
 
 // ── קבועים (מ"מ אלא אם צוין אחרת) ──────────────────────────────────────────
@@ -150,8 +151,9 @@ export function calcCuts(
     }
 
     // ── דלתות ─────────────────────────────────────────────────────────────────
-    // Panel dimensions align with getDoorWidth/getDoorHeight in doorUtils.ts.
-    // hasEnvelopeTop reduces the effective height of the top/single-level box.
+    // Door width is sourced from the cabinet-level front layout (see
+    // `core/geometry/frontGeometry.ts`): all fronts in the cabinet share a
+    // single width, with one gap on every side and between every pair.
     //
     // Horizontal splitting matches useCabinet: first split by MAX_BOX_W=100,
     // then split each box-column by maxDoorWidth.
@@ -160,8 +162,17 @@ export function calcCuts(
     const numBoxCols = Math.ceil(innerW / MAX_BOX_W_CM);
     const colW = innerW / numBoxCols;
     const numFrontsPerCol = Math.max(1, Math.ceil(colW / maxDoorWidth));
-    const frontW_mm = cm(getDoorWidth(colW, numFrontsPerCol, doorGapMm));
     const frontsPerRow = numBoxCols * numFrontsPerCol;
+    // cuttingList operates on a single-row cabinet (no body decomposition);
+    // each row has the same fronts as the cabinet has columns.
+    const cabinetLayout = computeRowFrontLayout({
+      cabinetW: W,
+      hasOuterShell: hasShell,
+      shellThicknessCm: tShell,
+      totalFrontsInRow: frontsPerRow,
+      gapCm: doorGapMm / 10,
+    });
+    const frontW_mm = cm(cabinetLayout.frontWidth);
 
     const topReduction = (hasEnvelopeTop && hasShell) ? tFront : 0;
     const lowerBoxH = d.rows === 1 ? (H - plinth) - topReduction : d.lowerH - plinth;

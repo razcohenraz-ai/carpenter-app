@@ -81,7 +81,7 @@ export default function CabinetForm(): React.JSX.Element {
     interiorById, setBoxInterior,
     cellInteriorById, addPartition, removePartition, setCellItems,
     doorsById, drawerFrontsById, displayNumbers, numFrontsPerBox,
-    partitionsById,
+    partitionsById, frontLayoutByRow,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
@@ -556,6 +556,8 @@ export default function CabinetForm(): React.JSX.Element {
               hasShell={form.hasShell}
               frontMaterialThickness={frontThicknessCm}
               {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
+              frontLayoutByRow={frontLayoutByRow}
+              numFrontsPerBox={numFrontsPerBox}
             />
           ) : (
             <CabinetFrontsSketch
@@ -570,6 +572,8 @@ export default function CabinetForm(): React.JSX.Element {
               displayNumbers={displayNumbers}
               drawerFrontsById={drawerFrontsById}
               partitionsById={partitionsById}
+              frontLayoutByRow={frontLayoutByRow}
+              numFrontsPerBox={numFrontsPerBox}
               onDrawerFrontClick={setEditingDrawerId}
             />
           )}

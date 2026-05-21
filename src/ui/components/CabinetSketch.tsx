@@ -1,6 +1,14 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
+import {
+  type RowFrontLayout,
+  computeFrontGeometry,
+  computeFrontGeometryForSpan,
+  getBoxFirstGlobalFrontIndex,
+  groupBoxesByRow,
+} from '../../core/geometry/frontGeometry';
+import type { BoxLevel } from '../../types/geometry';
 import styles from './CabinetSketch.module.css';
 import type { InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 
@@ -18,9 +26,11 @@ interface Props {
   hasShell?: boolean;
   frontMaterialThickness?: number;
   hasEnvelopeTop?: boolean;
+  frontLayoutByRow?: Map<BoxLevel, RowFrontLayout>;
+  numFrontsPerBox?: Map<string, number>;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -168,17 +178,39 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
           // Stack externals from the body floor; gap between them follows
           // the door-gap convention used by deriveDrawerFronts (default 2mm).
+          // Horizontal extent comes from this body's ROW layout: a body-wide
+          // drawer spans all `numFronts` columns of this box, within its row.
           const gapCm = 0.2;
           let cumulative = 0;
+          const boxLevel = geo.boxes.find(b => b.id === boxId)?.level;
+          const layout = boxLevel ? frontLayoutByRow?.get(boxLevel) : undefined;
+          const rowBoxes = boxLevel
+            ? (groupBoxesByRow(geo.boxes).get(boxLevel) ?? [])
+            : [];
+          const boxFirstGlobalIndexInRow = layout && numFrontsPerBox
+            ? getBoxFirstGlobalFrontIndex({ rowBoxes, numFrontsPerBox, targetBoxId: boxId })
+            : -1;
+          const numFronts = numFrontsPerBox?.get(boxId) ?? 1;
+          const drawerSpan = layout && boxFirstGlobalIndexInRow >= 0
+            ? computeFrontGeometryForSpan({
+                startGlobalIndexInRow: boxFirstGlobalIndexInRow,
+                spanLength: numFronts,
+                layout,
+                gapCm: layout.gapCm,
+              })
+            : null;
+          const innerLeftSvg = layout ? geo.cabinet.x + layout.cabinetLeftOffset * geo.scale : rect.x;
           const externalNodes = externals.map(drawer => {
             const yBottom = toSvgY(cumulative);
             const yTop    = toSvgY(cumulative + drawer.drawerHeight);
             cumulative += drawer.drawerHeight + gapCm;
+            const fX = drawerSpan ? innerLeftSvg + drawerSpan.x * geo.scale : rect.x;
+            const fW = drawerSpan ? drawerSpan.width * geo.scale : rect.w;
             return (
               <rect
                 key={`ext-${drawer.id}`}
-                x={rect.x} y={yTop}
-                width={rect.w} height={yBottom - yTop}
+                x={fX} y={yTop}
+                width={fW} height={yBottom - yTop}
                 className={styles.externalDrawerRect}
               />
             );
@@ -235,15 +267,35 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
                 const gapCm = 0.2;
                 let cumulative = 0;
+                // Cell drawer = one column in this body's ROW layout (matches
+                // the door above it). ci=0 → rightmost column in this box;
+                // ci=1 → leftmost.
+                const boxLevel = geo.boxes.find(b => b.id === boxId)?.level;
+                const layout = boxLevel ? frontLayoutByRow?.get(boxLevel) : undefined;
+                const rowBoxes = boxLevel
+                  ? (groupBoxesByRow(geo.boxes).get(boxLevel) ?? [])
+                  : [];
+                const numFronts = numFrontsPerBox?.get(boxId) ?? 2;
+                const boxFirstGlobalIndexInRow = layout && numFrontsPerBox
+                  ? getBoxFirstGlobalFrontIndex({ rowBoxes, numFrontsPerBox, targetBoxId: boxId })
+                  : -1;
+                const fi = ci === 0 ? 0 : numFronts - 1;
+                const globalIndexInRow = boxFirstGlobalIndexInRow + (numFronts - 1 - fi);
+                const frontGeo = layout && boxFirstGlobalIndexInRow >= 0
+                  ? computeFrontGeometry({ globalFrontIndexInRow: globalIndexInRow, layout, gapCm: layout.gapCm })
+                  : null;
+                const innerLeftSvg = layout ? geo.cabinet.x + layout.cabinetLeftOffset * geo.scale : rect.x;
                 const externalNodes = externals.map(drawer => {
                   const yBottom = toSvgY(cumulative);
                   const yTop    = toSvgY(cumulative + drawer.drawerHeight);
                   cumulative += drawer.drawerHeight + gapCm;
+                  const fX = frontGeo ? innerLeftSvg + frontGeo.x * geo.scale : xLeft;
+                  const fW = frontGeo ? frontGeo.width * geo.scale : (xRight - xLeft);
                   return (
                     <rect
                       key={`ext-${drawer.id}`}
-                      x={xLeft} y={yTop}
-                      width={xRight - xLeft} height={yBottom - yTop}
+                      x={fX} y={yTop}
+                      width={fW} height={yBottom - yTop}
                       className={styles.externalDrawerRect}
                     />
                   );

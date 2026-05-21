@@ -9,17 +9,23 @@ import {
   defaultHingeSide,
   assignDoorDisplayNumbers,
   shouldCoverSkirt,
-  getDoorWidth,
-  getPartitionDoorWidth,
   makeDoorId,
   salonHingeSide,
   calcMainDoorHeight,
   getSkirtCoveringDrawer,
   externalStackChanged,
   getItemsForFront,
-  deriveDrawerFronts,
-  DRAWER_FRONT_SIDE_GAP_CM,
 } from '../../core/doors/doorUtils';
+import { deriveDrawerFronts } from '../../core/doors/drawerFrontsCalc';
+import {
+  computeRowFrontLayout,
+  computeFrontGeometryForSpan,
+  getBoxFirstGlobalFrontIndex,
+  getTotalFrontsInRow,
+  groupBoxesByRow,
+  type RowFrontLayout,
+} from '../../core/geometry/frontGeometry';
+import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
@@ -102,6 +108,7 @@ export function useCabinet(): {
   displayNumbers: Map<string, string>;
   numFrontsPerBox: Map<string, number>;
   partitionsById: Map<string, boolean>;
+  frontLayoutByRow: Map<BoxLevel, RowFrontLayout>;
   setBoxPartitions: (boxId: string, value: boolean) => void;
   setDoorHingeSide: (doorId: string, side: 'left' | 'right') => void;
   setDoorHingeCount: (doorId: string, count: 2 | 3 | 4 | 'auto') => void;
@@ -121,6 +128,7 @@ export function useCabinet(): {
   const [displayNumbers, setDisplayNumbers] = useState<Map<string, string>>(new Map());
   const [numFrontsPerBox, setNumFrontsPerBox] = useState<Map<string, number>>(new Map());
   const [partitionsById, setPartitionsById] = useState<Map<string, boolean>>(new Map());
+  const [frontLayoutByRow, setFrontLayoutByRow] = useState<Map<BoxLevel, RowFrontLayout>>(new Map());
   const [drawerFrontsById, setDrawerFrontsByIdState] = useState<DrawerFrontById>({});
 
   const interiorRef = useRef<InteriorById>({});
@@ -545,6 +553,26 @@ export function useCabinet(): {
 
     plinthRef.current = plinth;
 
+    // ── Row-level front layouts ────────────────────────────────────────────
+    // Each Box.level ('bottom' | 'middle' | 'top' | 'single') is an
+    // independent horizontal row: it spreads its own fronts across the full
+    // cabinet width, with its own gaps. A multi-row cabinet (e.g. bottom +
+    // top) gets TWO layouts — not one shared layout — because each row
+    // hosts its own set of fronts.
+    const cabinetGapCm = doorGapMm / 10;
+    const rowsByLevel = groupBoxesByRow(bodyBoxes);
+    const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
+    for (const [level, rowBoxes] of rowsByLevel) {
+      const totalFrontsInRow = getTotalFrontsInRow(rowBoxes, newNumFrontsMap);
+      layoutByRow.set(level, computeRowFrontLayout({
+        cabinetW: W,
+        hasOuterShell: hasShell,
+        shellThicknessCm: tFront,
+        totalFrontsInRow,
+        gapCm: cabinetGapCm,
+      }));
+    }
+
     // ── Doors (height/coversSkirt aware of external drawers) ────────────────
     const newDoors: DoorById = {};
     const skirtCoveringIds = new Set<string>();
@@ -560,11 +588,9 @@ export function useCabinet(): {
       const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
       const hasTopGap = box.level === 'top' || box.level === 'single';
 
-      // Partition body (numFronts=2): symmetric layout with 4 gaps + partition.
-      // See getPartitionDoorWidth for the derivation.
-      const frontW = hasPartition
-        ? getPartitionDoorWidth(box.W, tBody, doorGapMm)
-        : getDoorWidth(box.W, numFronts, doorGapMm);
+      // Every door — partition or not — uses its row's frontWidth.
+      const rowLayout = layoutByRow.get(box.level);
+      const frontW = rowLayout?.frontWidth ?? 0;
 
       for (let fi = 0; fi < numFronts; fi++) {
         const doorId = makeDoorId(box.id, fi);
@@ -602,11 +628,9 @@ export function useCabinet(): {
     }
 
     // ── External-drawer front cuts ────────────────────────────────────────
-    // For a body without partition: one cut per external drawer at the full
-    // body width minus 2×rail clearance (numFronts splits doors, not drawers
-    // — a body-wide drawer sits below all door fronts as a single facade
-    // panel). For a partitioned body: one cut per drawer per cell, also less
-    // 2×rail clearance. The 2mm-per-side gap is independent of doorGapMm.
+    // Width comes from the cabinet-level layout (same source as the doors):
+    //   cell drawer (partition):  one column   → layout.frontWidth
+    //   body-wide drawer:         N columns    → spanLength = numFronts
     const externalDrawerCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
       const numFronts = newNumFrontsMap.get(box.id)!;
@@ -615,10 +639,12 @@ export function useCabinet(): {
       const cellItems = newCellInteriorById[box.id];
       const originalCoversSkirt = doorCoversPlinth && shouldCoverSkirt(box.level);
 
+      const rowLayout = layoutByRow.get(box.level);
+      if (!rowLayout) continue;
+      const rowBoxes = rowsByLevel.get(box.level) ?? [];
+
       if (hasPartition) {
-        // Cell drawer-front matches the partition door above it minus the
-        // 2×rail clearance — keeps drawer-front edges aligned with door edges.
-        const cellW = getPartitionDoorWidth(box.W, tBody, doorGapMm) - 2 * DRAWER_FRONT_SIDE_GAP_CM;
+        const cellW = rowLayout.frontWidth;
         for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
           const itemsForCell = cellItems?.[ci] ?? [];
           externalDrawerCuts.push(
@@ -628,12 +654,15 @@ export function useCabinet(): {
           );
         }
       } else {
-        // Single body-wide call — duplicating per frontIndex would emit
-        // numFronts copies at the wrong (door-sized) width.
-        // numFronts is referenced via `getItemsForFront` only when partition
-        // is on; here we deliberately use the raw body items.
-        void numFronts;
-        const bodyDrawerW = box.W - 2 * DRAWER_FRONT_SIDE_GAP_CM;
+        const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
+          rowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id,
+        });
+        const bodyDrawerW = computeFrontGeometryForSpan({
+          startGlobalIndexInRow: boxFirstGlobalIndexInRow,
+          spanLength: numFronts,
+          layout: rowLayout,
+          gapCm: cabinetGapCm,
+        }).width;
         externalDrawerCuts.push(
           ...calcExternalDrawerFrontCuts(
             bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
@@ -651,7 +680,7 @@ export function useCabinet(): {
       numFrontsPerBox: newNumFrontsMap,
       doorCoversPlinth,
       doorGapMm,
-      tBody,
+      layoutByRow,
     });
 
     // ── Finalize ────────────────────────────────────────────────────────────
@@ -665,6 +694,7 @@ export function useCabinet(): {
 
     numFrontsRef.current = newNumFrontsMap;
     setNumFrontsPerBox(newNumFrontsMap);
+    setFrontLayoutByRow(layoutByRow);
     prevBoxesRef.current = boxes;
     setInterior(newInterior);
     setDoors(newDoors, boxes, newNumFrontsMap);
@@ -681,6 +711,7 @@ export function useCabinet(): {
     cellInteriorById, addPartition, removePartition, setCellItems,
     doorsById, drawerFrontsById, displayNumbers, numFrontsPerBox,
     partitionsById, setBoxPartitions,
+    frontLayoutByRow,
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,

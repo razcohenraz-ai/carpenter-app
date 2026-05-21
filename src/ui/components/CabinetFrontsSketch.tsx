@@ -2,6 +2,14 @@ import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
 import { computeHingeSpacingWarnings, getDoorVisualHeight, getDrawerFrontVisualHeight } from '../../core/doors/doorUtils';
+import {
+  type RowFrontLayout,
+  computeFrontGeometry,
+  computeFrontGeometryForSpan,
+  getBoxFirstGlobalFrontIndex,
+  groupBoxesByRow,
+} from '../../core/geometry/frontGeometry';
+import type { BoxLevel } from '../../types/geometry';
 import styles from './CabinetFrontsSketch.module.css';
 import sketchStyles from './CabinetSketch.module.css';
 import type { DoorById, DrawerFrontById, DrawerFront } from '../../types/doors';
@@ -18,12 +26,14 @@ interface Props {
   displayNumbers: Map<string, string>;
   drawerFrontsById?: DrawerFrontById;
   partitionsById?: Map<string, boolean>;
+  frontLayoutByRow: Map<BoxLevel, RowFrontLayout>;
+  numFrontsPerBox: Map<string, number>;
   onDrawerFrontClick?: (drawerId: string) => void;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
-  drawerFrontsById, partitionsById, onDrawerFrontClick,
+  drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -103,27 +113,33 @@ export default function CabinetFrontsSketch({
             return Math.max(...list.map(f => f.positionFromBoxBottom + f.height + f.gapMm / 10));
           }
 
+          // Each row (Box.level) has its own layout. We pick it per-box.
+          const rowsByLevel = groupBoxesByRow(geo.boxes);
+
           return [...doorsByBoxId.entries()].flatMap(([boxId, doors]) => {
             const rect = geo.boxSvgRects[boxId];
             if (!rect) return [];
+            const boxLevel = geo.boxes.find(b => b.id === boxId)?.level;
+            const rowLayout = boxLevel ? frontLayoutByRow.get(boxLevel) : undefined;
+            if (!boxLevel || !rowLayout) return [];
+            const rowBoxes = rowsByLevel.get(boxLevel) ?? [];
+            const innerLeftSvg = geo.cabinet.x + rowLayout.cabinetLeftOffset * geo.scale;
+            const gapCm = rowLayout.gapCm;
 
             const sortedDoors = [...doors].sort((a, b) => a.frontIndex - b.frontIndex);
+            const numFronts = numFrontsPerBox.get(boxId) ?? 1;
+            const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
+              rowBoxes, numFrontsPerBox, targetBoxId: boxId,
+            });
 
             const doorNodes = sortedDoors.map(door => {
               const panelW   = door.width * geo.scale;
-              const gapPx    = (door.gapMm ?? 0) / 10 * geo.scale;
               const fi       = door.frontIndex;
-              const hasPartition = partitionsById?.get(boxId) === true;
-              // Partition body (numFronts=2): each door anchored to its side
-              // (gap from rect edge), partition fills the middle. Without this
-              // branch, the formula assumes a single gap between doors and
-              // pushes both doors to the right side of the body.
-              // Non-partition: existing formula — symmetric for any numFronts.
-              const panelX = hasPartition
-                ? (fi === 0
-                    ? rect.x + rect.w - panelW - gapPx
-                    : rect.x + gapPx)
-                : rect.x + rect.w - (fi + 1) * (panelW + gapPx);
+              // frontIndex 0 is the box's rightmost column → highest
+              // globalFrontIndexInRow within the box.
+              const globalIndexInRow = boxFirstGlobalIndexInRow + (numFronts - 1 - fi);
+              const frontGeo = computeFrontGeometry({ globalFrontIndexInRow: globalIndexInRow, layout: rowLayout, gapCm });
+              const panelX = innerLeftSvg + frontGeo.x * geo.scale;
               const panelH   = door.height * geo.scale;
               const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
               const panelY   = rect.y + rect.h - stackPx - panelH;
@@ -195,14 +211,14 @@ export default function CabinetFrontsSketch({
                   </text>
 
                   {/* Per-cell drawer fronts — drawn behind the matching door.
-                      Width uses front.width (already includes 2×rail clearance),
-                      centred within the door panel for a clean inset look. */}
+                      Same column geometry as the door above (single-column
+                      front), positioned directly via the cabinet layout. */}
                   {myCellFronts.map(front => {
                     const fH      = front.height * geo.scale;
                     const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
                     const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
                     const fW      = front.width * geo.scale;
-                    const fX      = panelX + (panelW - fW) / 2;
+                    const fX      = panelX;
                     const interactive = onDrawerFrontClick !== undefined;
                     const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
                     return (
@@ -237,16 +253,22 @@ export default function CabinetFrontsSketch({
               );
             });
 
-            // Body-wide drawer fronts — one rect per drawer at front.width
-            // (= box.W − 2×rail clearance), drawn once per box (not per
-            // frontIndex) and inset symmetrically from the box edges.
+            // Body-wide drawer fronts — span all `numFronts` columns of the
+            // box. Position from cabinet-level layout (matches the leftmost
+            // door's left edge; width includes inner gaps + door widths).
             const bodyFronts = bodyFrontsByBox.get(boxId) ?? [];
+            const bodySpanGeo = computeFrontGeometryForSpan({
+              startGlobalIndexInRow: boxFirstGlobalIndexInRow,
+              spanLength: numFronts,
+              layout: rowLayout,
+              gapCm,
+            });
             const bodyFrontNodes = bodyFronts.map(front => {
               const fH      = front.height * geo.scale;
               const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;
               const fY      = rect.y + rect.h - (front.positionFromBoxBottom + front.height) * geo.scale;
-              const fW      = front.width * geo.scale;
-              const fX      = rect.x + (rect.w - fW) / 2;
+              const fW      = bodySpanGeo.width * geo.scale;
+              const fX      = innerLeftSvg + bodySpanGeo.x * geo.scale;
               const interactive = onDrawerFrontClick !== undefined;
               const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
               return (
