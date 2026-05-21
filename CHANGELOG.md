@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### תוקן — מדף קבוע מעל מגירה חיצונית
+- **לא הוצג מיד תוך כדי עריכת גוף** עד שהמשתמש יצא מהעורך. שורש הבאג: `BoxInteriorEditor` החזיק `localItems`/`localCellItems` אופטימיים שלא הריצו `syncFixedShelf` בעצמם; ה-shelf נוצר רק ב-state של הפרנט, אבל ה-local copy של העורך (שמשמש את `BoxBodySketch` הפנימי) לא הכיל אותו עד remount.
+- **בערימה של 2+ מגירות בתא של גוף עם מחיצה — לא הוצג או במיקום שגוי**. אותו root cause: כש-`localCellItems[ci]` היה ללא ה-fixed shelf, הוספת מגירה שנייה שלחה ל-`syncFixedShelf` items בלי הקיים, וההיוריסטיקה פירשה את זה כ"המשתמש מחק ידנית" → לא נוצר מחדש.
+- **תיקון**: `BoxInteriorEditor.update` ו-`updateCell` מריצים `syncFixedShelf` על העותק המקומי לפני `setLocalItems`/`setLocalCellItems`. ה-shelf מופיע מיד ב-`BoxBodySketch` הפנימי. הפרנט (`useCabinet`) ממשיך להריץ את אותו sync על snapshot שלו — אידמפוטנטי. נוסף prop חדש `doorGapMm` ל-`BoxInteriorEditor`.
+
+### תוקן — מיניאטורת גוף הציגה כפילות פריטים בגוף עם מחיצה
+- `BoxThumbnail` עשה `cellItems.flat()` ושלח את כל ה-items לתוך `BoxBodySketch` אחד שלא יודע על תאים. תוצאה: external drawers מ-2 תאים נצברו יחד ב-stack אחד בתחתית, מתעלמים ממיקום התא.
+- **תיקון**: ב-partition body, המיניאטורה מרנדרת 2 `BoxBodySketch` נפרדים זה לצד זה (left=cell 1, right=cell 0), כל אחד עם `bodyW = (box.W − tBody) / 2` ו-items של התא שלו. ה-CSS class החדש `cellsRow` מציב אותם side-by-side. נוסף prop חדש `tBody` ל-`BoxThumbnail` (ברירת מחדל 1.8).
+
 ### תוקן — רפקטור חזיתות הסתמך על totalFrontsInCabinet, כעת per-row
 - **שורש הבאג**: הרפקטור הראשון של frontGeometry סופר את **כל** החזיתות בכל הקומות יחד (`totalFrontsInCabinet`). תוצאה: בארון עם 2 קומות, frontWidth קטן בחצי, וכל קומה תפסה רק חצי מהרוחב — קומה עליונה נדחפה שמאלה, תחתונה ימינה.
 - **תיקון**: לוגיקת חישוב הופכת ל-per-row. כל `Box.level` (`'bottom' | 'middle' | 'top' | 'single'`) הוא יחידה אופקית עצמאית: כל row מתפזרת על כל רוחב הארון בנפרד, עם ה-gaps שלה.

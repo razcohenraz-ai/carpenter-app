@@ -28,3 +28,11 @@
   text-align: center;
   white-space: nowrap;
 }
+
+/* Two side-by-side cells when the body is partitioned. Items in each cell
+   stay within their own BoxBodySketch — no flattening. */
+.cellsRow {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+}

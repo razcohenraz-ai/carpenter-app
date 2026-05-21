@@ -329,6 +329,7 @@ export default function CabinetForm(): React.JSX.Element {
           cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
           onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
           tBody={getMaterial(form.bodyMaterialId).thickness / 10}
+          doorGapMm={parseFloat(form.doorGap) || 2}
         />
       </div>
     );
@@ -592,6 +593,7 @@ export default function CabinetForm(): React.JSX.Element {
                   svgHeight={h}
                   hasPartition={partitionsById.get(box.id) ?? false}
                   {...(cellInteriorById[box.id] ? { cellItems: cellInteriorById[box.id] } : {})}
+                  tBody={getMaterial(form.bodyMaterialId).thickness / 10}
                   onClick={() => openEditor(box)}
                 />
                 );

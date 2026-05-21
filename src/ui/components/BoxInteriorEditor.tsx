@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
+import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import {
   addShelfRedistributed,
   redistributeShelves,
@@ -32,6 +33,10 @@ interface Props {
   cellItems: InteriorItem[][];
   onCellItemsChange: (cellIndex: number, items: InteriorItem[]) => void;
   tBody: number;
+  /** Cabinet-wide door/front gap in mm — needed locally so the editor can
+   *  run `syncFixedShelf` on its optimistic copy and reflect the auto fixed
+   *  shelf immediately, before the parent's state update round-trips back. */
+  doorGapMm: number;
 }
 
 const SKETCH_W      = 180;
@@ -42,7 +47,7 @@ const CELL_SKETCH_H = 260;
 export default function BoxInteriorEditor({
   box, items, onChange, onBack, numFronts, hasPartitions,
   onAddPartition, onRemovePartition,
-  cellItems, onCellItemsChange, tBody,
+  cellItems, onCellItemsChange, tBody, doorGapMm,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -80,8 +85,13 @@ export default function BoxInteriorEditor({
   // ── single-box item helpers ───────────────────────────────────────────────
 
   function update(next: InteriorItem[]): void {
-    setLocalItems(next);
-    onChange(next);
+    // Run syncFixedShelf on the local copy so the auto fixed shelf appears in
+    // BoxBodySketch immediately, without waiting for a parent state round-trip.
+    // The parent (useCabinet.setBoxInterior) re-runs the same sync against its
+    // own snapshot — that path is idempotent (existing shelf → height update).
+    const synced = syncFixedShelf(localItems, next, doorGapMm, tBody);
+    setLocalItems(synced);
+    onChange(synced);
   }
 
   function addShelf(): void {
@@ -158,9 +168,13 @@ export default function BoxInteriorEditor({
   // ── cell item helpers ─────────────────────────────────────────────────────
 
   function updateCell(cellIndex: number, next: InteriorItem[]): void {
-    const updated = localCellItems.map((c, i) => i === cellIndex ? next : c);
+    // syncFixedShelf runs per-cell — each cell maintains its own fixed shelf,
+    // so the diff is between the cell's previous items and the new items.
+    const prev = localCellItems[cellIndex] ?? [];
+    const synced = syncFixedShelf(prev, next, doorGapMm, tBody);
+    const updated = localCellItems.map((c, i) => i === cellIndex ? synced : c);
     setLocalCellItems(updated);
-    onCellItemsChange(cellIndex, next);
+    onCellItemsChange(cellIndex, synced);
   }
 
   function setCellWarnings(ci: number, warnings: ShelfWarning[]): void {
