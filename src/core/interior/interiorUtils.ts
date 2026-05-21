@@ -193,16 +193,17 @@ export function defaultDrawerPlacement(
   const warnings: ShelfWarning[] = [];
 
   // External drawer: stack above existing externals.
-  // heightFromFloor = stack-top centred at drawerHeight/2 (so drawer bottom sits
-  // exactly at the top of the current stack — the next external slots above
-  // the previous one with a gap supplied by calcExternalStackHeight).
+  // heightFromFloor follows the project-wide convention — BOTTOM of the item.
+  // For externals, "bottom" is the top of the current stack: the new drawer's
+  // floor sits on top of all preceding externals (with `calcExternalStackHeight`
+  // already accounting for the gap above each one).
   if (mount === 'external') {
     const stackTop = calcExternalStackHeightLocal(existingItems, gapMm);
     return {
       drawer: {
         type: 'drawer',
         id: newId,
-        heightFromFloor: roundCm(stackTop + drawerH / 2),
+        heightFromFloor: roundCm(stackTop),
         drawerHeight: drawerH,
         mount: 'external',
       },

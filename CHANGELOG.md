@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### שונה — קונבנציית `heightFromFloor` למגירה חיצונית
+- היה: מרכז המגירה (`stackTop + drawerHeight / 2`).
+- כעת: תחתית המגירה (`stackTop`), בעקבות אחידות עם כל שאר הפריטים הפנימיים (`ShelfItem`, `RodItem`, `DrawerItem` פנימית) ועם תיעוד ה-type `// cm from body bottom to bottom of drawer`.
+- שינוי קוד: שורה אחת ב-`interiorUtils.ts:205` (`defaultDrawerPlacement` במצב external).
+- אין שינוי ב-renderers ו-cuts: `BoxBodySketch` / `CabinetSketch` מציירים externals דרך `cumulative` offset (לא משתמשים ב-`heightFromFloor`); `calcExternalStackHeight`, `calcFixedShelfHeight`, `getExternalDrawers` משתמשים ב-`drawerHeight` ו-sort בלבד — כולם עובדים בלי שינוי.
+
+### תוקן — מדף חדש שנוסף לאחר מגירה חיצונית + מוט תליה נחת בתוך המגירה
+- שורש: הקונבנציה הישנה ל-external (`heightFromFloor = center`) גרמה לבדיקת hanger-shelf בלוגיקת `redistributeShelves` (`drawer.heightFromFloor / 2`) למקם מדף ב-5 ס"מ (= 10/2) **בתוך המגירה** שתופסת 0..20.
+- התיקון בקונבנציה פותר את הבאג ללא שינוי לוגיקה: לאחר השינוי, מגירה חיצונית עם `heightFromFloor=0` נכנסת לתנאי `drawer.heightFromFloor > 0` כ-FALSE, ו-hanger-shelf לא מוצב במיקום שגוי. החלוקה ב-round-robin של חזיתות חופשיות פועלת כרגיל ומציבה את המדף בחלל מעל המגירה.
+- נוסף 1 בדיקת רגרסיה (`redistributeShelves — regression: rod + external drawer + new shelf`).
+
 ### תוקן — מדף קבוע מעל מגירה חיצונית
 - **לא הוצג מיד תוך כדי עריכת גוף** עד שהמשתמש יצא מהעורך. שורש הבאג: `BoxInteriorEditor` החזיק `localItems`/`localCellItems` אופטימיים שלא הריצו `syncFixedShelf` בעצמם; ה-shelf נוצר רק ב-state של הפרנט, אבל ה-local copy של העורך (שמשמש את `BoxBodySketch` הפנימי) לא הכיל אותו עד remount.
 - **בערימה של 2+ מגירות בתא של גוף עם מחיצה — לא הוצג או במיקום שגוי**. אותו root cause: כש-`localCellItems[ci]` היה ללא ה-fixed shelf, הוספת מגירה שנייה שלחה ל-`syncFixedShelf` items בלי הקיים, וההיוריסטיקה פירשה את זה כ"המשתמש מחק ידנית" → לא נוצר מחדש.

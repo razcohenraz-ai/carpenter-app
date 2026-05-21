@@ -554,6 +554,35 @@ describe('redistributeShelves — hanger logic', () => {
   });
 });
 
+// ── Regression: shelf added after rod + external drawer ─────────────────────
+// Bug (before convention fix): the external drawer was stored with
+// heightFromFloor=10 (center). The hanger-shelf branch then placed a new
+// shelf at drawer.heightFromFloor/2 = 5cm — INSIDE the drawer's 0..20 zone.
+// After the fix: external heightFromFloor=0 (bottom), the `drawerBottom > 0`
+// guard (line 449 in interiorUtils) fails, no hanger shelf is forced into a
+// non-existent below-drawer space, and the auto shelf lands in the real free
+// zone above the drawer.
+
+describe('redistributeShelves — regression: rod + external drawer + new shelf', () => {
+  it('new shelf lands above the external drawer, not inside it', () => {
+    const items: InteriorItem[] = [
+      { type: 'rod', id: 'r', heightFromFloor: 90 },
+      { type: 'drawer', id: 'd', heightFromFloor: 0, drawerHeight: 20, mount: 'external' },
+      { type: 'shelf', id: 'f', heightFromFloor: 18.2, isFixedAboveExternals: true },
+    ];
+    const { items: result } = addShelfRedistributed(items, 100);
+    const autoShelves = result.filter(
+      (i): i is { type: 'shelf'; id: string; heightFromFloor: number; isFixedAboveExternals?: boolean } =>
+        i.type === 'shelf' && (i as { isFixedAboveExternals?: boolean }).isFixedAboveExternals !== true,
+    );
+    expect(autoShelves).toHaveLength(1);
+    // The drawer occupies 0..20; fixed shelf at 18.2..20. Free zone above:
+    // [20, 100]. Auto shelf must land within this zone — well above the drawer.
+    expect(autoShelves[0]!.heightFromFloor).toBeGreaterThanOrEqual(20);
+    expect(autoShelves[0]!.heightFromFloor).toBeLessThanOrEqual(90);
+  });
+});
+
 describe('redistributeShelves — small zone warnings (post-placement)', () => {
   it('emits small_zone warning when two items are <25cm apart', () => {
     // Body 200. Two drawers leave a 10cm gap between them.
