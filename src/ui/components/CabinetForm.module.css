@@ -210,13 +210,6 @@
   color: var(--color-surface);
 }
 
-.thumbRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  justify-content: center;
-}
-
 /* ── תוצאת חישוב ── */
 .summary {
   background: var(--color-surface-raised);

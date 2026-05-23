@@ -3,11 +3,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS, getMaterial } from '../../catalog';
 import type { MaterialId } from '../../types';
-import type { Box } from '../../types/geometry';
-import { makeDoorId } from '../../core/doors/doorUtils';
 import BoxesList from './BoxesList';
-import BoxThumbnail from './BoxThumbnail';
-import DoorThumbnail from './DoorThumbnail';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
 import BoxInteriorEditor from './BoxInteriorEditor';
@@ -17,23 +13,6 @@ import ExternalDrawerEditor from './ExternalDrawerEditor';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
-
-const MAX_THUMB_W    = 120;
-const MAX_THUMB_H    = 160;
-const MIN_THUMB_PX   = 30;
-const DEFAULT_THUMB_W = 70;
-const DEFAULT_THUMB_H = 110;
-
-function computeThumbSizes(boxes: Box[]): Map<string, { w: number; h: number }> {
-  if (boxes.length === 0) return new Map();
-  const maxW  = Math.max(...boxes.map(b => b.W));
-  const maxH  = Math.max(...boxes.map(b => b.H));
-  const scale = Math.min(MAX_THUMB_W / maxW, MAX_THUMB_H / maxH);
-  return new Map(boxes.map(b => [b.id, {
-    w: Math.max(b.W * scale, MIN_THUMB_PX),
-    h: Math.max(b.H * scale, MIN_THUMB_PX),
-  }]));
-}
 
 interface FormState {
   W: string;
@@ -366,7 +345,6 @@ export default function CabinetForm(): React.JSX.Element {
   // ── main view ──────────────────────────────────────────────────────────────
 
   const bodyBoxes = result?.boxes.filter(b => b.level !== 'plinth') ?? [];
-  const thumbSizes = computeThumbSizes(bodyBoxes);
 
   return (
     <form onSubmit={handleSubmit} className={styles.form} noValidate>
@@ -584,51 +562,6 @@ export default function CabinetForm(): React.JSX.Element {
               onDoorClick={handleDoorClick}
               onBoxClick={handleBoxClick}
             />
-          )}
-
-          {/* Thumbnails row */}
-          {bodyBoxes.length > 0 && sketchMode === 'bodies' && (
-            <div className={styles.thumbRow}>
-              {bodyBoxes.map(box => {
-                const { w, h } = thumbSizes.get(box.id) ?? { w: DEFAULT_THUMB_W, h: DEFAULT_THUMB_H };
-                return (
-                <BoxThumbnail
-                  key={box.id}
-                  box={box}
-                  items={interiorById[box.id] ?? []}
-                  svgWidth={w}
-                  svgHeight={h}
-                  hasPartition={partitionsById.get(box.id) ?? false}
-                  {...(cellInteriorById[box.id] ? { cellItems: cellInteriorById[box.id] } : {})}
-                  tBody={getMaterial(form.bodyMaterialId).thickness / 10}
-                  onClick={() => handleBoxClick(box.id)}
-                />
-                );
-              })}
-            </div>
-          )}
-
-          {bodyBoxes.length > 0 && sketchMode === 'fronts' && result && (
-            <div className={styles.thumbRow}>
-              {bodyBoxes.flatMap(box => {
-                const nf = numFrontsPerBox.get(box.id) ?? 1;
-                return Array.from({ length: nf }, (_, fi) => {
-                  const doorId = makeDoorId(box.id, fi);
-                  const door = doorsById[doorId];
-                  if (!door) return null;
-                  return (
-                    <DoorThumbnail
-                      key={doorId}
-                      door={door}
-                      displayNumber={displayNumbers.get(doorId) ?? ''}
-                      globalMaterialId={form.frontMaterialId}
-                      plinthHeight={parseFloat(form.plinth) || 0}
-                      onClick={() => handleDoorClick(doorId)}
-                    />
-                  );
-                });
-              })}
-            </div>
           )}
         </div>
       </div>

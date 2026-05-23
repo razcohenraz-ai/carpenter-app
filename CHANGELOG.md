@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### הוסר — מיניאטורות של גופים וחזיתות
+- ה-thumbnail rows הוסרו מ-`CabinetForm`: שורת `BoxThumbnail` במצב bodies, ושורת `DoorThumbnail` במצב fronts.
+- הניווט מעתה דרך לחיצה ישירה בתצוגת הארון (שלב 1).
+- קבצים שנמחקו: `BoxThumbnail.tsx`, `BoxThumbnail.module.css`, `DoorThumbnail.tsx`, `DoorThumbnail.module.css` (לא היו בשימוש בשום מקום אחר).
+- ניקוי ב-`CabinetForm`: imports, `MAX_THUMB_W`/`H`/`MIN_THUMB_PX`/`DEFAULT_THUMB_W`/`H`, `computeThumbSizes`, וייבוא `Box`/`makeDoorId` שלא היו נדרשים יותר.
+- CSS class `.thumbRow` הוסר מ-`CabinetForm.module.css`.
+- Bundle: 74→70 modules; CSS 30.25→28.83 KB; JS 292.52→289.47 KB.
+
 ### שונה — לחיצה ישירה בתצוגת הארון פותחת את העורך המתאים
 - לחיצה על אזור גוף ב-`CabinetSketch` או ב-`CabinetFrontsSketch` → `BoxInteriorEditor`.
 - לחיצה על דלת ב-`CabinetFrontsSketch` → `DoorEditor`.
