@@ -39,27 +39,46 @@
   stroke-dasharray: 5 3;
 }
 
+/* Transparent click target for a body — sits at low z so the box rect
+   captures clicks on empty interior area. Decorative elements (shelves,
+   rods, internal drawers) drawn on top are set pointer-events:none so
+   their visible area still routes to the box click. External drawer rects
+   keep their own onClick (and stop propagation). */
+.boxClickable {
+  fill: transparent;
+  cursor: pointer;
+  transition: fill 0.12s;
+}
+.boxClickable:hover {
+  fill: var(--color-primary);
+  fill-opacity: 0.05;
+}
+
 .partitionLine {
   stroke: var(--color-primary);
   stroke-width: 1;
   opacity: 0.6;
+  pointer-events: none;
 }
 
 .shelfLine {
   stroke: var(--color-height);
   stroke-width: 1.5;
+  pointer-events: none;
 }
 
 .rodLine {
   stroke: var(--color-depth);
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
+  pointer-events: none;
 }
 
 .drawerRect {
   fill: var(--color-surface-raised);
   stroke: var(--color-border-strong);
   stroke-width: 1;
+  pointer-events: none;
 }
 
 .externalDrawerRect {

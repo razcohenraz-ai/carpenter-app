@@ -29,11 +29,15 @@ interface Props {
   frontLayoutByRow: Map<BoxLevel, RowFrontLayout>;
   numFrontsPerBox: Map<string, number>;
   onDrawerFrontClick?: (drawerId: string) => void;
+  /** Click handler for a door panel — opens the door editor. */
+  onDoorClick?: (doorId: string) => void;
+  /** Click handler for a body area (gap between doors, outline edges). */
+  onBoxClick?: (boxId: string) => void;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
-  drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick,
+  drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -70,6 +74,22 @@ export default function CabinetFrontsSketch({
           width={geo.cabinet.w} height={geo.cabinet.h}
           className={sketchStyles.cabinetRect}
         />
+
+        {/* Per-body click targets — clicks on door/drawer panels stop
+            propagation; this rect catches clicks on the surrounding gap
+            area only. */}
+        {onBoxClick && geo.boxes.filter(b => b.level !== 'plinth').map(box => {
+          const rect = geo.boxSvgRects[box.id];
+          if (!rect) return null;
+          return (
+            <rect
+              key={`box-click-${box.id}`}
+              x={rect.x} y={rect.y} width={rect.w} height={rect.h}
+              className={sketchStyles.boxClickable}
+              onClick={() => onBoxClick(box.id)}
+            />
+          );
+        })}
 
         {/* Door panels — grouped by box, multiple horizontal fronts per box */}
         {(() => {
@@ -149,9 +169,20 @@ export default function CabinetFrontsSketch({
               // end and must NOT be duplicated here.
               const myCellFronts = cellFrontsByBoxFi.get(`${boxId}:${fi}`) ?? [];
 
+              const doorInteractive = onDoorClick !== undefined;
+              const doorGroupProps = doorInteractive
+                ? {
+                    onClick: (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onDoorClick!(door.id);
+                    },
+                    style: { cursor: 'pointer' as const },
+                  }
+                : {};
+
               if (!door.hasDoor) {
                 return (
-                  <g key={door.id}>
+                  <g key={door.id} {...doorGroupProps}>
                     <rect x={panelX} y={panelY} width={panelW} height={panelH}
                       className={styles.noDoorRect} />
                     <text x={panelX + panelW / 2} y={panelY + panelH / 2}
@@ -168,7 +199,7 @@ export default function CabinetFrontsSketch({
               const skirtExt     = (getDoorVisualHeight(door, plinthH) - door.height) * geo.scale;
 
               return (
-                <g key={door.id}>
+                <g key={door.id} {...doorGroupProps}>
                   <rect x={panelX} y={panelY} width={panelW} height={panelH + skirtExt}
                     className={styles.doorRect} />
                   {skirtExt > 0 && (
@@ -220,7 +251,15 @@ export default function CabinetFrontsSketch({
                     const fW      = front.width * geo.scale;
                     const fX      = panelX;
                     const interactive = onDrawerFrontClick !== undefined;
-                    const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
+                    // The cell drawer front sits inside the door's <g>, so
+                    // its click must stop propagation to avoid also firing
+                    // the door's onClick.
+                    const onClick = interactive
+                      ? (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onDrawerFrontClick!(front.drawerId);
+                        }
+                      : undefined;
                     return (
                       <g
                         key={`f-${front.id}`}
@@ -270,7 +309,14 @@ export default function CabinetFrontsSketch({
               const fW      = bodySpanGeo.width * geo.scale;
               const fX      = innerLeftSvg + bodySpanGeo.x * geo.scale;
               const interactive = onDrawerFrontClick !== undefined;
-              const onClick = interactive ? () => onDrawerFrontClick!(front.drawerId) : undefined;
+              // stopPropagation: prevent click from also triggering the
+              // sibling box-click rect via SVG event bubbling.
+              const onClick = interactive
+                ? (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onDrawerFrontClick!(front.drawerId);
+                  }
+                : undefined;
               return (
                 <g
                   key={`body-f-${front.id}`}

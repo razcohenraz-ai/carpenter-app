@@ -6,11 +6,11 @@ import type { MaterialId } from '../../types';
 import type { Box } from '../../types/geometry';
 import { makeDoorId } from '../../core/doors/doorUtils';
 import BoxesList from './BoxesList';
+import BoxThumbnail from './BoxThumbnail';
+import DoorThumbnail from './DoorThumbnail';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
-import BoxThumbnail from './BoxThumbnail';
 import BoxInteriorEditor from './BoxInteriorEditor';
-import DoorThumbnail from './DoorThumbnail';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
@@ -87,21 +87,20 @@ export default function CabinetForm(): React.JSX.Element {
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
   } = useCabinet();
 
-  const [view, setView]               = useState<'main' | 'editor' | 'doorEditor'>('main');
-  const [editingBox, setEditingBox]   = useState<Box | null>(null);
-  const [editingDoorId, setEditingDoorId] = useState<string | null>(null);
-  const [editingDrawerId, setEditingDrawerId] = useState<string | null>(null);
-  const [sketchMode, setSketchMode]   = useState<'bodies' | 'fronts'>('bodies');
+  // Unified editor state: one editor open at a time. The body/door editors
+  // replace the main view; the drawer editor renders as an overlay above it.
+  type Editing =
+    | { type: 'none' }
+    | { type: 'box'; boxId: string }
+    | { type: 'door'; doorId: string }
+    | { type: 'drawer'; drawerId: string };
+  const [editing, setEditing] = useState<Editing>({ type: 'none' });
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts'>('bodies');
 
-  function openEditor(box: Box): void {
-    setEditingBox(box);
-    setView('editor');
-  }
-
-  function openDoorEditor(boxId: string): void {
-    setEditingDoorId(boxId);
-    setView('doorEditor');
-  }
+  function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
+  function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
+  function handleDrawerFrontClick(drawerId: string): void { setEditing({ type: 'drawer', drawerId }); }
+  function closeEditor(): void { setEditing({ type: 'none' }); }
 
   // Lookup of all DrawerItems by id (across body interiors and partitioned
   // cells), so the modal can read drawerHeight/frontThicknessOverride from
@@ -313,46 +312,51 @@ export default function CabinetForm(): React.JSX.Element {
   }
 
   // ── editor views ───────────────────────────────────────────────────────────
+  // The body and door editors fully replace the main view; the drawer editor
+  // renders as a modal overlay (rendered alongside main view, see below).
 
-  if (view === 'editor' && editingBox) {
-    return (
-      <div className={styles.form}>
-        <BoxInteriorEditor
-          box={editingBox}
-          items={interiorById[editingBox.id] ?? []}
-          onChange={items => setBoxInterior(editingBox.id, items)}
-          onBack={() => setView('main')}
-          numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
-          hasPartitions={partitionsById.get(editingBox.id) ?? false}
-          onAddPartition={() => addPartition(editingBox.id)}
-          onRemovePartition={() => removePartition(editingBox.id)}
-          cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
-          onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
-          tBody={getMaterial(form.bodyMaterialId).thickness / 10}
-          doorGapMm={parseFloat(form.doorGap) || 2}
-        />
-      </div>
-    );
+  if (editing.type === 'box') {
+    const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
+    if (editingBox) {
+      return (
+        <div className={styles.form}>
+          <BoxInteriorEditor
+            box={editingBox}
+            items={interiorById[editingBox.id] ?? []}
+            onChange={items => setBoxInterior(editingBox.id, items)}
+            onBack={closeEditor}
+            numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
+            hasPartitions={partitionsById.get(editingBox.id) ?? false}
+            onAddPartition={() => addPartition(editingBox.id)}
+            onRemovePartition={() => removePartition(editingBox.id)}
+            cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
+            onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
+            tBody={getMaterial(form.bodyMaterialId).thickness / 10}
+            doorGapMm={parseFloat(form.doorGap) || 2}
+          />
+        </div>
+      );
+    }
   }
 
-  if (view === 'doorEditor' && editingDoorId) {
-    const door = doorsById[editingDoorId];
+  if (editing.type === 'door') {
+    const door = doorsById[editing.doorId];
     if (door) {
       return (
         <div className={styles.form}>
           <DoorEditor
             door={door}
             interiorItems={interiorById[door.boxId] ?? []}
-            displayNumber={displayNumbers.get(editingDoorId) ?? ''}
+            displayNumber={displayNumbers.get(editing.doorId) ?? ''}
             globalMaterialId={form.frontMaterialId}
             plinthHeight={parseFloat(form.plinth) || 0}
-            onHingeSide={side => setDoorHingeSide(editingDoorId, side)}
-            onHingeCount={count => setDoorHingeCount(editingDoorId, count)}
-            onHingeManual={(hingeId, pos) => setHingeManual(editingDoorId, hingeId, pos)}
-            onResetAuto={hingeId => resetHingeToAuto(editingDoorId, hingeId)}
-            onHasDoor={v => setDoorHasDoor(editingDoorId, v)}
-            onThickness={matId => setDoorThickness(editingDoorId, matId)}
-            onBack={() => setView('main')}
+            onHingeSide={side => setDoorHingeSide(editing.doorId, side)}
+            onHingeCount={count => setDoorHingeCount(editing.doorId, count)}
+            onHingeManual={(hingeId, pos) => setHingeManual(editing.doorId, hingeId, pos)}
+            onResetAuto={hingeId => resetHingeToAuto(editing.doorId, hingeId)}
+            onHasDoor={v => setDoorHasDoor(editing.doorId, v)}
+            onThickness={matId => setDoorThickness(editing.doorId, matId)}
+            onBack={closeEditor}
           />
         </div>
       );
@@ -559,6 +563,7 @@ export default function CabinetForm(): React.JSX.Element {
               {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
               frontLayoutByRow={frontLayoutByRow}
               numFrontsPerBox={numFrontsPerBox}
+              {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
             />
           ) : (
             <CabinetFrontsSketch
@@ -575,7 +580,9 @@ export default function CabinetForm(): React.JSX.Element {
               partitionsById={partitionsById}
               frontLayoutByRow={frontLayoutByRow}
               numFrontsPerBox={numFrontsPerBox}
-              onDrawerFrontClick={setEditingDrawerId}
+              onDrawerFrontClick={handleDrawerFrontClick}
+              onDoorClick={handleDoorClick}
+              onBoxClick={handleBoxClick}
             />
           )}
 
@@ -594,7 +601,7 @@ export default function CabinetForm(): React.JSX.Element {
                   hasPartition={partitionsById.get(box.id) ?? false}
                   {...(cellInteriorById[box.id] ? { cellItems: cellInteriorById[box.id] } : {})}
                   tBody={getMaterial(form.bodyMaterialId).thickness / 10}
-                  onClick={() => openEditor(box)}
+                  onClick={() => handleBoxClick(box.id)}
                 />
                 );
               })}
@@ -616,7 +623,7 @@ export default function CabinetForm(): React.JSX.Element {
                       displayNumber={displayNumbers.get(doorId) ?? ''}
                       globalMaterialId={form.frontMaterialId}
                       plinthHeight={parseFloat(form.plinth) || 0}
-                      onClick={() => openDoorEditor(doorId)}
+                      onClick={() => handleDoorClick(doorId)}
                     />
                   );
                 });
@@ -650,18 +657,18 @@ export default function CabinetForm(): React.JSX.Element {
                 {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
                 {...(parsedW > 0 ? { cabinetW: parsedW, cabinetH: parseFloat(form.H) || 0, cabinetD: parseFloat(form.D) || 0 } : {})}
                 frontMaterialThickness={frontThicknessCm}
-                onDrawerFrontClick={setEditingDrawerId}
+                onDrawerFrontClick={handleDrawerFrontClick}
               />
           }
         </>
       )}
-      {editingDrawerId && drawerById[editingDrawerId] && (
+      {editing.type === 'drawer' && drawerById[editing.drawerId] && (
         <ExternalDrawerEditor
-          drawer={drawerById[editingDrawerId]!}
-          onSetHeight={h => setDrawerHeight(editingDrawerId, h)}
-          onSetThicknessOverride={mid => setDrawerFrontThickness(editingDrawerId, mid)}
-          onDelete={() => { deleteDrawer(editingDrawerId); setEditingDrawerId(null); }}
-          onClose={() => setEditingDrawerId(null)}
+          drawer={drawerById[editing.drawerId]!}
+          onSetHeight={h => setDrawerHeight(editing.drawerId, h)}
+          onSetThicknessOverride={mid => setDrawerFrontThickness(editing.drawerId, mid)}
+          onDelete={() => { deleteDrawer(editing.drawerId); closeEditor(); }}
+          onClose={closeEditor}
         />
       )}
     </form>

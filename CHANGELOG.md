@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### שונה — לחיצה ישירה בתצוגת הארון פותחת את העורך המתאים
+- לחיצה על אזור גוף ב-`CabinetSketch` או ב-`CabinetFrontsSketch` → `BoxInteriorEditor`.
+- לחיצה על דלת ב-`CabinetFrontsSketch` → `DoorEditor`.
+- לחיצה על חזית מגירה חיצונית (בשתי התצוגות) → `ExternalDrawerEditor`.
+- `cursor: pointer` + hover ייעודי על אזור גוף.
+- ה-state ב-`CabinetForm` אוחד ל-`editing: { type, id }` (במקום `view` + 3 `editing*` נפרדים). רק עורך אחד פתוח בכל רגע. סגירה דרך `closeEditor`.
+- ה-thumbnails הקיימים (`BoxThumbnail`, `DoorThumbnail`) ממשיכים לעבוד — מעבר ל-handlers החדשים (`handleBoxClick`, `handleDoorClick`). הסרתם תבוצע בשלב נפרד.
+- `stopPropagation` בכל onClick של חזית (דלת, מגירה) — מונע double-trigger כש-front מצויר כילד של group אחר.
+
 ### שונה — קונבנציית `heightFromFloor` למגירה חיצונית
 - היה: מרכז המגירה (`stackTop + drawerHeight / 2`).
 - כעת: תחתית המגירה (`stackTop`), בעקבות אחידות עם כל שאר הפריטים הפנימיים (`ShelfItem`, `RodItem`, `DrawerItem` פנימית) ועם תיעוד ה-type `// cm from body bottom to bottom of drawer`.

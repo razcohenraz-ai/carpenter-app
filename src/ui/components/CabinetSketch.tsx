@@ -28,9 +28,14 @@ interface Props {
   hasEnvelopeTop?: boolean;
   frontLayoutByRow?: Map<BoxLevel, RowFrontLayout>;
   numFrontsPerBox?: Map<string, number>;
+  /** Click handler for a body area (no front above it in this view).
+   *  Opens the body's interior editor. */
+  onBoxClick?: (boxId: string) => void;
+  /** Click handler for an external drawer rect. Opens the drawer editor. */
+  onDrawerFrontClick?: (drawerId: string) => void;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -110,6 +115,23 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             className={styles.envelopePanel}
           />
         )}
+
+        {/* Per-body click targets — transparent rects at low z; visible
+            elements (shelves, drawers) drawn on top either capture their
+            own clicks or are pointer-events:none so the box rect catches
+            empty-area clicks. */}
+        {onBoxClick && geo.boxes.filter(b => b.level !== 'plinth').map(box => {
+          const rect = geo.boxSvgRects[box.id];
+          if (!rect) return null;
+          return (
+            <rect
+              key={`box-click-${box.id}`}
+              x={rect.x} y={rect.y} width={rect.w} height={rect.h}
+              className={styles.boxClickable}
+              onClick={() => onBoxClick(box.id)}
+            />
+          );
+        })}
 
         {/* Box split lines */}
         {geo.splitLines.map((line, i) => (
@@ -206,12 +228,20 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             cumulative += drawer.drawerHeight + gapCm;
             const fX = drawerSpan ? innerLeftSvg + drawerSpan.x * geo.scale : rect.x;
             const fW = drawerSpan ? drawerSpan.width * geo.scale : rect.w;
+            const interactive = onDrawerFrontClick !== undefined;
             return (
               <rect
                 key={`ext-${drawer.id}`}
                 x={fX} y={yTop}
                 width={fW} height={yBottom - yTop}
                 className={styles.externalDrawerRect}
+                {...(interactive ? {
+                  onClick: (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onDrawerFrontClick!(drawer.id);
+                  },
+                  style: { cursor: 'pointer' as const },
+                } : {})}
               />
             );
           });
@@ -291,12 +321,20 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
                   cumulative += drawer.drawerHeight + gapCm;
                   const fX = frontGeo ? innerLeftSvg + frontGeo.x * geo.scale : xLeft;
                   const fW = frontGeo ? frontGeo.width * geo.scale : (xRight - xLeft);
+                  const interactive = onDrawerFrontClick !== undefined;
                   return (
                     <rect
                       key={`ext-${drawer.id}`}
                       x={fX} y={yTop}
                       width={fW} height={yBottom - yTop}
                       className={styles.externalDrawerRect}
+                      {...(interactive ? {
+                        onClick: (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onDrawerFrontClick!(drawer.id);
+                        },
+                        style: { cursor: 'pointer' as const },
+                      } : {})}
                     />
                   );
                 });
