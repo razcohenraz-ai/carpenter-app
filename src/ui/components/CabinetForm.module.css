@@ -16,10 +16,12 @@
   margin: 0;
 }
 
-/* ── פריסת 2 עמודות: טופס ~33% | סקיצה ~67% ── */
+/* ── פריסת 2 עמודות: טופס בעל רוחב טבעי | סקיצה תופסת את כל מה שנשאר ──
+   הטופס מקבל min 260px, max 320px (מספיק ל-3 שורות שדות + תוויות). הסקיצה
+   מקבלת 1fr → כל הרוחב הזמין במרכז, לא רק 2/3. */
 .twoCol {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: var(--spacing-lg);
   align-items: start;
 }
@@ -165,12 +167,13 @@
 .borderHeight:focus { outline: none; border-color: var(--color-height); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-height) 15%, transparent); }
 .borderDepth:focus  { outline: none; border-color: var(--color-depth);  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-depth)  15%, transparent); }
 
-/* ── עמודת סקיצה + מיניאטורות ── */
+/* ── עמודת סקיצה ── */
 .sketchStack {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
 }
 
 /* ── Toggle: גופים / חזיתות ── */

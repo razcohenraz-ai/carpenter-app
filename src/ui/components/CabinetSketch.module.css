@@ -4,6 +4,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   height: 100%;
+  width: 100%;
 }
 
 .title {
@@ -14,9 +15,14 @@
   text-align: center;
 }
 
+/* SVG fills the available width but never exceeds the viewport height.
+   aspect-ratio matches the viewBox (600×500) so the box shrinks
+   proportionally when capped by max-height instead of stretching. */
 .svg {
   width: 100%;
-  height: auto;
+  max-height: 75vh;
+  aspect-ratio: 600 / 500;
+  display: block;
 }
 
 /* ── SVG element styles ── */

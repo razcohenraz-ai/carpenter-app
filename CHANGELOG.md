@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### שונה — תצוגת הארון מתפרסה על כל רוחב האזור המרכזי
+- ה-grid ב-`CabinetForm.module.css` שונה מ-`minmax(260px, 1fr) | minmax(0, 2fr)` (טופס ~33% / סקיצה ~67%) ל-`minmax(260px, 320px) | minmax(0, 1fr)` — הטופס מקבל רוחב טבעי 260-320px, והסקיצה תופסת את **כל** המרחב הנותר.
+- `.sketchStack` מקבל `align-items: stretch + width: 100%` כדי שה-SVG ימלא את הרוחב. `modeToggle` ממשיך להיות ממורכז דרך ה-`align-self: center` שלו.
+- ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
+- שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
+
 ### הוסר — מיניאטורות של גופים וחזיתות
 - ה-thumbnail rows הוסרו מ-`CabinetForm`: שורת `BoxThumbnail` במצב bodies, ושורת `DoorThumbnail` במצב fronts.
 - הניווט מעתה דרך לחיצה ישירה בתצוגת הארון (שלב 1).
