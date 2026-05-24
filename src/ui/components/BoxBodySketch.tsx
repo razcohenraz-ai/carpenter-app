@@ -108,6 +108,14 @@ export default function BoxBodySketch({
   const bX = PAD + (drawW - bW) / 2;
   const bY = padTop + (drawH - bH) / 2;
 
+  // Inner-width band: interior items (shelves, drawers, rods) live BETWEEN
+  // the side boards, not edge-to-edge. Uses the body-material thickness so
+  // it matches the boards drawn by CabinetCutSketch behind them. Defaults
+  // to 18mm when no material is provided.
+  const tBodyCm = (bodyMaterialId ? getMaterial(bodyMaterialId).thickness : 18) / 10;
+  const innerX  = bX + tBodyCm * scale;
+  const innerW  = bW - 2 * tBodyCm * scale;
+
   const toY = (h: number) => bY + bH - h * scale;
 
   // ── Board-model background layer ─────────────────────────────────────────
@@ -119,6 +127,11 @@ export default function BoxBodySketch({
   // derived from `hasOuterShell` (false in cell views).
   const bodyMat  = bodyMaterialId  ? getMaterial(bodyMaterialId)  : null;
   const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : bodyMat;
+  // The body editor shows the carcass in isolation — envelope panels belong
+  // to the cabinet view, not the body editor. Force all envelope flags off
+  // here regardless of the cabinet-level props (which are kept on Props for
+  // API symmetry with CabinetSketch).
+  void hasOuterShell; void hasEnvelopeTop;
   const boards = (bodyMat && bodyW)
     ? buildBoardModel({
         box: {
@@ -131,9 +144,9 @@ export default function BoxBodySketch({
         } as Box,
         bodyMaterial: bodyMat,
         frontMaterial: frontMat ?? bodyMat,
-        hasEnvelopeLeft: hasOuterShell,
-        hasEnvelopeRight: hasOuterShell,
-        hasEnvelopeTop: hasOuterShell && hasEnvelopeTop,
+        hasEnvelopeLeft: false,
+        hasEnvelopeRight: false,
+        hasEnvelopeTop: false,
         items,
         hasPartition: false,
       })
@@ -251,13 +264,13 @@ export default function BoxBodySketch({
           const lineClass = isFixedShelf ? styles.fixedShelfLine : styles.shelfLine;
           return (
             <g key={item.id} {...dragProps}>
-              <line x1={bX} y1={y} x2={bX + bW} y2={y}
+              <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
                 className={lineClass}
                 opacity={isDragging ? 0.4 : 1}
               />
               {/* Wider invisible hit area (suppressed for fixed shelves) */}
               {!isFixedShelf && (
-                <line x1={bX} y1={y} x2={bX + bW} y2={y}
+                <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
                   stroke="transparent" strokeWidth={10}
                 />
               )}
@@ -274,11 +287,11 @@ export default function BoxBodySketch({
           const y = toY(h);
           return (
             <g key={item.id} {...dragProps}>
-              <line x1={bX} y1={y} x2={bX + bW} y2={y}
+              <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
                 className={styles.rodLine}
                 opacity={isDragging ? 0.4 : 1}
               />
-              <line x1={bX} y1={y} x2={bX + bW} y2={y}
+              <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
                 stroke="transparent" strokeWidth={10}
               />
               {showLabels && !isDragging && (
@@ -296,9 +309,9 @@ export default function BoxBodySketch({
           return (
             <g key={item.id} {...dragProps}>
               <rect
-                x={bX + 2}
+                x={innerX}
                 y={yTop}
-                width={bW - 4}
+                width={innerW}
                 height={yBottom - yTop}
                 className={styles.drawerRect}
                 opacity={isDragging ? 0.4 : 1}
@@ -332,19 +345,19 @@ export default function BoxBodySketch({
               {...(onClick ? { onClick, style: { cursor: 'pointer' } } : {})}
             >
               <rect
-                x={bX} y={yTop}
-                width={bW} height={rectH}
+                x={innerX} y={yTop}
+                width={innerW} height={rectH}
                 className={styles.externalDrawerRect}
               />
               {/* Subtle double-line near the top of the front to hint a panel face */}
               <line
-                x1={bX + 2} y1={yTop + 2}
-                x2={bX + bW - 2} y2={yTop + 2}
+                x1={innerX + 2} y1={yTop + 2}
+                x2={innerX + innerW - 2} y2={yTop + 2}
                 className={styles.externalDrawerFaceHint}
               />
               {showLabels && rectH >= 12 && (
                 <text
-                  x={bX + bW / 2} y={(yTop + yBottom) / 2 + 3}
+                  x={innerX + innerW / 2} y={(yTop + yBottom) / 2 + 3}
                   textAnchor="middle" className={styles.externalDrawerLabel}
                 >
                   {t.interior.drawer} {Math.round(drawer.drawerHeight)}

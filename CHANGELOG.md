@@ -13,6 +13,10 @@
 - ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
 - שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
 
+### תוקן — BoxBodySketch
+- **פריטים פנימיים מוגבלים לרוחב הפנימי**: מדפים, מגירות פנימיות, מוטות תליה ומגירות חיצוניות מצוירים בין לוחות הצד (`xFrom = bX + tBody·scale, width = bW − 2·tBody·scale`) במקום ברוחב המלא של הגוף. עד היום הם חרגו מעבר ללוחות הצד וגלשו על הקורפוס.
+- **מעטפת לא מוצגת בעורך גוף**: `buildBoardModel` נקרא תמיד עם `hasEnvelopeLeft/Right/Top = false`, ללא תלות ב-props. המעטפת שייכת לתצוגת הארון, לא לעורך הגוף הבודד. ה-props הקיימים (`hasOuterShell`, `hasEnvelopeTop`) נשארים על Props ל-API symmetry עם `CabinetSketch` אבל לא משפיעים על הציור.
+
 ### שונה — BoxBodySketch מציג לוחות קורפוס כרקע
 - `BoxBodySketch` קורא ל-`buildBoardModel` על Box סינתטי (מ-`bodyW`/`bodyH`/`bodyD`) ומרנדר את הלוחות כשכבת רקע דרך `CabinetCutSketch`. הפנים הקיים (מדפים, מגירות, מוטות, מדף קבוע) מצויר מעל הלוחות כפי שהיה.
 - 4 props חדשים: `bodyMaterialId`, `frontMaterialId`, `hasOuterShell?`, `hasEnvelopeTop?` (אופציונליים — אם `bodyMaterialId` חסר, אין רנדור לוחות, תאימות לאחור).
