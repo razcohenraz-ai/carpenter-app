@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import type { InteriorItem, DrawerItem, ShelfItem } from '../../types/interior';
+import type { InteriorItem, DrawerItem } from '../../types/interior';
 import type { Box } from '../../types/geometry';
 import type { MaterialId } from '../../types/materials';
 import { useTranslation } from '../hooks/useTranslation';
@@ -251,35 +251,28 @@ export default function BoxBodySketch({
       {renderableItems.map(item => {
         const h = resolvedH(item);
         const isDragging = drag?.itemId === item.id;
-        // Fixed shelves (auto-generated above external drawers) are not
-        // draggable — their position is derived from drawer geometry.
-        const isFixedShelf = item.type === 'shelf' && (item as ShelfItem).isFixedAboveExternals === true;
-        const dragProps = dragging && !isFixedShelf ? {
+        const dragProps = dragging ? {
           onPointerDown: (e: React.PointerEvent<SVGElement>) => onPointerDown(e, item),
           style: { cursor: 'ns-resize' } as React.CSSProperties,
         } : {};
 
+        // Shelves (and fixed shelves) are displayed by CabinetCutSketch as
+        // physical boards. To keep dragging functional we add only an
+        // invisible hit-area line at the shelf's y-position. The board
+        // itself (drawn behind, with pointer-events:none) provides the
+        // visual; this line captures the pointer events.
+        // Fixed shelves above external drawers are derived geometry — they
+        // are not draggable.
         if (item.type === 'shelf') {
+          if (item.isFixedAboveExternals === true) return null;
           const y = toY(h);
-          const lineClass = isFixedShelf ? styles.fixedShelfLine : styles.shelfLine;
           return (
-            <g key={item.id} {...dragProps}>
-              <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
-                className={lineClass}
-                opacity={isDragging ? 0.4 : 1}
-              />
-              {/* Wider invisible hit area (suppressed for fixed shelves) */}
-              {!isFixedShelf && (
-                <line x1={innerX} y1={y} x2={innerX + innerW} y2={y}
-                  stroke="transparent" strokeWidth={10}
-                />
-              )}
-              {showLabels && !isDragging && (
-                <text x={bX + bW + 3} y={y + 4} className={styles.label}>
-                  {isFixedShelf ? t.interior.fixedShelfLabel : Math.round(item.heightFromFloor)}
-                </text>
-              )}
-            </g>
+            <line
+              key={item.id}
+              x1={innerX} y1={y} x2={innerX + innerW} y2={y}
+              stroke="transparent" strokeWidth={10}
+              {...dragProps}
+            />
           );
         }
 

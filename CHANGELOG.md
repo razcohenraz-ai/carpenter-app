@@ -13,6 +13,12 @@
 - ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
 - שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
 
+### תוקן — BoxBodySketch — תצוגה כפולה של מדפים
+- מדפים הוצגו פעמיים בעורך הגוף: פעם כלוח (BoardModel דרך CabinetCutSketch) ופעם כקו ירוק ישן (legacy `shelfLine`). דומה ל-fixed shelf (`fixedShelfLine` dashed). הוסרה תצוגת ה-legacy.
+- שמירה על drag של מדפים: `<line>` שקוף ברוחב 10 כ-hit-area נשאר על מיקום המדף. הלוח (board) ב-`CabinetCutSketch` עם `pointer-events:none` בורר את התצוגה; ה-hit-area הקטן ממנו בלבד תופס את ה-pointer events.
+- מדף קבוע (`isFixedAboveExternals`) — אינו נגרר כפי שהיה.
+- מגירות פנימיות / מוטות / מגירות חיצוניות — נשארות עם רנדור legacy (עדיין אינן boards).
+
 ### תוקן — BoxBodySketch
 - **פריטים פנימיים מוגבלים לרוחב הפנימי**: מדפים, מגירות פנימיות, מוטות תליה ומגירות חיצוניות מצוירים בין לוחות הצד (`xFrom = bX + tBody·scale, width = bW − 2·tBody·scale`) במקום ברוחב המלא של הגוף. עד היום הם חרגו מעבר ללוחות הצד וגלשו על הקורפוס.
 - **מעטפת לא מוצגת בעורך גוף**: `buildBoardModel` נקרא תמיד עם `hasEnvelopeLeft/Right/Top = false`, ללא תלות ב-props. המעטפת שייכת לתצוגת הארון, לא לעורך הגוף הבודד. ה-props הקיימים (`hasOuterShell`, `hasEnvelopeTop`) נשארים על Props ל-API symmetry עם `CabinetSketch` אבל לא משפיעים על הציור.
