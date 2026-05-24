@@ -312,6 +312,10 @@ export default function CabinetForm(): React.JSX.Element {
             onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
             tBody={getMaterial(form.bodyMaterialId).thickness / 10}
             doorGapMm={parseFloat(form.doorGap) || 2}
+            bodyMaterialId={form.bodyMaterialId}
+            frontMaterialId={form.frontMaterialId}
+            hasOuterShell={form.hasShell}
+            hasEnvelopeTop={form.hasEnvelopeTop}
           />
         </div>
       );

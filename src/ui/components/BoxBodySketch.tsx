@@ -1,6 +1,11 @@
 import React, { useRef, useState } from 'react';
 import type { InteriorItem, DrawerItem, ShelfItem } from '../../types/interior';
+import type { Box } from '../../types/geometry';
+import type { MaterialId } from '../../types/materials';
 import { useTranslation } from '../hooks/useTranslation';
+import { getMaterial } from '../../catalog';
+import { buildBoardModel } from '../../core/boards/boardModel';
+import CabinetCutSketch from './CabinetCutSketch';
 import styles from './BoxBodySketch.module.css';
 
 interface Props {
@@ -18,6 +23,16 @@ interface Props {
   gapMm?: number;
   /** Click handler for an external drawer; opens the editor modal in the parent. */
   onExternalDrawerClick?: (drawerId: string) => void;
+  // ── Board-model props ─────────────────────────────────────────────────────
+  // When `bodyMaterialId` is provided, the sketch renders the physical carcass
+  // boards (sides, top, bottom, shelves, envelope) as a background layer
+  // under the interior items. Cell views (called per cell in a partitioned
+  // body) pass `hasOuterShell: false` — the envelope belongs to the whole
+  // body, not the individual cell.
+  bodyMaterialId?: MaterialId;
+  frontMaterialId?: MaterialId;
+  hasOuterShell?: boolean;
+  hasEnvelopeTop?: boolean;
 }
 
 interface DragState {
@@ -63,6 +78,7 @@ export default function BoxBodySketch({
   bodyH, bodyW, bodyD, items, svgWidth, svgHeight,
   showLabels = false, showDimensions = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
+  bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -93,6 +109,35 @@ export default function BoxBodySketch({
   const bY = padTop + (drawH - bH) / 2;
 
   const toY = (h: number) => bY + bH - h * scale;
+
+  // ── Board-model background layer ─────────────────────────────────────────
+  // Build the physical carcass boards (sides, top, bottom, shelves, envelope)
+  // for this body/cell when material info is provided. Rendered below the
+  // interior items so shelves/drawers/rods sit on top. The synthetic Box is
+  // a thin wrapper around the dimensions we already render — position/level
+  // are 'single' because BoxBodySketch is body-isolated; envelope flags are
+  // derived from `hasOuterShell` (false in cell views).
+  const bodyMat  = bodyMaterialId  ? getMaterial(bodyMaterialId)  : null;
+  const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : bodyMat;
+  const boards = (bodyMat && bodyW)
+    ? buildBoardModel({
+        box: {
+          id: 'preview',
+          W: bodyW,
+          H: bodyH,
+          D: bodyD ?? 60,
+          position: 'single',
+          level: 'single',
+        } as Box,
+        bodyMaterial: bodyMat,
+        frontMaterial: frontMat ?? bodyMat,
+        hasEnvelopeLeft: hasOuterShell,
+        hasEnvelopeRight: hasOuterShell,
+        hasEnvelopeTop: hasOuterShell && hasEnvelopeTop,
+        items,
+        hasPartition: false,
+      })
+    : [];
 
   function clientYToH(clientY: number): number {
     const svgRect = svgRef.current!.getBoundingClientRect();
@@ -154,6 +199,19 @@ export default function BoxBodySketch({
     >
       {/* Body outline */}
       <rect x={bX} y={bY} width={bW} height={bH} className={styles.bodyRect} />
+
+      {/* Carcass boards — drawn above the body outline but below interior
+          items (shelves, drawers, rods). Same renderer used by CabinetSketch
+          for the cabinet-wide view, keeping the visual language consistent. */}
+      {boards.length > 0 && (
+        <CabinetCutSketch
+          boards={boards}
+          offsetX={bX}
+          offsetY={bY}
+          scale={scale}
+          bodyMaterialId={bodyMat?.id ?? 'mdf18'}
+        />
+      )}
 
       {/* Guide line during drag */}
       {drag && (() => {

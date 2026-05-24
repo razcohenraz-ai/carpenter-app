@@ -37,6 +37,14 @@ interface Props {
    *  run `syncFixedShelf` on its optimistic copy and reflect the auto fixed
    *  shelf immediately, before the parent's state update round-trips back. */
   doorGapMm: number;
+  // ── Board-model props (passed through to BoxBodySketch) ──────────────────
+  // Whole-body sketch uses these to draw the carcass boards as background.
+  // Cell sketches (partitioned bodies) intentionally pass hasOuterShell=false
+  // — the envelope belongs to the whole body, not the cell.
+  bodyMaterialId: import('../../types/materials').MaterialId;
+  frontMaterialId: import('../../types/materials').MaterialId;
+  hasOuterShell: boolean;
+  hasEnvelopeTop: boolean;
 }
 
 const SKETCH_W      = 180;
@@ -48,6 +56,7 @@ export default function BoxInteriorEditor({
   box, items, onChange, onBack, numFronts, hasPartitions,
   onAddPartition, onRemovePartition,
   cellItems, onCellItemsChange, tBody, doorGapMm,
+  bodyMaterialId, frontMaterialId, hasOuterShell, hasEnvelopeTop,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -554,6 +563,10 @@ export default function BoxInteriorEditor({
                       showLabels={false}
                       onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
                       numPartitions={0}
+                      bodyMaterialId={bodyMaterialId}
+                      frontMaterialId={frontMaterialId}
+                      hasOuterShell={false}
+                      hasEnvelopeTop={false}
                     />
                   </div>
 
@@ -603,6 +616,10 @@ export default function BoxInteriorEditor({
               showDimensions
               onItemMove={onItemMove}
               numPartitions={0}
+              bodyMaterialId={bodyMaterialId}
+              frontMaterialId={frontMaterialId}
+              hasOuterShell={hasOuterShell}
+              hasEnvelopeTop={hasEnvelopeTop}
             />
           </div>
 

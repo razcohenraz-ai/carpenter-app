@@ -13,6 +13,13 @@
 - ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
 - שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
 
+### שונה — BoxBodySketch מציג לוחות קורפוס כרקע
+- `BoxBodySketch` קורא ל-`buildBoardModel` על Box סינתטי (מ-`bodyW`/`bodyH`/`bodyD`) ומרנדר את הלוחות כשכבת רקע דרך `CabinetCutSketch`. הפנים הקיים (מדפים, מגירות, מוטות, מדף קבוע) מצויר מעל הלוחות כפי שהיה.
+- 4 props חדשים: `bodyMaterialId`, `frontMaterialId`, `hasOuterShell?`, `hasEnvelopeTop?` (אופציונליים — אם `bodyMaterialId` חסר, אין רנדור לוחות, תאימות לאחור).
+- בעורך גוף בודד: לוחות הקורפוס המלא + מעטפת (אם יש מעטפת חיצונית).
+- בעורך תאים של גוף עם מחיצה: כל תא מציג את הלוחות שלו בלבד (sides + top + bottom של התא). `hasOuterShell={false}` בעורך תא — המעטפת שייכת לגוף, לא לתא.
+- `BoxInteriorEditor` מעביר 4 props חדשים ל-BoxBodySketch (`bodyMaterialId`, `frontMaterialId`, `hasOuterShell`, `hasEnvelopeTop`). `CabinetForm` מעביר את המקור.
+
 ### נוסף — BoardModel + תצוגת חתך
 - **`src/core/boards/boardModel.ts`** (חדש) — מודל פיזי של לוחות הגוף. exports: `Board`, `BoardRole` (`'side-left' | 'side-right' | 'top' | 'bottom' | 'shelf' | 'partition' | 'fixed-shelf' | 'internal-shelf' | 'envelope-left' | 'envelope-right' | 'envelope-top'`), `JointMethod` (`'rabbet' | 'butt'`), `resolveJointMethod(box)`, `buildBoardModel(args)`.
 - שתי שיטות חיבור: **rabbet** (W ≤ 2·H) — צדדים בגובה מלא, תקרה/רצפה בין הצדדים; **butt** (W > 2·H) — תקרה/רצפה ברוחב מלא, צדדים קצרים.
