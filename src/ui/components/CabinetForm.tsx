@@ -541,6 +541,8 @@ export default function CabinetForm(): React.JSX.Element {
               {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
               frontLayoutByRow={frontLayoutByRow}
               numFrontsPerBox={numFrontsPerBox}
+              bodyMaterialId={form.bodyMaterialId}
+              frontMaterialId={form.frontMaterialId}
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
             />
           ) : (

@@ -8,7 +8,11 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
+import { buildBoardModel } from '../../core/boards/boardModel';
+import { getMaterial } from '../../catalog';
+import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
+import type { MaterialId } from '../../types/materials';
 import styles from './CabinetSketch.module.css';
 import type { InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 
@@ -28,6 +32,10 @@ interface Props {
   hasEnvelopeTop?: boolean;
   frontLayoutByRow?: Map<BoxLevel, RowFrontLayout>;
   numFrontsPerBox?: Map<string, number>;
+  /** Body material id — drives per-board geometry when interiorById is set. */
+  bodyMaterialId?: MaterialId;
+  /** Front material id — used for envelope boards. */
+  frontMaterialId?: MaterialId;
   /** Click handler for a body area (no front above it in this view).
    *  Opens the body's interior editor. */
   onBoxClick?: (boxId: string) => void;
@@ -35,7 +43,7 @@ interface Props {
   onDrawerFrontClick?: (drawerId: string) => void;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -54,6 +62,38 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
     doorsPerColumn === '3' ? 3 : 'auto';
   const tEnv = hasShell && frontMaterialThickness ? frontMaterialThickness : undefined;
   const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
+
+  // ── Per-body board model (cross-section view) ────────────────────────────
+  // Boards are emitted only post-calc (interiorById defined) and only when
+  // we have material info. Pre-calc the sketch falls back to the legacy
+  // envelopePanels + shelfLine rendering below.
+  const bodyMat  = bodyMaterialId  ? getMaterial(bodyMaterialId)  : null;
+  const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : null;
+  const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
+  const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
+  if (hasBoards) {
+    for (const box of geo.boxes) {
+      if (box.level === 'plinth') continue;
+      const hasPartition = partitionsById?.get(box.id) === true;
+      const cells = cellInteriorById?.[box.id];
+      const items = interiorById![box.id] ?? [];
+      const hasEnvelopeLeft  = !!hasShell && (box.position === 'left'  || box.position === 'single');
+      const hasEnvelopeRight = !!hasShell && (box.position === 'right' || box.position === 'single');
+      const hasEnvelopeTopBox = !!hasShell && !!hasEnvelopeTop && (box.level === 'top' || box.level === 'single');
+      const boards = buildBoardModel({
+        box,
+        bodyMaterial: bodyMat!,
+        frontMaterial: frontMat!,
+        hasEnvelopeLeft,
+        hasEnvelopeRight,
+        hasEnvelopeTop: hasEnvelopeTopBox,
+        items,
+        hasPartition,
+        ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
+      });
+      boardsByBoxId.set(box.id, boards);
+    }
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -85,8 +125,9 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
           />
         )}
 
-        {/* Outer envelope side panels */}
-        {geo.envelopePanels && (
+        {/* Outer envelope side panels — drawn only PRE-calc.
+            Post-calc the per-body board model emits envelope boards. */}
+        {!hasBoards && geo.envelopePanels && (
           <>
             <rect
               x={geo.envelopePanels.left.x}
@@ -105,8 +146,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
           </>
         )}
 
-        {/* Outer envelope ceiling panel */}
-        {geo.envelopeTopPanel && (
+        {/* Outer envelope ceiling — pre-calc only (post-calc → board). */}
+        {!hasBoards && geo.envelopeTopPanel && (
           <rect
             x={geo.envelopeTopPanel.x}
             y={geo.envelopeTopPanel.y}
@@ -115,6 +156,24 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             className={styles.envelopePanel}
           />
         )}
+
+        {/* Per-body cut sketch — sides, top, bottom, shelves, partition,
+            envelope. Drawn BEFORE interior items (rods, drawers) so those
+            sit on top. */}
+        {hasBoards && [...boardsByBoxId.entries()].map(([boxId, boards]) => {
+          const rect = geo.boxSvgRects[boxId];
+          if (!rect || !bodyMat) return null;
+          return (
+            <CabinetCutSketch
+              key={`cut-${boxId}`}
+              boards={boards}
+              offsetX={rect.x}
+              offsetY={rect.y}
+              scale={geo.scale}
+              bodyMaterialId={bodyMat.id}
+            />
+          );
+        })}
 
         {/* Per-body click targets — transparent rects at low z; visible
             elements (shelves, drawers) drawn on top either capture their
@@ -172,13 +231,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
           const nonExternalNodes = items.map(item => {
             if (externalIds.has(item.id)) return null;
-            if (item.type === 'shelf') {
-              const y = toSvgY(item.heightFromFloor);
-              return (
-                <line key={item.id} x1={rect.x} y1={y} x2={rect.x + rect.w} y2={y}
-                  className={styles.shelfLine} />
-              );
-            }
+            // Shelves are emitted as boards by CabinetCutSketch — skip here.
+            if (item.type === 'shelf') return null;
             if (item.type === 'rod') {
               const y = toSvgY(item.heightFromFloor);
               return (
@@ -260,11 +314,16 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
           return (
             <g key={`${boxId}-cells`}>
-              <line
-                x1={partitionX} y1={rect.y}
-                x2={partitionX} y2={rect.y + rect.h}
-                className={styles.partitionLine}
-              />
+              {/* Partition line — drawn only pre-calc. Post-calc the
+                  partition becomes a 'partition' board emitted by
+                  CabinetCutSketch. */}
+              {!hasBoards && (
+                <line
+                  x1={partitionX} y1={rect.y}
+                  x2={partitionX} y2={rect.y + rect.h}
+                  className={styles.partitionLine}
+                />
+              )}
               {cells.flatMap((cellItems, ci) => {
                 const xLeft  = ci === 0 ? partitionX : rect.x;
                 const xRight = ci === 0 ? rect.x + rect.w : partitionX;
@@ -275,10 +334,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
 
                 const internalNodes = cellItems.map(item => {
                   if (externalIds.has(item.id)) return null;
-                  if (item.type === 'shelf') {
-                    const y = toSvgY(item.heightFromFloor);
-                    return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.shelfLine} />;
-                  }
+                  // Shelves → boards. Skip line rendering here.
+                  if (item.type === 'shelf') return null;
                   if (item.type === 'rod') {
                     const y = toSvgY(item.heightFromFloor);
                     return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.rodLine} />;

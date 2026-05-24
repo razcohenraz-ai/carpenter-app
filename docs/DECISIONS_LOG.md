@@ -4,6 +4,23 @@
 
 ---
 
+## 2026-05-24 — BoardModel + תצוגת חתך (גישה ב')
+
+**ההחלטה**: בנייה של מודל פיזי של לוחות הגוף (`core/boards/boardModel.ts`) ויצירת תצוגה ויזואלית (`CabinetCutSketch`) **לפני** חיבור לרשימת חיתוכים (`calcCuts`). תצוגת "גופים" הוחלפה בתצוגת "חתך" שמציגה כל לוח פיזי בעובי ובמיקום האמיתיים.
+
+**הנימוק**: גישה ב' (ויזואל קודם, cuts אחר כך) מאפשרת לאמת את נכונות המודל ויזואלית — כולל את כל תרחישי הקצה (rabbet/butt, מחיצה, מעטפת, מדפים פנימיים, מדף קבוע, internal shelves) — לפני שמסירים את הלוגיקה הקיימת של `calcCuts`. אם המודל שגוי, השגיאה מובנת מיד ומוצמדת לאלמנט ספציפי בסקיצה. חיבור `BoardModel → CutItem` יבוצע בשלב הבא.
+
+**טריידאוף**: כיום `calcCuts` ו-`buildBoardModel` קיימים במקביל ומחשבים מידות אותם לוחות. כפילות לתקופה קצרה. ההצדקה: סיכון רגרסיה נמוך — שינוי `calcCuts` בלי אימות מודל הוא הרבה יותר מסוכן.
+
+**יישום**: 
+- `Board` עם `xFrom/xTo/yFrom/yTo` בקואורדינטות גוף-לוקאליות (x=0 קצה שמאלי, x=W קצה ימני, y=0 קצה עליון, y=H קצה תחתון). מעטפות ב-x<0 או x>W.
+- שתי שיטות חיבור (`rabbet`, `butt`) דרך `resolveJointMethod(box)` לפי `W > 2·H`.
+- 11 BoardRoles: side-left/right, top, bottom, shelf, partition, fixed-shelf, internal-shelf, envelope-left/right/top.
+- 18 בדיקות יחידה.
+- אינטגרציה ב-`CabinetSketch`: post-calc (interiorById + materials מוגדרים) רנדור boards דרך `CabinetCutSketch`. envelopePanels + shelfLines + partitionLine מוסתרים post-calc.
+
+---
+
 ## 2026-05-21 — אחידות בקונבנציית `heightFromFloor`
 
 **ההחלטה**: `heightFromFloor` של כל פריט פנימי הוא **תחתית** הפריט (cm מרצפת הגוף לקצה התחתון). חל אחיד על `ShelfItem`, `RodItem`, `DrawerItem` פנימית, ו-`DrawerItem` חיצונית.

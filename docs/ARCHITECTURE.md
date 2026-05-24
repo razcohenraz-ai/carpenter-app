@@ -27,6 +27,8 @@ src/
 │   ├── geometry/
 │   │   ├── boxDecomposition.ts   פיצול ארון לגופים פיזיים
 │   │   └── frontGeometry.ts      מקור יחיד לחישוב x ו-width של כל החזיתות (ברמת הארון)
+│   ├── boards/
+│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף (cut view); buildBoardModel
 │   ├── doors/
 │   │   ├── doorCalc.ts           חישוב מספר דלתות ושורות
 │   │   ├── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorHeight, derivation helpers
@@ -61,12 +63,11 @@ src/
         ├── BoxesList.tsx           רשימת פיצול לקופסאות
         ├── BoxInteriorEditor.tsx   עורך פנים גוף
         ├── BoxBodySketch.tsx       סקיצת SVG לפנים גוף
-        ├── BoxThumbnail.tsx        מיניאטורת גוף
-        ├── CabinetSketch.tsx       סקיצת ארון חיה
+        ├── CabinetSketch.tsx       סקיצת ארון חיה (תצוגת חתך: boards per body)
+        ├── CabinetCutSketch.tsx    רנדור per-body של boards (לוחות פיזיים) דרך SVG
         ├── CabinetFrontsSketch.tsx סקיצת חזיתות
         ├── DoorEditor.tsx          עורך חזית (צירים)
         ├── DoorsList.tsx           רשימת חזיתות (כולל drawer fronts עם תיוג "(מגירה)")
-        ├── DoorThumbnail.tsx       מיניאטורת חזית
         ├── ExternalDrawerEditor.tsx מודאל עריכת מגירה חיצונית (גובה, override, מחיקה)
         └── [*.module.css]          סגנונות מבודדים
 ```

@@ -13,6 +13,14 @@
 - ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
 - שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
 
+### נוסף — BoardModel + תצוגת חתך
+- **`src/core/boards/boardModel.ts`** (חדש) — מודל פיזי של לוחות הגוף. exports: `Board`, `BoardRole` (`'side-left' | 'side-right' | 'top' | 'bottom' | 'shelf' | 'partition' | 'fixed-shelf' | 'internal-shelf' | 'envelope-left' | 'envelope-right' | 'envelope-top'`), `JointMethod` (`'rabbet' | 'butt'`), `resolveJointMethod(box)`, `buildBoardModel(args)`.
+- שתי שיטות חיבור: **rabbet** (W ≤ 2·H) — צדדים בגובה מלא, תקרה/רצפה בין הצדדים; **butt** (W > 2·H) — תקרה/רצפה ברוחב מלא, צדדים קצרים.
+- 18 בדיקות חדשות ב-`boardModel.test.ts` מכסות: rabbet, butt, מדפים מ-items, מחיצה + מדפי תאים, מעטפת (left/right/top), fixed-shelf, internal-shelves מ-`box.internalShelves[]`, sanity של שטח פנים, plinth=[].
+- **`src/ui/components/CabinetCutSketch.tsx`** (חדש) — רנדור per-body של ה-boards כ-SVG `<rect>` עם styling לפי role (carcass, partition, fixed-shelf, internal-shelf, envelope).
+- **`CabinetSketch.tsx`**: post-calc (interiorById + materials מוגדרים) מציג boards דרך CabinetCutSketch. envelopePanels + envelopeTopPanel + shelf lines + partition line מוסתרים post-calc (הם כעת boards). pre-calc נשאר עם הרינדור הישן. props חדשים: `bodyMaterialId`, `frontMaterialId`. הקליק על body (`onBoxClick`) ממשיך לעבוד דרך ה-`<rect>` השקוף הקיים (boards מצוירים אחריו עם `pointer-events` default — לא מפריעים לקליק על rect השקוף ב-z נמוך — אבל גם דרך bubbling של ה-`<g>` של ה-body).
+- **גישה ב'**: BoardModel **לא** מחובר ל-`calcCuts` בשלב זה. החיבור יבוא בשלב הבא (BoardModel → CutItem). `cuttingList.ts` ממשיך לעבוד כפי שהיה.
+
 ### הוסר — מיניאטורות של גופים וחזיתות
 - ה-thumbnail rows הוסרו מ-`CabinetForm`: שורת `BoxThumbnail` במצב bodies, ושורת `DoorThumbnail` במצב fronts.
 - הניווט מעתה דרך לחיצה ישירה בתצוגת הארון (שלב 1).

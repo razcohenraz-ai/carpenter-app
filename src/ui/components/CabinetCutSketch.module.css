@@ -1,0 +1,56 @@
+/* CabinetCutSketch — cross-section view of one body.
+   Each <rect> is a physical board: sides, top, bottom, shelves, partition,
+   envelope. Colours follow the project palette and roughly correspond to
+   the cabinet material (body) vs the visible facade material (envelope). */
+
+.bodyGroup {
+  /* Boards are decorative; the per-body onBoxClick rect (drawn elsewhere in
+     CabinetSketch) handles all clicks. pointer-events:none lets clicks pass
+     through to that rect regardless of z-order. */
+  pointer-events: none;
+}
+
+/* Carcass boards: sides + top + bottom + regular shelves. */
+.carcassBoard {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-primary);
+  stroke-width: 0.7;
+  fill-opacity: 0.95;
+}
+
+/* Vertical partition — same material as carcass but slightly emphasised. */
+.partitionBoard {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-primary);
+  stroke-width: 0.7;
+  fill-opacity: 0.85;
+}
+
+/* Fixed shelf (auto, above external drawers) — dashed outline so the
+   "auto" status remains legible at a glance. */
+.fixedShelfBoard {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-primary);
+  stroke-width: 0.7;
+  stroke-dasharray: 3 2;
+  fill-opacity: 0.9;
+}
+
+/* Structural shelf from box.internalShelves (merged-body splits) —
+   slightly different fill so it reads as "fixed by structure". */
+.internalShelfBoard {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-border-strong);
+  stroke-width: 0.8;
+  stroke-dasharray: 4 2;
+  fill-opacity: 0.85;
+}
+
+/* Outer envelope panels — made of the front material, so coloured
+   distinctly using the fronts palette. */
+.envelopeBoard {
+  fill: var(--color-fronts);
+  stroke: var(--color-fronts);
+  stroke-width: 0.7;
+  fill-opacity: 0.45;
+}
