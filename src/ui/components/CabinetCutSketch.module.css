@@ -46,11 +46,13 @@
   fill-opacity: 0.85;
 }
 
-/* Outer envelope panels — made of the front material, so coloured
-   distinctly using the fronts palette. */
+/* Outer envelope panels — made of the front material. Filled near-opaque
+   with a contrasting primary-colour stroke so each envelope board reads
+   as a physical panel (matching the carcass-board treatment), not as a
+   transparent overlay. */
 .envelopeBoard {
   fill: var(--color-fronts);
-  stroke: var(--color-fronts);
+  stroke: var(--color-primary);
   stroke-width: 0.7;
-  fill-opacity: 0.45;
+  fill-opacity: 0.9;
 }
