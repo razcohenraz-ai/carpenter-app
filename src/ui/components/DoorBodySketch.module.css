@@ -40,7 +40,7 @@
 }
 
 .dimLabel {
-  font-size: 7px;
+  font-size: 10px;
   fill: var(--color-text-muted);
   font-family: var(--font-family);
 }

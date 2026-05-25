@@ -23,8 +23,10 @@ interface Props {
   onBack: () => void;
 }
 
-const SKETCH_W = 120;
-const SKETCH_H = 220;
+// Larger door sketch — gives a clearer view of the panel + hinge positions.
+// The controls column flexes to take the remaining width.
+const SKETCH_W = 180;
+const SKETCH_H = 330;
 const materialsArray = Object.values(MATERIALS);
 
 export default function DoorEditor({
