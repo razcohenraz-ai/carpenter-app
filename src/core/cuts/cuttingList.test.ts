@@ -11,54 +11,14 @@ describe("calcCuts — cabinet קלאסי", () => {
   const base = () =>
     calcCuts("cabinet", 80, 180, 60, 0, 0, false, 0, false, undefined, false);
 
-  it("מייצר 2 לוחות צד", () => {
-    const sides = base().filter((c) => c.name === "צד שמאל" || c.name === "צד ימין");
-    expect(sides).toHaveLength(2);
-    sides.forEach((s) => {
-      expect(s.w).toBe(600); // 60cm × 10
-      expect(s.h).toBe(1800); // 180cm × 10
-      expect(s.qty).toBe(1);
-    });
-  });
-
-  it("עליון ותחתון ברוחב W - 2×tBody", () => {
-    const top = find(base(), "עליון")!;
-    // W*10 - tBody*2 = 800 - 36 = 764
-    expect(top.w).toBe(764);
-    expect(top.h).toBe(600);
-  });
+  // הערה: בדיקות לוחות קורפוס (צד, עליון, תחתון, מדף, גב, צוקל, מעטפת)
+  // הוסרו — כל הלוחות האלה מגיעים כעת מ-`buildBoardModel` ולא מ-`calcCuts`.
+  // ראה `src/core/boards/boardModel.test.ts` לכיסוי המקביל.
 
   it("מכיל דלת אחת (n=2 כי 80>60)", () => {
     const cuts = base();
     const door = cuts.find((c) => c.name.startsWith("דלת"))!;
     expect(door.qty).toBe(2); // 2 דלתות על רוחב 80
-  });
-
-  it("ללא מדפים — אין מדף בפלט", () => {
-    expect(find(base(), "מדף פנימי")).toBeUndefined();
-  });
-
-  it("עם מדף — מדף צף עם reveal נכון", () => {
-    const cuts = calcCuts("cabinet", 80, 180, 60, 2, 0, false, 0, false, undefined, false);
-    const shelf = find(cuts, "מדף פנימי")!;
-    expect(shelf.qty).toBe(2);
-    expect(shelf.w).toBe(764 - 2); // SHELF_WIDTH_REVEAL_MM = 2
-    expect(shelf.h).toBe(600 - 20); // SHELF_DEPTH_REVEAL_MM = 20
-  });
-
-  it("עם גב — לוח גב עם note 6mm", () => {
-    const cuts = calcCuts("cabinet", 80, 180, 60, 0, 0, true, 0, false, undefined, false);
-    const back = find(cuts, "גב")!;
-    expect(back).toBeDefined();
-    expect(back.note).toBe("6mm");
-    expect(back.group).toBe("back");
-  });
-
-  it("עם צוקל — מייצר 2 לוחות צוקל", () => {
-    const cuts = calcCuts("cabinet", 80, 180, 60, 0, 0, false, 10, false, undefined, false);
-    const plinth = cuts.filter((c) => c.name.includes("צוקל"));
-    expect(plinth).toHaveLength(2);
-    plinth.forEach((p) => expect(p.h).toBe(100)); // 10cm × 10
   });
 
   it("עם מגירה — מייצר 4 סוגי חלקי מגירה", () => {
@@ -120,46 +80,10 @@ describe("calcCuts — drawer_unit", () => {
   });
 });
 
-describe("calcCuts — cabinet עם מעטפת (תיקון ISSUE-001)", () => {
-  // tShell=1.8cm (18mm), tBody=1.8cm (18mm)
-  // iW = 100 - 1.8×2 = 96.4  |  iH = 180 - 1.8 = 178.2  |  iD = 60 - 1.8 = 58.2
-  const shell = () =>
-    calcCuts("cabinet", 100, 180, 60, 0, 0, false, 0, false, undefined, true, 1.8, 1.8);
-
-  it("מעטפת — צדדים במידות חיצוניות מלאות", () => {
-    const cuts = shell();
-    const side = cuts.find((c) => c.name === "מעטפת — צד שמאל")!;
-    expect(side.w).toBe(600);  // D=60 × 10
-    expect(side.h).toBe(1800); // H=180 × 10
-  });
-
-  it("מעטפת — טופ ברוחב iW", () => {
-    const top = find(shell(), "מעטפת — טופ")!;
-    expect(top.w).toBe(964); // iW=96.4 × 10
-    expect(top.h).toBe(600); // D=60 × 10
-  });
-
-  it("גוף פנימי — צדדים בממדים פנימיים", () => {
-    const side = find(shell(), "גוף פנימי — צד שמאל")!;
-    expect(side.w).toBe(582);  // iD=58.2 × 10
-    expect(side.h).toBe(1782); // iH=178.2 × 10
-  });
-
-  it("גוף פנימי — עליון ברוחב iW − 2×tBody", () => {
-    const top = find(shell(), "גוף פנימי — עליון")!;
-    // (iW - tBody×2) × 10 = (96.4 - 3.6) × 10 = 928
-    // toBeCloseTo כי 96.4 - 3.6 יוצר שגיאת floating-point קטנה ב-JS
-    expect(top.w).toBeCloseTo(928, 5);
-    expect(top.h).toBeCloseTo(582, 5); // iD=58.2 × 10
-  });
-
-  it("hasShell=false — לוחות גוף ב-W מלא", () => {
-    const classic = calcCuts("cabinet", 100, 180, 60, 0, 0, false, 0, false, undefined, false, 1.8, 1.8);
-    const top = find(classic, "עליון")!;
-    // (W - tBody×2) × 10 = (100 - 3.6) × 10 = 964
-    expect(top.w).toBe(964);
-  });
-});
+// "calcCuts — cabinet עם מעטפת" — כל הבדיקות הוסרו. לוחות מעטפת + גוף פנימי
+// מגיעים כעת מ-`buildBoardModel`. בדיקות התיקון של ISSUE-001 (מעטפת במידות
+// חיצוניות, גוף בממדים פנימיים) מכוסות ב-`boardModel.test.ts` דרך תרחישי
+// rabbet/butt + envelope flags.
 
 describe("calcCuts — custom", () => {
   it("custom עם D>0 — לוח ראשי + 2 לוחות צד", () => {
@@ -197,13 +121,8 @@ describe("calcCuts — envelope top (מעטפת תקרה)", () => {
     expect(diff).toBeCloseTo(18);
   });
 
-  it("לוח תקרה מופיע בחיתוכים עם תקרה", () => {
-    expect(find(singleRow(true), "מעטפת תקרה")).toBeDefined();
-  });
-
-  it("לוח תקרה לא מופיע ללא תקרה", () => {
-    expect(find(singleRow(false), "מעטפת תקרה")).toBeUndefined();
-  });
+  // לוח "מעטפת תקרה" עצמו עבר ל-BoardModel; הבדיקות שמודדות את ההשפעה על
+  // גובה הדלת נשמרו (`getDoorHeight` עדיין מתחשב ב-envelope-top).
 
   // ארון 2 קומות — H=220, צוקל 10, קומה תחתונה 170
   // קומה עליונה box.H=50 — תמיד 2 רווחים (לא מושפעת מהצוקל)

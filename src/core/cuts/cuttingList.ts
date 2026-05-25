@@ -7,12 +7,6 @@ import { roundInternal, roundOutput } from "../utils/round";
 // ── קבועים (מ"מ אלא אם צוין אחרת) ──────────────────────────────────────────
 // כל "מספר קסם" קיבל שם. שנה כאן בלבד.
 
-/** רווח רוחב לכל צד של מדף צף (הפחתה כוללת = ×1 מכל צד), מ"מ */
-const SHELF_WIDTH_REVEAL_MM = 2;
-
-/** קיצור עומק מדף צף (מאפשר הוצאה ללא חיכוך), מ"מ */
-const SHELF_DEPTH_REVEAL_MM = 20;
-
 /** רווח ברירת מחדל לרוחב דלת כשאין gap מוגדר (overlay על הגוף), מ"מ */
 const DOOR_WIDTH_REVEAL_MM = 2;
 
@@ -88,67 +82,12 @@ export function calcCuts(
   if (type === "cabinet") {
     const d = calcDoors(W, H, plinth, doorCoversPlinth, lowerH, hasShell, tShell);
 
-    if (hasShell) {
-      // ── מעטפת חיצונית ────────────────────────────────────────────────────
-      // כל מידות הגוף הפנימי נגזרות מהממדים החיצוניים פחות עובי המעטפת.
-      // tShell ב-ס"מ → החיסור מתקיים ביחידות עקביות.
-      const iW = W - tShell * 2; // רוחב פנימי
-      const iH = H - tShell;     // גובה פנימי (מעטפת רק מלמעלה — גוף יושב על הרצפה)
-      const iD = D - tShell;     // עומק פנימי
-
-      cuts.push({ name: "מעטפת — צד שמאל", qty: 1, w: cm(D),  h: cm(H),  group: "shell" });
-      cuts.push({ name: "מעטפת — צד ימין", qty: 1, w: cm(D),  h: cm(H),  group: "shell" });
-      cuts.push({ name: "מעטפת — טופ",      qty: 1, w: cm(iW), h: cm(D),  group: "shell" });
-      if (hasEnvelopeTop) {
-        cuts.push({ name: "מעטפת תקרה", qty: 1, w: cm(iW), h: cm(D), group: "shell" });
-      }
-
-      // ── גוף פנימי ─────────────────────────────────────────────────────────
-      cuts.push({ name: "גוף פנימי — צד שמאל", qty: 1, w: cm(iD),             h: cm(iH),           group: "body" });
-      cuts.push({ name: "גוף פנימי — צד ימין", qty: 1, w: cm(iD),             h: cm(iH),           group: "body" });
-      cuts.push({ name: "גוף פנימי — עליון",    qty: 1, w: cm(iW - tBody * 2), h: cm(iD),           group: "body" });
-      cuts.push({ name: "גוף פנימי — תחתון",   qty: 1, w: cm(iW - tBody * 2), h: cm(iD),
-                  ...(plinth > 0 ? { note: `מגובה ${plinth} ס"מ` } : {}),                            group: "body" });
-
-      if (plinth > 0) {
-        cuts.push({ name: "גוף פנימי — צוקל קדמי",  qty: 1, w: cm(iW - tBody * 2), h: cm(plinth), group: "plinth" });
-        cuts.push({ name: "גוף פנימי — צוקל אחורי", qty: 1, w: cm(iW - tBody * 2), h: cm(plinth), group: "plinth" });
-      }
-      if (shelves > 0) {
-        cuts.push({ name: "גוף פנימי — מדף", qty: shelves,
-          w: cm(iW - tBody * 2) - SHELF_WIDTH_REVEAL_MM,
-          h: cm(iD) - SHELF_DEPTH_REVEAL_MM,
-          note: "מדף צף", group: "body" });
-      }
-      if (hasBack) {
-        cuts.push({ name: "גוף פנימי — גב", qty: 1,
-          w: cm(iW - tBody * 2), h: cm(iH - tBody * 2),
-          note: "6mm", group: "back" });
-      }
-
-    } else {
-      // ── קרקס קלאסי (ללא מעטפת) ──────────────────────────────────────────
-      cuts.push({ name: "צד שמאל", qty: 1, w: cm(D),             h: cm(H) });
-      cuts.push({ name: "צד ימין", qty: 1, w: cm(D),             h: cm(H) });
-      cuts.push({ name: "עליון",   qty: 1, w: cm(W - tBody * 2), h: cm(D) });
-      cuts.push({ name: "תחתון",   qty: 1, w: cm(W - tBody * 2), h: cm(D),
-                  ...(plinth > 0 ? { note: `מגובה ${plinth} ס"מ` } : {}) });
-      if (plinth > 0) {
-        cuts.push({ name: "לוח צוקל קדמי",  qty: 1, w: cm(W - tBody * 2), h: cm(plinth), group: "plinth" });
-        cuts.push({ name: "לוח צוקל אחורי", qty: 1, w: cm(W - tBody * 2), h: cm(plinth), group: "plinth" });
-      }
-      if (shelves > 0) {
-        cuts.push({ name: "מדף פנימי", qty: shelves,
-          w: cm(W - tBody * 2) - SHELF_WIDTH_REVEAL_MM,
-          h: cm(D) - SHELF_DEPTH_REVEAL_MM,
-          note: "מדף צף" });
-      }
-      if (hasBack) {
-        cuts.push({ name: "גב", qty: 1,
-          w: cm(W - tBody * 2), h: cm(H - tBody * 2),
-          note: "6mm", group: "back" });
-      }
-    }
+    // ── קורפוס + מעטפת + צוקל + גב + מדפים ─────────────────────────────────
+    // הוסר. כל לוחות הקורפוס מגיעים כעת מ-`buildBoardModel` (קרא ב-useCabinet).
+    // `calcCuts` מייצר רק את החזיתות — דלתות ומגירות — שלא חלק מ-BoardModel
+    // עדיין. השדות `shelves`, `hasBack`, `tShell`, `hasEnvelopeTop` נשארים על
+    // הסיגנטורה לתאימות לאחור אך לא משפיעים על הקורפוס.
+    void shelves; void hasBack; void hasEnvelopeTop; void tBody;
 
     // ── דלתות ─────────────────────────────────────────────────────────────────
     // Door width is sourced from the cabinet-level front layout (see

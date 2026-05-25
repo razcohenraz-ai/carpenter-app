@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-05-25 — החלפת calcCuts לקורפוס ב-BoardModel (שלב B)
+
+**ההחלטה**: לוחות הקורפוס (sides + top + bottom + back + plinth + shelves + envelope) מיוצרים כעת מ-`buildBoardModel` per body, ומתורגמים ל-CutItems דרך `boardsToCutItems`. `calcCuts` מייצר רק את החזיתות שאינן boards: דלתות + חלקי קופסת מגירה (front/sides/back/bottom של drawer-box).
+
+**הנימוק**: `calcCuts` חישב את הקרקס כאילו הוא קופסה אחת ברמת הארון, גם כשהארון מפוצל ל-6 גופים (2 שורות × 3 עמודות). זה ייצר מידות שגויות (לוח אחד ארוך במקום 6 לוחות פר-גוף). BoardModel מסתמך על המבנה הפיזי האמיתי שמיוצר ע"י `decomposeBoxes` ומפיק לוח לכל גוף בנפרד עם המידות הנכונות.
+
+**טריידאוף**: רשימת חיתוכים גדולה יותר (28 לוחות במקום 16 ב-cabinet 240×220 לדוגמה, כי הקרקס מפוצל). זה היה הביצוע הנכון מההתחלה — calcCuts פשוט הסתיר את זה. עכשיו המסור מקבל מידות תואמות לרהיט שמיוצר בפועל.
+
+**יישום**:
+- Board.visible (חדש) — לוחות נסתרים (גב + צוקל-אחורי) נכנסים לרשימת חיתוכים אבל לא לסקיצה.
+- 4 BoardRoles חדשים: `back`, `plinth-front`, `plinth-back`, וגם `internal-shelf` קיים נשמר.
+- `deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop)` — helper משותף ל-CabinetSketch (רינדור) ול-useCabinet (חיתוכים). תיקן באג שגופי `unit_*` לא קיבלו envelope.
+- `useCabinet` עבר ל-board-cuts loop אחרי בניית ה-interior state.
+- `cuttingList.test.ts` הוסר 11 בדיקות שציפו ללוחות קורפוס מ-calcCuts. הכיסוי המקביל ב-`boardModel.test.ts` (39 בדיקות).
+
+**אלטרנטיבה שנדחתה**: לעדכן את calcCuts להפיק לוח לכל גוף. זה היה ייצור של אותה לוגיקה ב-2 מקומות (BoardModel + calcCuts), עם הצורך להחזיק עקביות. הגישה הנוכחית: מקור יחיד לאמת (BoardModel), calcCuts רק עבור מה ש-BoardModel עדיין לא מטפל בו.
+
+---
+
 ## 2026-05-24 — BoardModel + תצוגת חתך (גישה ב')
 
 **ההחלטה**: בנייה של מודל פיזי של לוחות הגוף (`core/boards/boardModel.ts`) ויצירת תצוגה ויזואלית (`CabinetCutSketch`) **לפני** חיבור לרשימת חיתוכים (`calcCuts`). תצוגת "גופים" הוחלפה בתצוגת "חתך" שמציגה כל לוח פיזי בעובי ובמיקום האמיתיים.

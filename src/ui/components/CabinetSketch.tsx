@@ -8,7 +8,7 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
-import { buildBoardModel } from '../../core/boards/boardModel';
+import { buildBoardModel, deriveEnvelopeFlags } from '../../core/boards/boardModel';
 import { getMaterial } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -77,19 +77,23 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
       const hasPartition = partitionsById?.get(box.id) === true;
       const cells = cellInteriorById?.[box.id];
       const items = interiorById![box.id] ?? [];
-      const hasEnvelopeLeft  = !!hasShell && (box.position === 'left'  || box.position === 'single');
-      const hasEnvelopeRight = !!hasShell && (box.position === 'right' || box.position === 'single');
-      const hasEnvelopeTopBox = !!hasShell && !!hasEnvelopeTop && (box.level === 'top' || box.level === 'single');
+      // Centralised envelope-flag derivation handles unit_* positions too —
+      // the legacy inline check missed unit_1 / unit_N (only 'left' / 'right'
+      // / 'single' got envelope panels).
+      const env = deriveEnvelopeFlags(box, !!hasShell, !!hasEnvelopeTop);
+      const isBottomRow = box.level === 'bottom' || box.level === 'single';
       const boards = buildBoardModel({
         box,
         bodyMaterial: bodyMat!,
         frontMaterial: frontMat!,
-        hasEnvelopeLeft,
-        hasEnvelopeRight,
-        hasEnvelopeTop: hasEnvelopeTopBox,
+        hasEnvelopeLeft: env.hasEnvelopeLeft,
+        hasEnvelopeRight: env.hasEnvelopeRight,
+        hasEnvelopeTop: env.hasEnvelopeTop,
         items,
         hasPartition,
         ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
+        plinthHeight: isBottomRow ? (parseFloat(plinth) || 0) : 0,
+        hasBack: true,
       });
       boardsByBoxId.set(box.id, boards);
     }
@@ -222,6 +226,11 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
           if (!rect) return null;
 
           const toSvgY = (h: number) => rect.y + rect.h - h * geo.scale;
+          // Inner-width band: rods, drawers, external drawers sit between the
+          // side boards (same convention as BoxBodySketch).
+          const tBodyCm = bodyMat ? bodyMat.thickness / 10 : 1.8;
+          const innerX  = rect.x + tBodyCm * geo.scale;
+          const innerW  = rect.w - 2 * tBodyCm * geo.scale;
 
           // External drawers in this box stack from the bottom upward.
           const externals = items
@@ -236,7 +245,7 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
             if (item.type === 'rod') {
               const y = toSvgY(item.heightFromFloor);
               return (
-                <line key={item.id} x1={rect.x} y1={y} x2={rect.x + rect.w} y2={y}
+                <line key={item.id} x1={innerX} y1={y} x2={innerX + innerW} y2={y}
                   className={styles.rodLine} />
               );
             }
@@ -244,8 +253,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
               const yBottom = toSvgY(item.heightFromFloor);
               const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
               return (
-                <rect key={item.id} x={rect.x + 2} y={yTop}
-                  width={rect.w - 4} height={yBottom - yTop}
+                <rect key={item.id} x={innerX} y={yTop}
+                  width={innerW} height={yBottom - yTop}
                   className={styles.drawerRect} />
               );
             }
@@ -275,13 +284,18 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
                 gapCm: layout.gapCm,
               })
             : null;
-          const innerLeftSvg = layout ? geo.cabinet.x + layout.cabinetLeftOffset * geo.scale : rect.x;
+          // External drawer in cabinet view: clipped to inner width (between
+          // side boards), matching the inner-width convention for other
+          // interior items. The front-layout `drawerSpan` is no longer used
+          // for x positioning here — fronts have their own dedicated view
+          // (CabinetFrontsSketch).
+          void drawerSpan;
           const externalNodes = externals.map(drawer => {
             const yBottom = toSvgY(cumulative);
             const yTop    = toSvgY(cumulative + drawer.drawerHeight);
             cumulative += drawer.drawerHeight + gapCm;
-            const fX = drawerSpan ? innerLeftSvg + drawerSpan.x * geo.scale : rect.x;
-            const fW = drawerSpan ? drawerSpan.width * geo.scale : rect.w;
+            const fX = innerX;
+            const fW = innerW;
             const interactive = onDrawerFrontClick !== undefined;
             return (
               <rect
@@ -327,6 +341,12 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
               {cells.flatMap((cellItems, ci) => {
                 const xLeft  = ci === 0 ? partitionX : rect.x;
                 const xRight = ci === 0 ? rect.x + rect.w : partitionX;
+                // Cell-local inner band: clip rods/drawers/externals between
+                // the cell's side (carcass or partition) and the opposite
+                // side, matching the inner-width convention.
+                const tBodyCmCell = bodyMat ? bodyMat.thickness / 10 : 1.8;
+                const cellInnerX = xLeft + tBodyCmCell * geo.scale;
+                const cellInnerW = (xRight - xLeft) - 2 * tBodyCmCell * geo.scale;
                 const externals = cellItems
                   .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
                   .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
@@ -338,14 +358,14 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
                   if (item.type === 'shelf') return null;
                   if (item.type === 'rod') {
                     const y = toSvgY(item.heightFromFloor);
-                    return <line key={item.id} x1={xLeft} y1={y} x2={xRight} y2={y} className={styles.rodLine} />;
+                    return <line key={item.id} x1={cellInnerX} y1={y} x2={cellInnerX + cellInnerW} y2={y} className={styles.rodLine} />;
                   }
                   if (item.type === 'drawer') {
                     const yBottom = toSvgY(item.heightFromFloor);
                     const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
                     return (
-                      <rect key={item.id} x={xLeft + 2} y={yTop}
-                        width={xRight - xLeft - 4} height={yBottom - yTop}
+                      <rect key={item.id} x={cellInnerX} y={yTop}
+                        width={cellInnerW} height={yBottom - yTop}
                         className={styles.drawerRect} />
                     );
                   }
@@ -371,13 +391,17 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
                 const frontGeo = layout && boxFirstGlobalIndexInRow >= 0
                   ? computeFrontGeometry({ globalFrontIndexInRow: globalIndexInRow, layout, gapCm: layout.gapCm })
                   : null;
-                const innerLeftSvg = layout ? geo.cabinet.x + layout.cabinetLeftOffset * geo.scale : rect.x;
+                // Cell external drawer in cabinet view: same inner-width
+                // clipping as other cell items. Front-layout values are
+                // ignored here — front positioning is handled by
+                // CabinetFrontsSketch.
+                void layout; void frontGeo;
                 const externalNodes = externals.map(drawer => {
                   const yBottom = toSvgY(cumulative);
                   const yTop    = toSvgY(cumulative + drawer.drawerHeight);
                   cumulative += drawer.drawerHeight + gapCm;
-                  const fX = frontGeo ? innerLeftSvg + frontGeo.x * geo.scale : xLeft;
-                  const fW = frontGeo ? frontGeo.width * geo.scale : (xRight - xLeft);
+                  const fX = cellInnerX;
+                  const fW = cellInnerW;
                   const interactive = onDrawerFrontClick !== undefined;
                   return (
                     <rect

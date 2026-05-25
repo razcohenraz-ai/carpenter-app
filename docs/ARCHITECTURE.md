@@ -28,7 +28,7 @@ src/
 │   │   ├── boxDecomposition.ts   פיצול ארון לגופים פיזיים
 │   │   └── frontGeometry.ts      מקור יחיד לחישוב x ו-width של כל החזיתות (ברמת הארון)
 │   ├── boards/
-│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף (cut view); buildBoardModel
+│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף; buildBoardModel, boardsToCutItems, deriveEnvelopeFlags
 │   ├── doors/
 │   │   ├── doorCalc.ts           חישוב מספר דלתות ושורות
 │   │   ├── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorHeight, derivation helpers

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { buildBoardModel, resolveJointMethod, type Board } from './boardModel';
+import {
+  buildBoardModel,
+  resolveJointMethod,
+  deriveEnvelopeFlags,
+  boardsToCutItems,
+  SHELF_WIDTH_REVEAL_CM,
+  SHELF_DEPTH_REVEAL_CM,
+  BACK_THICKNESS_CM,
+  type Board,
+} from './boardModel';
 import { getMaterial } from '../../catalog';
 import type { Box } from '../../types/geometry';
 import type { InteriorItem, ShelfItem, DrawerItem } from '../../types/interior';
@@ -30,6 +39,9 @@ const bodyMat  = getMaterial('mdf18');
 const frontMat = getMaterial('mdf18');
 const t = bodyMat.thickness / 10; // 1.8 cm
 
+// Most carcass-structure tests opt out of the back panel so the assertions
+// stay focused on sides/top/bottom/shelves. Production callers default to
+// hasBack=true (handled by the dedicated back-panel describe below).
 const baseArgs = {
   bodyMaterial: bodyMat,
   frontMaterial: frontMat,
@@ -38,6 +50,7 @@ const baseArgs = {
   hasEnvelopeTop: false,
   items: [] as InteriorItem[],
   hasPartition: false,
+  hasBack: false,
 };
 
 function byRole(boards: Board[], role: string): Board[] {
@@ -143,7 +156,8 @@ describe('buildBoardModel — shelves from items', () => {
     expect(s.yTo).toBeCloseTo(140);
     expect(s.xFrom).toBeCloseTo(t);
     expect(s.xTo).toBeCloseTo(80 - t);
-    expect(s.length).toBeCloseTo(80 - 2 * t);
+    // length applies the reveal offset (-2 × SHELF_WIDTH_REVEAL_CM)
+    expect(s.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
   });
 
   it('drawers and rods are NOT boards', () => {
@@ -303,5 +317,200 @@ describe('buildBoardModel — invariants', () => {
   it('plinth box returns []', () => {
     const b = box({ W: 80, H: 10, level: 'plinth' });
     expect(buildBoardModel({ ...baseArgs, box: b })).toEqual([]);
+  });
+});
+
+// ── 9. Back panel ────────────────────────────────────────────────────────────
+
+describe('buildBoardModel — back panel', () => {
+  it('hasBack=true (default in production) → 1 back board, visible=false', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const backs = byRole(boards, 'back');
+    expect(backs).toHaveLength(1);
+    const back = backs[0]!;
+    expect(back.visible).toBe(false);
+    expect(back.thickness).toBeCloseTo(BACK_THICKNESS_CM);
+    expect(back.length).toBeCloseTo(80 - 2 * t);
+    expect(back.width).toBeCloseTo(200 - 2 * t);
+  });
+
+  it('hasBack=false → no back board', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: false });
+    expect(byRole(boards, 'back')).toHaveLength(0);
+  });
+});
+
+// ── 10. Plinth boards ────────────────────────────────────────────────────────
+
+describe('buildBoardModel — plinth', () => {
+  it('plinthHeight=10 → plinth-front + plinth-back (front visible, back hidden)', () => {
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, plinthHeight: 10 });
+    const front = byRole(boards, 'plinth-front')[0]!;
+    const back  = byRole(boards, 'plinth-back')[0]!;
+    expect(front).toBeDefined();
+    expect(back).toBeDefined();
+    expect(front.length).toBeCloseTo(80 - 2 * t);
+    expect(front.thickness).toBeCloseTo(t);
+    expect(front.yFrom).toBe(100);
+    expect(front.yTo).toBe(110);
+    expect(front.visible).toBe(true);
+    expect(back.visible).toBe(false);
+  });
+
+  it('plinthHeight=0 (default) → no plinth boards', () => {
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    expect(byRole(boards, 'plinth-front')).toHaveLength(0);
+    expect(byRole(boards, 'plinth-back')).toHaveLength(0);
+  });
+});
+
+// ── 11. Shelf reveal offsets ─────────────────────────────────────────────────
+
+describe('buildBoardModel — shelf reveal', () => {
+  it('regular shelf: length = (W − 2·t) − 2·SHELF_WIDTH_REVEAL_CM; width = D − SHELF_DEPTH_REVEAL_CM', () => {
+    const b = box({ W: 80, H: 200, D: 60 });
+    const boards = buildBoardModel({
+      ...baseArgs, box: b,
+      items: [shelf('s', 100)],
+    });
+    const s = byRole(boards, 'shelf')[0]!;
+    expect(s.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
+    expect(s.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+  });
+
+  it('internal-shelf: same reveal applied', () => {
+    const b = box({ W: 80, H: 200, D: 60, internalShelves: [100] });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    const ins = byRole(boards, 'internal-shelf')[0]!;
+    expect(ins.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
+    expect(ins.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+  });
+
+  it('fixed-shelf: same reveal applied', () => {
+    const b = box({ W: 80, H: 200, D: 60 });
+    const boards = buildBoardModel({
+      ...baseArgs, box: b,
+      items: [shelf('fix', 18.2, { isFixedAboveExternals: true })],
+    });
+    const fs = byRole(boards, 'fixed-shelf')[0]!;
+    expect(fs.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
+    expect(fs.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+  });
+});
+
+// ── 12. Envelope flags helper ────────────────────────────────────────────────
+
+describe('deriveEnvelopeFlags', () => {
+  function b(position: Box['position'], level: Box['level'] = 'single', unitIndex?: number, unitTotal?: number): Box {
+    return {
+      id: 't', W: 80, H: 100, D: 60, position, level,
+      ...(unitIndex !== undefined ? { unitIndex } : {}),
+      ...(unitTotal !== undefined ? { unitTotal } : {}),
+    };
+  }
+
+  it('hasShell=false → all false', () => {
+    const flags = deriveEnvelopeFlags(b('single'), false, true);
+    expect(flags).toEqual({ hasEnvelopeLeft: false, hasEnvelopeRight: false, hasEnvelopeTop: false });
+  });
+
+  it('single + shell + envelopeTop → all three', () => {
+    const flags = deriveEnvelopeFlags(b('single'), true, true);
+    expect(flags.hasEnvelopeLeft).toBe(true);
+    expect(flags.hasEnvelopeRight).toBe(true);
+    expect(flags.hasEnvelopeTop).toBe(true);
+  });
+
+  it("position='left' → envelope-left only", () => {
+    const flags = deriveEnvelopeFlags(b('left'), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(true);
+    expect(flags.hasEnvelopeRight).toBe(false);
+  });
+
+  it('unit_1 of 3 → envelope-left only', () => {
+    const flags = deriveEnvelopeFlags(b('unit_1', 'top', 1, 3), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(true);
+    expect(flags.hasEnvelopeRight).toBe(false);
+  });
+
+  it('unit_3 of 3 → envelope-right only', () => {
+    const flags = deriveEnvelopeFlags(b('unit_3', 'top', 3, 3), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(false);
+    expect(flags.hasEnvelopeRight).toBe(true);
+  });
+
+  it('unit_2 of 3 → neither edge', () => {
+    const flags = deriveEnvelopeFlags(b('unit_2', 'top', 2, 3), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(false);
+    expect(flags.hasEnvelopeRight).toBe(false);
+  });
+
+  it("level='bottom' + envelopeTop=true → envelopeTop stays false", () => {
+    const flags = deriveEnvelopeFlags(b('single', 'bottom'), true, true);
+    expect(flags.hasEnvelopeTop).toBe(false);
+  });
+
+  it("level='top' + envelopeTop=true → envelopeTop true", () => {
+    const flags = deriveEnvelopeFlags(b('single', 'top'), true, true);
+    expect(flags.hasEnvelopeTop).toBe(true);
+  });
+});
+
+// ── 13. boardsToCutItems ─────────────────────────────────────────────────────
+
+describe('boardsToCutItems', () => {
+  it('includes back panel (visible=false) in cut list', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const cuts = boardsToCutItems(boards, 'גוף');
+    const backCut = cuts.find(c => c.name.startsWith('גב'));
+    expect(backCut).toBeDefined();
+    expect(backCut!.group).toBe('back');
+    expect(backCut!.note).toBe('6mm');
+  });
+
+  it('emits one CutItem per Board with mm dimensions', () => {
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    const cuts = boardsToCutItems(boards, 'גוף תחתון');
+    expect(cuts).toHaveLength(boards.length);
+    // Sample: top board length 80-2t cm = 764 mm; width 60 cm = 600 mm.
+    const topCut = cuts.find(c => c.name.startsWith('עליון'));
+    expect(topCut).toBeDefined();
+    expect(topCut!.w).toBe(Math.round((80 - 2 * t) * 10));
+    expect(topCut!.h).toBe(600);
+  });
+
+  it('label is appended to each name', () => {
+    const b = box({ W: 80, H: 100 });
+    const cuts = boardsToCutItems(buildBoardModel({ ...baseArgs, box: b }), 'גוף תחתון שמאל');
+    expect(cuts.every(c => c.name.endsWith(' — גוף תחתון שמאל'))).toBe(true);
+  });
+
+  it('empty label → no separator', () => {
+    const b = box({ W: 80, H: 100 });
+    const cuts = boardsToCutItems(buildBoardModel({ ...baseArgs, box: b }), '');
+    const topCut = cuts.find(c => c.name === 'עליון');
+    expect(topCut).toBeDefined();
+  });
+
+  it('envelope boards map to group "shell"', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasEnvelopeLeft: true, hasEnvelopeTop: true });
+    const cuts = boardsToCutItems(boards, '');
+    expect(cuts.find(c => c.name === 'מעטפת — צד שמאל')!.group).toBe('shell');
+    expect(cuts.find(c => c.name === 'מעטפת תקרה')!.group).toBe('shell');
+  });
+
+  it('plinth boards map to group "plinth"', () => {
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, plinthHeight: 10 });
+    const cuts = boardsToCutItems(boards, '');
+    expect(cuts.find(c => c.name === 'צוקל קדמי')!.group).toBe('plinth');
+    expect(cuts.find(c => c.name === 'צוקל אחורי')!.group).toBe('plinth');
   });
 });

@@ -31,7 +31,7 @@ export default function CabinetCutSketch({
 }: Props): React.JSX.Element {
   return (
     <g className={styles.bodyGroup}>
-      {boards.map(b => {
+      {boards.filter(b => b.visible).map(b => {
         const x = offsetX + b.xFrom * scale;
         const y = offsetY + b.yFrom * scale;
         const w = (b.xTo - b.xFrom) * scale;

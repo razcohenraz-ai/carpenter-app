@@ -13,6 +13,27 @@
 - ה-SVG ב-`CabinetSketch.module.css` משתמש כעת ב-`aspect-ratio: 600 / 500` (תואם ל-viewBox) + `max-height: 75vh`. במסכים רחבים השרטוט גדל באופן יחסי; במסכים גבוהים מוגבל ל-75% מגובה החלון כדי לא להידחק מתחת ל-fold. `preserveAspectRatio` (ברירת מחדל = `xMidYMid meet`) שומר על יחס הארון — לא מרוח ולא דחוס.
 - שיפור משמעותי בקריאות הסקיצה במסכי שולחן עבודה (1100px+ רוחב לסקיצה במקום ~900px קודם).
 
+### תוקן — 3 בעיות תצוגה אחרי B
+- **מדפים לא נראו בעורך הגוף**: ה-`<rect>` של ה-back (visible:false) שורטט ב-CabinetCutSketch ככל לוח אחר עם class `carcassBoard` (fill opaque), כיסה את כל הקרקס הפנימי כולל המדפים. תיקון: `CabinetCutSketch` מסנן עכשיו `boards.filter(b => b.visible)`.
+- **מגירות/מוטות/מגירות חיצוניות חורגות מעובי הדופן ב-CabinetSketch**: עד היום הציור היה ב-`rect.x` עד `rect.x + rect.w` (כל הגוף). תיקון: כל הפריטים הפנימיים בתצוגה הראשית משתמשים ב-`innerX = rect.x + tBody·scale` ו-`innerW = rect.w − 2·tBody·scale` — כמו ב-BoxBodySketch. חל גם על תאי גוף עם מחיצה (`cellInnerX/W`).
+- **envelope-top לא הוצג כ-board**: השורש לא היה בלוח עצמו אלא בלוגיקת ה-flags של CabinetSketch — חישבה envelope לפי `position === 'left' | 'right' | 'single'` בלבד, ולא טיפלה ב-`unit_N`. תיקון: עברה ל-`deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop)` המשותף שמכיר ב-`unit_1` (left) ו-`unit_N` האחרון (right). גם הוספה `plinthHeight: isBottomRow ? plinth : 0` ו-`hasBack: true` בקריאה ל-`buildBoardModel` ב-CabinetSketch — כעת זהה לקריאה ב-useCabinet.
+
+### נוסף — BoardModel: גב, צוקל, shelf reveal, envelope helper
+- **גב הארון**: role `'back'`, `thickness: 0.6` ס"מ (=6מ"מ), `visible: false`. נכנס בין הצדדים בקואורדינטות `[t, W−t] × [t, H−t]`. **לא** מוצג בסקיצה הקדמית, **כן** ברשימת חיתוכים.
+- **לוחות צוקל**: roles `'plinth-front'` ו-`'plinth-back'`. נוצרים כש-`plinthHeight > 0`. `plinth-front` visible=true (מצויר מתחת לגוף), `plinth-back` visible=false. `useCabinet` מעביר `plinthHeight = plinth` רק לגופים ב-bottom-row (`level === 'bottom' || 'single'`).
+- **Shelf reveal offsets** כקבועים: `SHELF_WIDTH_REVEAL_CM = 0.1` (1מ"מ מכל צד), `SHELF_DEPTH_REVEAL_CM = 2.0` (20מ"מ פחות עומק). חל על roles: `shelf`, `fixed-shelf`, `internal-shelf`. אורך מדף = `(W − 2·tBody) − 2 × SHELF_WIDTH_REVEAL_CM`; עומק = `D − SHELF_DEPTH_REVEAL_CM`.
+- **`deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop)`** — helper משותף. מטפל ב-`position` `'left' | 'right' | 'single' | 'unit_N'` (תוקן הבאג שגופי `unit_*` לא קיבלו envelope). שורת ה-`unit_1` מקבלת envelope-left, ה-`unit_N` האחרונה מקבלת envelope-right.
+- **`Board.visible: boolean`** — שדה חדש. true לכל הלוחות הנראים; false לגב ולצוקל-אחורי. `CabinetCutSketch` חייב לסנן visible=false (כן עושה היום אגב `pointer-events:none` — אבל גם פיזית לא מצויר).
+
+### נוסף — `boardsToCutItems(boards, label): CutItem[]`
+- מתרגם Board → CutItem עם שם עברי (`ROLE_NAME_HE`), קבוצת cut (`ROLE_GROUP`), `qty: 1`, `note` של עובי במ"מ. כל הלוחות נכללים (גם visible=false).
+- בקריאה: `boardsToCutItems(boards, "תחתון יחידה 2")` יוצר שמות כמו "צד שמאל — תחתון יחידה 2".
+
+### שונה — calcCuts מייצר רק דלתות + מגירות לארון
+- הענף `type === 'cabinet'` ב-`calcCuts` הוסר הכל הקשור לקורפוס: shell, body, plinth, back, shelves. הסיגנטורה לא השתנתה (`shelves`, `hasBack`, `tShell`, `hasEnvelopeTop`, `tBody` נשארים כפרמטרים אך אינם משפיעים על הקורפוס).
+- `useCabinet` קורא ל-`buildBoardModel` לכל body box, ול-`boardsToCutItems` להפקת CutItems. תוצאה ממוזגת עם `cuts` (דלתות + מגירות מ-calcCuts) + `partitionCuts` (computePartitionCuts המקורי) + `externalDrawerCuts`.
+- ה-push הידני של "מעטפת — צד ימין/שמאל/תקרה" ב-useCabinet הוסר — boards מטפלים בזה דרך `envelope-left/right/top`.
+
 ### תוקן — BoxBodySketch — תצוגה כפולה של מדפים
 - מדפים הוצגו פעמיים בעורך הגוף: פעם כלוח (BoardModel דרך CabinetCutSketch) ופעם כקו ירוק ישן (legacy `shelfLine`). דומה ל-fixed shelf (`fixedShelfLine` dashed). הוסרה תצוגת ה-legacy.
 - שמירה על drag של מדפים: `<line>` שקוף ברוחב 10 כ-hit-area נשאר על מיקום המדף. הלוח (board) ב-`CabinetCutSketch` עם `pointer-events:none` בורר את התצוגה; ה-hit-area הקטן ממנו בלבד תופס את ה-pointer events.

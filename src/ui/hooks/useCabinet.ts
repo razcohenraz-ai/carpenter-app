@@ -27,12 +27,30 @@ import {
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
+import {
+  buildBoardModel,
+  boardsToCutItems,
+  deriveEnvelopeFlags,
+} from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 import type { Door, DoorById, DrawerFrontById, Hinge } from '../../types/doors';
+
+// ── Box-label helper (used for both partition cuts and board cuts) ──────────
+
+function buildBoxLabel(box: Box): string {
+  if (box.position === 'single' && box.level === 'single') return '';
+  const parts: string[] = [];
+  const levelMap: Record<string, string> = { top: 'עליון', middle: 'אמצעי', bottom: 'תחתון' };
+  if (box.level !== 'single' && levelMap[box.level]) parts.push(levelMap[box.level]!);
+  if (box.position === 'left') parts.push('שמאל');
+  else if (box.position === 'right') parts.push('ימין');
+  else if (box.unitIndex !== undefined) parts.push(`יחידה ${box.unitIndex}`);
+  return parts.join(' — ');
+}
 
 // ── Partition helpers ─────────────────────────────────────────────────────────
 
@@ -479,16 +497,10 @@ export function useCabinet(): {
 
     const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
     const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
+    // plinth / back / shelves all come from the BoardModel loop below.
     const cuts  = calcCuts('cabinet', innerW, H, D, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
-
-    if (hasShell) {
-      cuts.push({ name: 'מעטפת — צד ימין', qty: 1, w: D * 10, h: H * 10, group: 'shell' });
-      cuts.push({ name: 'מעטפת — צד שמאל', qty: 1, w: D * 10, h: H * 10, group: 'shell' });
-      if (hasEnvelopeTop) {
-        cuts.push({ name: 'מעטפת תקרה', qty: 1, w: innerW * 10, h: D * 10, group: 'shell' });
-      }
-    }
 
     // ── Stable maps from previous state ────────────────────────────────────
     const prevBoxes = prevBoxesRef.current;
@@ -701,7 +713,38 @@ export function useCabinet(): {
     setDrawerFronts(newDrawerFronts);
 
     const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody);
-    const allCuts = [...cuts, ...partitionCuts, ...externalDrawerCuts];
+
+    // ── Carcass cuts via BoardModel ────────────────────────────────────────
+    // One Board[] per body → boardsToCutItems → flat CutItem[]. Replaces the
+    // legacy shell+body+plinth+back+shelves output of calcCuts. The
+    // 'partition' role is filtered out because `computePartitionCuts` above
+    // already emits partition cuts with richer Hebrew labels.
+    const boardCuts: CutItem[] = [];
+    for (const box of bodyBoxes) {
+      const envFlags = deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop);
+      const items = newInterior[box.id] ?? [];
+      const cellItems = newCellInteriorById[box.id];
+      const hasPartitionBox = newPartitionsMap.get(box.id) === true;
+      const isBottomRow = box.level === 'bottom' || box.level === 'single';
+      const boards = buildBoardModel({
+        box,
+        bodyMaterial,
+        frontMaterial,
+        hasEnvelopeLeft: envFlags.hasEnvelopeLeft,
+        hasEnvelopeRight: envFlags.hasEnvelopeRight,
+        hasEnvelopeTop: envFlags.hasEnvelopeTop,
+        items,
+        hasPartition: hasPartitionBox,
+        ...(hasPartitionBox && cellItems
+          ? { cellItems: [cellItems[0] ?? [], cellItems[1] ?? []] as [InteriorItem[], InteriorItem[]] }
+          : {}),
+        plinthHeight: isBottomRow ? plinth : 0,
+        hasBack: true,
+      }).filter(b => b.role !== 'partition'); // partition emitted separately
+      boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
+    }
+
+    const allCuts = [...cuts, ...boardCuts, ...partitionCuts, ...externalDrawerCuts];
     setResult({ boxes, cuts: allCuts, doors });
   }
 
