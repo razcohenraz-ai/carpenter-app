@@ -47,10 +47,12 @@ interface Props {
   hasEnvelopeTop: boolean;
 }
 
-const SKETCH_W      = 180;
-const SKETCH_H      = 380;
-const CELL_SKETCH_W = 130;
-const CELL_SKETCH_H = 260;
+// Larger sketches give the carpenter a more readable cross-section in the
+// body editor; the controls column flexes to take the remaining width.
+const SKETCH_W      = 270;
+const SKETCH_H      = 570;
+const CELL_SKETCH_W = 195;
+const CELL_SKETCH_H = 390;
 
 export default function BoxInteriorEditor({
   box, items, onChange, onBack, numFronts, hasPartitions,
