@@ -78,6 +78,12 @@ export const BACK_THICKNESS_CM = 0.5;
  *  `carcassD = cabinetD - backThickness - HINGE_GAP_CM - frontThickness`. */
 export const HINGE_GAP_CM = 0.3;
 
+/** Floor clearance under the outer envelope side panels — the cabinet rests
+ *  on plastic levelers ~6 mm tall, so the envelope sides are cut short by
+ *  this amount to leave room. cm. Affects only `envelope-left` /
+ *  `envelope-right` cut length. */
+export const LEVELER_GAP_CM = 0.6;
+
 // ── Joint method ─────────────────────────────────────────────────────────────
 // Rabbet: sides span full height; top/bottom slot between the sides.
 //   → narrow / tall cabinets (W ≤ 2·H), where the sides carry the load.
@@ -164,6 +170,12 @@ export interface BuildBoardModelArgs {
    *  exposes this as the "עובי גב" field; callers pass the user value
    *  here so the back-panel cut emits the right thickness. */
   backThicknessCm?: number;
+  /** Full cabinet height in cm (top of envelope-top to floor — i.e. the
+   *  user's H input, which already includes plinth). Drives the cut length
+   *  of envelope-left / envelope-right: those side panels span the WHOLE
+   *  cabinet side and are shortened by `LEVELER_GAP_CM` so they sit on
+   *  plastic levelers. Defaults to box.H for legacy / unit-test callers. */
+  cabinetTotalH?: number;
 }
 
 export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
@@ -175,6 +187,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     hasBack = true,
     envelopeDepth,
     backThicknessCm = BACK_THICKNESS_CM,
+    cabinetTotalH,
   } = args;
 
   if (box.level === 'plinth') return [];
@@ -187,6 +200,10 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   // Envelope panels span the full cabinet depth — that includes the back
   // panel + hinge gap + front thickness that box.D already excluded.
   const envD = envelopeDepth ?? D;
+  // Envelope side length: full external cabinet height minus the floor gap
+  // for plastic levelers. Defaults to this body's H so legacy callers and
+  // unit tests keep working when they only care about a single body.
+  const envSideLength = (cabinetTotalH ?? H) - LEVELER_GAP_CM;
   const matId = bodyMaterial.id;
   const frontMatId = frontMaterial.id;
   const joint = resolveJointMethod(box);
@@ -292,11 +309,14 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   }
 
   // ── Back panel (invisible in front view, still cut) ──────────────────────
+  // The back is cut to the OUTER dimensions of the body (W × H) so it
+  // overlays the back face of the carcass — covering the rear edges of the
+  // side / top / bottom panels rather than slotting between them.
   if (hasBack) {
     out.push({
       id: newItemId(), role: 'back', materialId: matId,
-      length: W - 2 * t, width: H - 2 * t, thickness: backThicknessCm,
-      xFrom: t, xTo: W - t, yFrom: t, yTo: H - t, visible: false,
+      length: W, width: H, thickness: backThicknessCm,
+      xFrom: 0, xTo: W, yFrom: 0, yTo: H, visible: false,
     });
   }
 
@@ -317,18 +337,20 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   // ── Envelope ─────────────────────────────────────────────────────────────
   // Envelope panels use `envD` (full cabinet depth) rather than box.D
   // (carcass depth) — the outer shell wraps around the back panel and the
-  // hinge gap that the carcass excludes.
+  // hinge gap that the carcass excludes. envelope-left/right length spans
+  // the FULL external cabinet height (cabinetTotalH, including plinth)
+  // minus LEVELER_GAP_CM for the plastic levelers under the cabinet.
   if (hasEnvelopeLeft) {
     out.push({
       id: newItemId(), role: 'envelope-left', materialId: frontMatId,
-      length: H, width: envD, thickness: tF,
+      length: envSideLength, width: envD, thickness: tF,
       xFrom: -tF, xTo: 0, yFrom: 0, yTo: H, visible: true,
     });
   }
   if (hasEnvelopeRight) {
     out.push({
       id: newItemId(), role: 'envelope-right', materialId: frontMatId,
-      length: H, width: envD, thickness: tF,
+      length: envSideLength, width: envD, thickness: tF,
       xFrom: W, xTo: W + tF, yFrom: 0, yTo: H, visible: true,
     });
   }

@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### תוקן — 3 תיקונים נגריים ברשימת החיתוכים
+- **מדפים לא הופיעו ברשימת החיתוכים**: `setBoxInterior` / `setCellItems` ב-`useCabinet` קראו ל-`calculate()` רק כש-`externalStackChanged` (שינוי בערימת מגירות חיצוניות). תוצאה: הוספת מדף דרך עורך הפנים עדכנה את ה-`interiorById` אבל לא הריצה את `buildBoardModel` מחדש, כך ש-`result.cuts` נשאר ללא המדף. תיקון: שני ה-callbacks מריצים `calculate(lastInputRef.current)` תמיד כשיש קלט שמור — הלוגיקה ה-inline של עדכון hinges הוסרה (calculate ממילא מחשב hinges דרך `recomputeDoorHinges` בלולאת הדלתות).
+- **גב הארון: מידות חיצוניות מלאות**: עד היום הגב נחתך ב-`(W − 2·tBody) × (H − 2·tBody)` (נכנס בין הצדדים). תיקון: הגב נחתך כעת ב-`W × H` (רוחב מלא של הגוף כולל עובי שני הלוחות הצדדיים, גובה מלא ללא הקטנה). זה הסטנדרט הנגרי לארונות בטור — לוח הגב מורכב מאחור כ-overlay על הקצוות, לא בין הלוחות. `back.xFrom/yFrom = 0` ו-`xTo/yTo = W/H` (visual גם אם `visible: false`).
+- **מעטפת צדדים: גובה = cabinetTotalH − 6 מ"מ**: `envelope-left` / `envelope-right` חתכו ב-`length: H` של הגוף הבודד. עכשיו `length = cabinetTotalH − LEVELER_GAP_CM`, כאשר `LEVELER_GAP_CM = 0.6` (קבוע חדש ב-`boardModel.ts`). הסיבה הנגרית: הגבהות פלסטיק של 6 מ"מ בתחתית הארון — הצדדים החיצוניים חייבים להיות קצרים ב-6 מ"מ כדי לשבת על ההגבהות. פרמטר חדש `cabinetTotalH?: number` ב-`BuildBoardModelArgs` (default = `box.H` לתאימות עם בדיקות יחידה). `useCabinet` מעביר `cabinetTotalH: H` (ה-H של קלט הטופס — כולל צוקל ומעטפת תקרה).
+
 ### נוסף — טאב "חיתוכים" עם רשימת לוחות מסודרת לפי חומר + ייצוא PDF
 - **טאב שלישי** "חיתוכים" / "Cuts" ב-`CabinetForm`, ליד "גופים" ו"חזיתות". `sketchMode` הורחב ל-`'bodies' | 'fronts' | 'cuts'`. במצב חיתוכים מוצגת סקיצת הגופים כתצוגת ייחוס מעל הרשימה.
 - **`CutsList`** (חדש, `src/ui/components/CutsList.tsx` + `.module.css`) — מקבץ את `result.cuts` לפי `materialId` (חומר מהקטלוג מופיע ראשון בסדר ה-`MATERIALS`; קבוצת "אחר" לחלקי קופסת מגירה בעובי קבוע מופיעה אחרונה). לכל קבוצה: כותרת עם שם החומר וטבלה עם עמודות **תיאור / מידות (ס"מ) / כמות / שטח (ס"מ²)**. footer מציג סך לוחות + סך שטח לקבוצה.

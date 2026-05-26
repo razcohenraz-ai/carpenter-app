@@ -13,7 +13,6 @@ import {
   salonHingeSide,
   calcMainDoorHeight,
   getSkirtCoveringDrawer,
-  externalStackChanged,
   getItemsForFront,
 } from '../../core/doors/doorUtils';
 import { deriveDrawerFronts } from '../../core/doors/drawerFrontsCalc';
@@ -206,22 +205,15 @@ export function useCabinet(): {
     const newInterior = { ...interiorRef.current, [boxId]: synced };
     setInterior(newInterior);
 
-    // External-drawer change → door height, coversSkirt and 'front' cuts may
-    // all flip; run the full pipeline rather than a surgical update (Q3).
-    if (externalStackChanged(prevItems, synced) && lastInputRef.current) {
+    // Interior changes feed BOTH cuts (shelves are boards in the cut list)
+    // and door hinges (gaps depend on items). Run the full pipeline so
+    // result.cuts and door hinges refresh together — was previously gated on
+    // externalStackChanged, which made user-added shelves silently invisible
+    // in the cut list.
+    void prevItems;
+    if (lastInputRef.current) {
       calculate(lastInputRef.current);
-      return;
     }
-
-    const nf = numFrontsRef.current.get(boxId) ?? 1;
-    const updatedDoors: DoorById = { ...doorsRef.current };
-    for (let fi = 0; fi < nf; fi++) {
-      const doorId = makeDoorId(boxId, fi);
-      const door = doorsRef.current[doorId];
-      if (door) updatedDoors[doorId] = recomputeDoorHinges(door, synced, plinthRef.current);
-    }
-    doorsRef.current = updatedDoors;
-    setDoorsById(updatedDoors);
   }
 
   // ── Partitions ────────────────────────────────────────────────────────────
@@ -300,8 +292,11 @@ export function useCabinet(): {
     cellInteriorRef.current = newCellInterior;
     setCellInteriorById(newCellInterior);
 
-    // Mount toggle inside a cell → full recalculate (same rationale as setBoxInterior).
-    if (externalStackChanged(prevItems, synced) && lastInputRef.current) {
+    // Same rationale as setBoxInterior: shelves added in a cell are boards in
+    // the cut list, so always recompute. The externalStackChanged shortcut
+    // hid them from the cut list.
+    void prevItems;
+    if (lastInputRef.current) {
       calculate(lastInputRef.current);
     }
   }
@@ -753,6 +748,10 @@ export function useCabinet(): {
         hasBack: true,
         envelopeDepth: D,
         backThicknessCm: backThickness,
+        // User's H input is the full external cabinet height (plinth + bodies
+        // + envelopeTop). Pass it so envelope-left/right cut to the right
+        // length regardless of which body emits them.
+        cabinetTotalH: H,
       }).filter(b => b.role !== 'partition'); // partition emitted separately
       boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
     }

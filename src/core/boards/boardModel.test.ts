@@ -331,8 +331,10 @@ describe('buildBoardModel — back panel', () => {
     const back = backs[0]!;
     expect(back.visible).toBe(false);
     expect(back.thickness).toBeCloseTo(BACK_THICKNESS_CM);
-    expect(back.length).toBeCloseTo(80 - 2 * t);
-    expect(back.width).toBeCloseTo(200 - 2 * t);
+    // Back panel is cut to the outer body dimensions and overlays the rear
+    // face — full W × H, not W − 2t × H − 2t.
+    expect(back.length).toBeCloseTo(80);
+    expect(back.width).toBeCloseTo(200);
   });
 
   it('hasBack=false → no back board', () => {
