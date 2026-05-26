@@ -470,7 +470,7 @@ describe('boardsToCutItems', () => {
     const backCut = cuts.find(c => c.name.startsWith('גב'));
     expect(backCut).toBeDefined();
     expect(backCut!.group).toBe('back');
-    expect(backCut!.note).toBe('6mm');
+    expect(backCut!.note).toBe(`${Math.round(BACK_THICKNESS_CM * 10)}mm`);
   });
 
   it('emits one CutItem per Board with mm dimensions', () => {

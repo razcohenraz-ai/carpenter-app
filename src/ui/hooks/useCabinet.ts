@@ -31,6 +31,7 @@ import {
   buildBoardModel,
   boardsToCutItems,
   deriveEnvelopeFlags,
+  HINGE_GAP_CM,
 } from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
@@ -93,6 +94,10 @@ export interface CabinetInput {
   W: number;
   H: number;
   D: number;
+  /** Back-panel thickness in cm (form field "עובי גב", entered in mm and
+   *  divided by 10). Reduces the carcass depth: every carcass board's depth
+   *  becomes `D - backThickness - HINGE_GAP_CM - frontMaterialThickness`. */
+  backThickness: number;
   hasShell: boolean;
   hasEnvelopeTop: boolean;
   bodyMaterialId: MaterialId;
@@ -487,19 +492,25 @@ export function useCabinet(): {
   function calculate(input: CabinetInput): void {
     lastInputRef.current = input;
 
-    const { W, H, D, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
+    const { W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
     const bodyMaterial  = getMaterial(bodyMaterialId);
     const frontMaterial = getMaterial(frontMaterialId);
     const tBody  = bodyMaterial.thickness / 10;   // cm
     const tFront = frontMaterial.thickness / 10;  // cm
     const innerW = hasShell ? W - 2 * tFront : W;
+    // Carcass depth: sides/top/bottom/shelves/partition/back/plinth all stop
+    // short of the cabinet's front+back faces. The full cabinet depth D
+    // is preserved for the outer envelope only (see buildBoardModel call
+    // below — envelopeDepth=D).
+    const carcassD = Math.max(0, D - backThickness - HINGE_GAP_CM - tFront);
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
     const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
-    const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    const boxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
     // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
     // plinth / back / shelves all come from the BoardModel loop below.
-    const cuts  = calcCuts('cabinet', innerW, H, D, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
+    // The drawer-box also sits inside the carcass, so it uses carcassD too.
+    const cuts  = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
 
     // ── Stable maps from previous state ────────────────────────────────────
@@ -740,6 +751,8 @@ export function useCabinet(): {
           : {}),
         plinthHeight: isBottomRow ? plinth : 0,
         hasBack: true,
+        envelopeDepth: D,
+        backThicknessCm: backThickness,
       }).filter(b => b.role !== 'partition'); // partition emitted separately
       boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
     }

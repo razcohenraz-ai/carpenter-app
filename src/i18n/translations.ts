@@ -18,6 +18,7 @@ export interface Translations {
     hasShell: string;
     bodyMaterial: string;
     frontMaterial: string;
+    backThickness: string;
     calculate: string;
     unitCm: string;
     plinthHeight: string;
@@ -171,6 +172,7 @@ const he: Translations = {
     hasShell: 'מעטפת חיצונית',
     bodyMaterial:  'חומר גופים',
     frontMaterial: 'חומר חזיתות',
+    backThickness: 'עובי גב (מ"מ)',
     calculate: 'חשב',
     unitCm: 'ס"מ',
     plinthHeight: 'גובה צוקל (ס"מ)',
@@ -323,6 +325,7 @@ const en: Translations = {
     hasShell: 'Outer shell',
     bodyMaterial:  'Body Material',
     frontMaterial: 'Front Material',
+    backThickness: 'Back Thickness (mm)',
     calculate: 'Calculate',
     unitCm: 'cm',
     plinthHeight: 'Plinth Height (cm)',

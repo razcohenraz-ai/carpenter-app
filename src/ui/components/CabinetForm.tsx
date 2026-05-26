@@ -18,6 +18,9 @@ interface FormState {
   W: string;
   H: string;
   D: string;
+  /** Back-panel thickness in MILLIMETRES (carpenter mental model). Stored
+   *  here as the raw input string; converted to cm at submit time. */
+  backThicknessMm: string;
   plinth: string;
   lowerDoorH: string;
   middleDoorH: string;
@@ -103,6 +106,7 @@ export default function CabinetForm(): React.JSX.Element {
 
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
+    backThicknessMm: '5',
     plinth: '10', lowerDoorH: '110', middleDoorH: '80',
     hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
     bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
@@ -182,8 +186,14 @@ export default function CabinetForm(): React.JSX.Element {
       form.doorsPerColumn === '2' ? 2 :
       form.doorsPerColumn === '3' ? 3 : 'auto';
 
+    const backThicknessMm = parseFloat(form.backThicknessMm);
+    const backThicknessCm = Number.isFinite(backThicknessMm) && backThicknessMm >= 0
+      ? backThicknessMm / 10
+      : 0.5;
+
     calculate({
       W, H, D,
+      backThickness: backThicknessCm,
       hasShell: form.hasShell,
       hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
       bodyMaterialId: form.bodyMaterialId,
@@ -208,6 +218,14 @@ export default function CabinetForm(): React.JSX.Element {
   const totalPieces = result?.cuts.reduce((sum, c) => sum + c.qty, 0) ?? 0;
 
   const frontThicknessCm = (MATERIALS[form.frontMaterialId]?.thickness ?? 18) / 10;
+  // The form stores the carpenter-facing value in MILLIMETRES; the sketch
+  // and the engine consume cm. Match the conversion + 0.5-cm fallback used
+  // in handleSubmit so the preview's carcass depth stays in sync with the
+  // value that ultimately reaches `calculate({ backThickness })`.
+  const backThicknessMmParsed = parseFloat(form.backThicknessMm);
+  const backThicknessCm = Number.isFinite(backThicknessMmParsed) && backThicknessMmParsed >= 0
+    ? backThicknessMmParsed / 10
+    : 0.5;
   const parsedW = parseFloat(form.W);
   const innerBodyW = form.hasShell && !isNaN(parsedW) ? parsedW - 2 * frontThicknessCm : parsedW;
   const shellWidthWarning = form.hasShell && !isNaN(parsedW) && innerBodyW < 30
@@ -404,6 +422,22 @@ export default function CabinetForm(): React.JSX.Element {
             </div>
 
             <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-back-thickness">
+                {t.form.backThickness}
+              </label>
+              <input
+                id="input-back-thickness"
+                className={styles.input}
+                type="number"
+                value={form.backThicknessMm}
+                step={0.5}
+                min={0}
+                onChange={e => setForm(p => ({ ...p, backThicknessMm: e.target.value }))}
+                onFocus={e => e.target.select()}
+              />
+            </div>
+
+            <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="input-front-material">
                 {t.form.frontMaterial}
               </label>
@@ -534,6 +568,7 @@ export default function CabinetForm(): React.JSX.Element {
               W={form.W}
               H={form.H}
               D={form.D}
+              backThicknessCm={backThicknessCm}
               plinth={form.plinth}
               doorsPerColumn={form.doorsPerColumn}
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}

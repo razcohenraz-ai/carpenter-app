@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### נוסף — שדה "עובי גב (מ"מ)" + חישוב עומק גוף פנימי (carcassD)
+- **CabinetForm**: שדה קלט חדש "עובי גב (מ"מ)" ליד שדה חומר הגוף, ברירת מחדל 5מ"מ. הנגר מזין מ"מ; הקוד שומר כ-ס"מ (חלוקה ב-10). אם הקלט לא תקין → fallback ל-0.5 ס"מ.
+- **`CabinetInput.backThickness`** (cm, חדש) — חלק מה-API של `useCabinet.calculate`. נשמר ב-`lastInputRef` כשאר ההגדרות.
+- **`carcassD = max(0, D − backThickness − HINGE_GAP_CM − tFront)`** — עומק הקורפוס הפנימי (צדדים/תקרה/רצפה/מדפים/גב/צוקל) נקטן ביחס ל-`D` המלא של הארון: ה-`D` נשמר רק ללוחות המעטפת.
+- **`decomposeBoxes`** מקבל `carcassD` כ-`box.D` — כל הצרכנים שקוראים `box.D` (boardModel, drawer-box, sketch interior) רואים את העומק הנכון של הקורפוס.
+- **`buildBoardModel`** מקבל `envelopeDepth: D` (העומק המלא) + `backThicknessCm: backThickness` — לוחות המעטפת נשארים בגודל מלא; לוח הגב מקבל את העובי שהנגר ביקש (לא קבוע 6מ"מ).
+- **`calcCuts` עם `'cabinet'`** מקבל `carcassD` במקום `D` — חלקי קופסת המגירה (drawer-box) יושבים בקורפוס ולכן עומקם נקבע לפי `carcassD`.
+- **`BACK_THICKNESS_CM`** הוגדר מחדש ל-0.5 (היה 0.6) — ברירת מחדל תואמת ל-5מ"מ של הטופס. בדיקה תואמת ב-`boardModel.test.ts:473` עודכנה (`6mm → 5mm`).
+- **`CabinetSketch`** מקבל `backThicknessCm` כ-prop ומחשב carcassD משלו לתצוגה (התואם ל-`useCabinet`), ומעביר `envelopeDepth: fullD` + `backThicknessCm` ל-`buildBoardModel` כך שהתצוגה הויזואלית תואמת את רשימת החיתוכים.
+
 ### שונה — תצוגת הארון מתפרסה על כל רוחב האזור המרכזי
 - ה-grid ב-`CabinetForm.module.css` שונה מ-`minmax(260px, 1fr) | minmax(0, 2fr)` (טופס ~33% / סקיצה ~67%) ל-`minmax(260px, 320px) | minmax(0, 1fr)` — הטופס מקבל רוחב טבעי 260-320px, והסקיצה תופסת את **כל** המרחב הנותר.
 - `.sketchStack` מקבל `align-items: stretch + width: 100%` כדי שה-SVG ימלא את הרוחב. `modeToggle` ממשיך להיות ממורכז דרך ה-`align-self: center` שלו.

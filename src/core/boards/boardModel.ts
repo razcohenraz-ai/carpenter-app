@@ -68,8 +68,15 @@ export const SHELF_WIDTH_REVEAL_CM = 0.1;
  *  fingertips clear the facade. cm (20 mm). */
 export const SHELF_DEPTH_REVEAL_CM = 2.0;
 
-/** Back-panel thickness — typical 6 mm sheet (4 mm for shelving units). cm. */
-export const BACK_THICKNESS_CM = 0.6;
+/** Back-panel thickness — default 5 mm sheet. Overridable per-call via
+ *  `backThicknessCm` in BuildBoardModelArgs (and per-cabinet via the form
+ *  field "עובי גב"). cm. */
+export const BACK_THICKNESS_CM = 0.5;
+
+/** Hinge gap between the carcass front edge and the front panel — fixed
+ *  by the hinge cup geometry. cm. Drives the carcass-depth reduction:
+ *  `carcassD = cabinetD - backThickness - HINGE_GAP_CM - frontThickness`. */
+export const HINGE_GAP_CM = 0.3;
 
 // ── Joint method ─────────────────────────────────────────────────────────────
 // Rabbet: sides span full height; top/bottom slot between the sides.
@@ -148,6 +155,15 @@ export interface BuildBoardModelArgs {
   plinthHeight?: number;
   /** Include a back panel (visible:false). Defaults to true. */
   hasBack?: boolean;
+  /** Outer envelope depth in cm — used for envelope-* board `width`. The
+   *  envelope spans the full cabinet depth, while box.D is the (smaller)
+   *  carcass depth (= cabinetD − backThickness − HINGE_GAP − frontThickness).
+   *  Defaults to box.D when not provided (legacy callers / unit tests). */
+  envelopeDepth?: number;
+  /** Back-panel thickness in cm. Defaults to `BACK_THICKNESS_CM`. The form
+   *  exposes this as the "עובי גב" field; callers pass the user value
+   *  here so the back-panel cut emits the right thickness. */
+  backThicknessCm?: number;
 }
 
 export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
@@ -157,6 +173,8 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     items, hasPartition, cellItems,
     plinthHeight = 0,
     hasBack = true,
+    envelopeDepth,
+    backThicknessCm = BACK_THICKNESS_CM,
   } = args;
 
   if (box.level === 'plinth') return [];
@@ -166,6 +184,9 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   const W = box.W;
   const H = box.H;
   const D = box.D;
+  // Envelope panels span the full cabinet depth — that includes the back
+  // panel + hinge gap + front thickness that box.D already excluded.
+  const envD = envelopeDepth ?? D;
   const matId = bodyMaterial.id;
   const frontMatId = frontMaterial.id;
   const joint = resolveJointMethod(box);
@@ -274,7 +295,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   if (hasBack) {
     out.push({
       id: newItemId(), role: 'back', materialId: matId,
-      length: W - 2 * t, width: H - 2 * t, thickness: BACK_THICKNESS_CM,
+      length: W - 2 * t, width: H - 2 * t, thickness: backThicknessCm,
       xFrom: t, xTo: W - t, yFrom: t, yTo: H - t, visible: false,
     });
   }
@@ -294,24 +315,27 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   }
 
   // ── Envelope ─────────────────────────────────────────────────────────────
+  // Envelope panels use `envD` (full cabinet depth) rather than box.D
+  // (carcass depth) — the outer shell wraps around the back panel and the
+  // hinge gap that the carcass excludes.
   if (hasEnvelopeLeft) {
     out.push({
       id: newItemId(), role: 'envelope-left', materialId: frontMatId,
-      length: H, width: D, thickness: tF,
+      length: H, width: envD, thickness: tF,
       xFrom: -tF, xTo: 0, yFrom: 0, yTo: H, visible: true,
     });
   }
   if (hasEnvelopeRight) {
     out.push({
       id: newItemId(), role: 'envelope-right', materialId: frontMatId,
-      length: H, width: D, thickness: tF,
+      length: H, width: envD, thickness: tF,
       xFrom: W, xTo: W + tF, yFrom: 0, yTo: H, visible: true,
     });
   }
   if (hasEnvelopeTop) {
     out.push({
       id: newItemId(), role: 'envelope-top', materialId: frontMatId,
-      length: W, width: D, thickness: tF,
+      length: W, width: envD, thickness: tF,
       xFrom: 0, xTo: W, yFrom: -tF, yTo: 0, visible: true,
     });
   }

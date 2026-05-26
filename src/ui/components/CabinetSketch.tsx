@@ -8,7 +8,7 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
-import { buildBoardModel, deriveEnvelopeFlags } from '../../core/boards/boardModel';
+import { buildBoardModel, deriveEnvelopeFlags, HINGE_GAP_CM } from '../../core/boards/boardModel';
 import { getMaterial } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -20,6 +20,11 @@ interface Props {
   W: string;
   H: string;
   D: string;
+  /** Back-panel thickness in cm. Drives the same `carcassD` reduction as
+   *  `useCabinet.calculate`, so the sketch's box.D matches the cut list.
+   *  Required: the form always supplies it (mm field with cm conversion),
+   *  so the sketch never falls back to the BoardModel constant. */
+  backThicknessCm: number;
   plinth: string;
   lowerDoorH?: string;
   doorsPerColumn?: string;
@@ -43,7 +48,7 @@ interface Props {
   onDrawerFrontClick?: (drawerId: string) => void;
 }
 
-export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -61,7 +66,14 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
     doorsPerColumn === '2' ? 2 :
     doorsPerColumn === '3' ? 3 : 'auto';
   const tEnv = hasShell && frontMaterialThickness ? frontMaterialThickness : undefined;
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
+  // Carcass depth reduction matches useCabinet.calculate: the sketch needs
+  // box.D = carcassD so the visual board model (BoxBodySketch, depth labels)
+  // matches the cut list. The full cabinet depth survives only on the
+  // envelope boards via `envelopeDepth` below.
+  const fullD = parseFloat(D);
+  const tFrontCm = frontMaterialThickness ?? 0;
+  const carcassD = Math.max(0, fullD - backThicknessCm - HINGE_GAP_CM - tFrontCm);
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
   // Boards are emitted only post-calc (interiorById defined) and only when
@@ -94,6 +106,8 @@ export default function CabinetSketch({ W, H, D, plinth, lowerDoorH, doorsPerCol
         ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
         plinthHeight: isBottomRow ? (parseFloat(plinth) || 0) : 0,
         hasBack: true,
+        envelopeDepth: fullD,
+        backThicknessCm,
       });
       boardsByBoxId.set(box.id, boards);
     }
