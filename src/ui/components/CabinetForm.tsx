@@ -9,6 +9,7 @@ import CabinetFrontsSketch from './CabinetFrontsSketch';
 import BoxInteriorEditor from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
+import CutsList from './CutsList';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import styles from './CabinetForm.module.css';
 
@@ -77,7 +78,7 @@ export default function CabinetForm(): React.JSX.Element {
     | { type: 'door'; doorId: string }
     | { type: 'drawer'; drawerId: string };
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
-  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts'>('bodies');
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts'>('bodies');
 
   function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
@@ -559,11 +560,18 @@ export default function CabinetForm(): React.JSX.Element {
               >
                 {t.doors.fronts}
               </button>
+              <button
+                type="button"
+                className={`${styles.modeBtn} ${styles.modeBtnCuts} ${sketchMode === 'cuts' ? styles.modeBtnActive : ''}`}
+                onClick={() => setSketchMode('cuts')}
+              >
+                {t.cutsList.tab}
+              </button>
             </div>
           )}
 
-          {/* Main sketch */}
-          {sketchMode === 'bodies' || !result ? (
+          {/* Main sketch — bodies layout doubles as the cuts-tab reference. */}
+          {sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
             <CabinetSketch
               W={form.W}
               H={form.H}
@@ -616,24 +624,25 @@ export default function CabinetForm(): React.JSX.Element {
           <p className={styles.summary}>
             {t.results.summary(result.boxes.length, totalPieces)}
           </p>
-          {sketchMode === 'bodies'
-            ? <BoxesList boxes={result.boxes} />
-            : <DoorsList
-                bodyBoxes={bodyBoxes}
-                doorsById={doorsById}
-                drawerFrontsById={drawerFrontsById}
-                drawerById={drawerById}
-                displayNumbers={displayNumbers}
-                globalMaterialId={form.frontMaterialId}
-                plinthHeight={parseFloat(form.plinth) || 0}
-                numFrontsPerBox={numFrontsPerBox}
-                hasShell={form.hasShell}
-                {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
-                {...(parsedW > 0 ? { cabinetW: parsedW, cabinetH: parseFloat(form.H) || 0, cabinetD: parseFloat(form.D) || 0 } : {})}
-                frontMaterialThickness={frontThicknessCm}
-                onDrawerFrontClick={handleDrawerFrontClick}
-              />
-          }
+          {sketchMode === 'bodies' && <BoxesList boxes={result.boxes} />}
+          {sketchMode === 'fronts' && (
+            <DoorsList
+              bodyBoxes={bodyBoxes}
+              doorsById={doorsById}
+              drawerFrontsById={drawerFrontsById}
+              drawerById={drawerById}
+              displayNumbers={displayNumbers}
+              globalMaterialId={form.frontMaterialId}
+              plinthHeight={parseFloat(form.plinth) || 0}
+              numFrontsPerBox={numFrontsPerBox}
+              hasShell={form.hasShell}
+              {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
+              {...(parsedW > 0 ? { cabinetW: parsedW, cabinetH: parseFloat(form.H) || 0, cabinetD: parseFloat(form.D) || 0 } : {})}
+              frontMaterialThickness={frontThicknessCm}
+              onDrawerFrontClick={handleDrawerFrontClick}
+            />
+          )}
+          {sketchMode === 'cuts' && <CutsList cuts={result.cuts} />}
         </>
       )}
       {editing.type === 'drawer' && drawerById[editing.drawerId] && (

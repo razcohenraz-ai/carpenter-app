@@ -394,6 +394,7 @@ export function boardsToCutItems(boards: Board[], label: string): CutItem[] {
       h: Math.round(b.width * 10),
       group: ROLE_GROUP[b.role],
       note: noteMm,
+      materialId: b.materialId,
     } satisfies CutItem;
   });
 }

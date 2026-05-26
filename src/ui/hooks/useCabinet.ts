@@ -757,7 +757,41 @@ export function useCabinet(): {
       boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
     }
 
-    const allCuts = [...cuts, ...boardCuts, ...partitionCuts, ...externalDrawerCuts];
+    // Enrich every non-board cut with a materialId so the cut-list view can
+    // group by material. boardsToCutItems already sets materialId from
+    // board.materialId — these others come from calcCuts / partition /
+    // external-drawer producers that don't carry material info, so we set
+    // it here by `group`:
+    //   shell/door/front → frontMaterialId (envelope, doors, external-drawer fronts)
+    //   body/back/plinth → bodyMaterialId
+    //   drawer           → no cabinet material (fixed 12mm/6mm drawer-box parts)
+    function materialForGroup(group: CutItem['group']): MaterialId | undefined {
+      switch (group) {
+        case 'shell':
+        case 'door':
+        case 'front':
+          return frontMaterialId;
+        case 'body':
+        case 'back':
+        case 'plinth':
+          return bodyMaterialId;
+        default:
+          return undefined;
+      }
+    }
+    function enrich(items: CutItem[]): CutItem[] {
+      return items.map(c => {
+        if (c.materialId !== undefined) return c;
+        const mid = materialForGroup(c.group);
+        return mid !== undefined ? { ...c, materialId: mid } : c;
+      });
+    }
+    const allCuts = [
+      ...enrich(cuts),
+      ...boardCuts,
+      ...enrich(partitionCuts),
+      ...enrich(externalDrawerCuts),
+    ];
     setResult({ boxes, cuts: allCuts, doors });
   }
 

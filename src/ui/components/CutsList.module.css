@@ -1,0 +1,160 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.exportBtn {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.exportBtn:hover {
+  background: var(--color-primary-dark);
+}
+
+.exportBtn:active {
+  transform: scale(0.99);
+}
+
+.printable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.group {
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.groupTitle {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  margin: 0;
+  padding-bottom: var(--spacing-xs);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.groupLabel {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.table thead th {
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  text-align: start;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.table tbody td {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tfoot td {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-weight: var(--font-weight-bold);
+  background: var(--color-surface-raised);
+  border-top: 2px solid var(--color-border);
+}
+
+.colDesc { text-align: start; }
+.colDims { text-align: start; white-space: nowrap; }
+.colQty  { text-align: end;   width: 60px; }
+.colArea { text-align: end;   width: 90px; white-space: nowrap; }
+
+.footerLabel {
+  color: var(--color-text-secondary);
+  text-align: start;
+}
+
+.note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* ── Print styles: PDF export via window.print ──────────────────────────────
+   When the browser enters print mode, hide the whole app and show only the
+   cut-list. The form, sketches, and other lists fall away so the carpenter
+   gets a clean printable sheet. */
+@media print {
+  /* Hide everything by default, then opt-in the printable area. */
+  body * {
+    visibility: hidden;
+  }
+  .printable,
+  .printable * {
+    visibility: visible;
+  }
+  .printable {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 12mm;
+    background: #fff;
+    color: #000;
+  }
+  .group {
+    page-break-inside: avoid;
+    border: 1px solid #999;
+    margin-bottom: 8mm;
+  }
+  .groupTitle {
+    color: #000;
+    border-bottom-color: #999;
+  }
+  .table thead th {
+    background: #eee;
+    color: #000;
+  }
+  .table tfoot td {
+    background: #f5f5f5;
+  }
+  .exportBtn,
+  .header {
+    display: none !important;
+  }
+}

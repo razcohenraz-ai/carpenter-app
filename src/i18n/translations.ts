@@ -152,6 +152,21 @@ export interface Translations {
     thickness: string;
     note: string;
   };
+
+  cutsList: {
+    tab: string;
+    materialGroup: string;
+    description: string;
+    dimensions: string;
+    quantity: string;
+    area: string;
+    totalPieces: string;
+    totalArea: string;
+    exportPdf: string;
+    /** Fallback section header for cuts that don't map to a catalog material
+     *  (e.g. drawer-box sides/back/bottom at fixed 12mm/6mm). */
+    noMaterial: string;
+  };
 }
 
 const he: Translations = {
@@ -305,6 +320,19 @@ const he: Translations = {
     thickness: 'עובי',
     note: 'הערה',
   },
+
+  cutsList: {
+    tab: 'חיתוכים',
+    materialGroup: 'חומר',
+    description: 'תיאור',
+    dimensions: 'מידות (ס"מ)',
+    quantity: 'כמות',
+    area: 'שטח (ס"מ²)',
+    totalPieces: 'סה"כ לוחות',
+    totalArea: 'סה"כ שטח',
+    exportPdf: 'ייצוא PDF',
+    noMaterial: 'אביזרי מגירה / אחר',
+  },
 };
 
 const en: Translations = {
@@ -457,6 +485,19 @@ const en: Translations = {
     length: 'Length',
     thickness: 'Thickness',
     note: 'Note',
+  },
+
+  cutsList: {
+    tab: 'Cuts',
+    materialGroup: 'Material',
+    description: 'Description',
+    dimensions: 'Dimensions (cm)',
+    quantity: 'Qty',
+    area: 'Area (cm²)',
+    totalPieces: 'Total pieces',
+    totalArea: 'Total area',
+    exportPdf: 'Export PDF',
+    noMaterial: 'Drawer parts / Other',
   },
 };
 

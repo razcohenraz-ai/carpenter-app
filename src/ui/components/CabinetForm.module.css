@@ -204,6 +204,10 @@
   color: var(--color-fronts);
 }
 
+.modeBtnCuts {
+  color: var(--color-text-secondary);
+}
+
 .modeBtn + .modeBtn {
   border-inline-start: var(--border-width) solid var(--color-border);
 }

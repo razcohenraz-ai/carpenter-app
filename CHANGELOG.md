@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### נוסף — טאב "חיתוכים" עם רשימת לוחות מסודרת לפי חומר + ייצוא PDF
+- **טאב שלישי** "חיתוכים" / "Cuts" ב-`CabinetForm`, ליד "גופים" ו"חזיתות". `sketchMode` הורחב ל-`'bodies' | 'fronts' | 'cuts'`. במצב חיתוכים מוצגת סקיצת הגופים כתצוגת ייחוס מעל הרשימה.
+- **`CutsList`** (חדש, `src/ui/components/CutsList.tsx` + `.module.css`) — מקבץ את `result.cuts` לפי `materialId` (חומר מהקטלוג מופיע ראשון בסדר ה-`MATERIALS`; קבוצת "אחר" לחלקי קופסת מגירה בעובי קבוע מופיעה אחרונה). לכל קבוצה: כותרת עם שם החומר וטבלה עם עמודות **תיאור / מידות (ס"מ) / כמות / שטח (ס"מ²)**. footer מציג סך לוחות + סך שטח לקבוצה.
+- **`CutItem.materialId?: MaterialId`** — שדה חדש על `src/types/cuts.ts`. אופציונלי כי חלקי קופסת מגירה (12מ"מ צד/גב, 6מ"מ תחתית) לא תואמים לחומר מהקטלוג.
+- **`boardsToCutItems`** מעתיק את `board.materialId` ל-CutItem.
+- **`useCabinet`** — פונקציית `enrich` חדשה ממפה `materialId` לפי `group` עבור חיתוכים מ-`calcCuts` / `computePartitionCuts` / `calcExternalDrawerFrontCuts`: `shell|door|front → frontMaterialId`, `body|back|plinth → bodyMaterialId`. `drawer` (חלקי קופסה) נשאר undefined ונכנס לקבוצת "אחר".
+- **כפתור "ייצוא PDF" / "Export PDF"** מעל הרשימה. הלחיצה מפעילה `window.print()`. CSS print מותאם: `@media print` מסתיר את כל ה-`body` חוץ מ-`.printable`, אורז כל קבוצה כ-`page-break-inside: avoid`, ומעצב את הטבלה לקריאה על דף לבן.
+- **תרגומים חדשים** ב-`translations.ts` תחת `cutsList`: `tab`, `materialGroup`, `description`, `dimensions`, `quantity`, `area`, `totalPieces`, `totalArea`, `exportPdf`, `noMaterial`.
+
 ### נוסף — שדה "עובי גב (מ"מ)" + חישוב עומק גוף פנימי (carcassD)
 - **CabinetForm**: שדה קלט חדש "עובי גב (מ"מ)" ליד שדה חומר הגוף, ברירת מחדל 5מ"מ. הנגר מזין מ"מ; הקוד שומר כ-ס"מ (חלוקה ב-10). אם הקלט לא תקין → fallback ל-0.5 ס"מ.
 - **`CabinetInput.backThickness`** (cm, חדש) — חלק מה-API של `useCabinet.calculate`. נשמר ב-`lastInputRef` כשאר ההגדרות.
