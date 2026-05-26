@@ -7,6 +7,12 @@
 
 ## [Unreleased]
 
+### תוקן — מדף נחתך בדיוק כמו תקרה/רצפה (ללא reveal)
+- `SHELF_WIDTH_REVEAL_CM` ו-`SHELF_DEPTH_REVEAL_CM` ב-`core/boards/boardModel.ts` שונו מ-`0.1` ו-`2.0` ל-`0`. תוצאה: מדף רגיל, מדף קבוע ו-internal-shelf מקבלים `length = W − 2·tBody` ו-`width = D` — זהה לחלוטין ללוח התקרה/רצפה של אותו גוף. לא מתבצעת עוד הקטנה של 1 מ"מ לצדדים ולא הקטנה של 20 מ"מ מהעומק.
+- הקבועים נשמרים כ-`export` ב-API לתאימות לאחור ולכך שניתן להחזיר reveal בעתיד בלי לשנות חתימות. הסכמה והערות עודכנו כדי לתעד שהערך הנוכחי הוא 0.
+- בדיקות ב-`boardModel.test.ts` (sections "shelves from items", "shelf dimensions match top/bottom") עודכנו לבטא את המוסכמה החדשה: assertions משתמשים ב-`W − 2·t` ו-`D` ישירות, ובדיקה אחת מאמתת `shelf.length === top.length` כך שכל שינוי עתידי שיחזיר reveal ייתפס מיד.
+- `docs/CARPENTRY_RULES.md`: סקציית "מדף — Reveal offsets" שונתה ל-"מדף — מידות זהות לתקרה/רצפה".
+
 ### תוקן — 3 תיקונים נגריים ברשימת החיתוכים
 - **מדפים לא הופיעו ברשימת החיתוכים**: `setBoxInterior` / `setCellItems` ב-`useCabinet` קראו ל-`calculate()` רק כש-`externalStackChanged` (שינוי בערימת מגירות חיצוניות). תוצאה: הוספת מדף דרך עורך הפנים עדכנה את ה-`interiorById` אבל לא הריצה את `buildBoardModel` מחדש, כך ש-`result.cuts` נשאר ללא המדף. תיקון: שני ה-callbacks מריצים `calculate(lastInputRef.current)` תמיד כשיש קלט שמור — הלוגיקה ה-inline של עדכון hinges הוסרה (calculate ממילא מחשב hinges דרך `recomputeDoorHinges` בלולאת הדלתות).
 - **גב הארון: מידות חיצוניות מלאות**: עד היום הגב נחתך ב-`(W − 2·tBody) × (H − 2·tBody)` (נכנס בין הצדדים). תיקון: הגב נחתך כעת ב-`W × H` (רוחב מלא של הגוף כולל עובי שני הלוחות הצדדיים, גובה מלא ללא הקטנה). זה הסטנדרט הנגרי לארונות בטור — לוח הגב מורכב מאחור כ-overlay על הקצוות, לא בין הלוחות. `back.xFrom/yFrom = 0` ו-`xTo/yTo = W/H` (visual גם אם `visible: false`).

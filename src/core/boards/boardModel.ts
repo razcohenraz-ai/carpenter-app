@@ -60,13 +60,15 @@ export interface Board {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Per-side reveal on shelf width — keeps the shelf from binding against the
- *  side panels. cm (1 mm per side). */
-export const SHELF_WIDTH_REVEAL_CM = 0.1;
+/** Per-side reveal on shelf width. Kept at 0 so a shelf is cut to exactly
+ *  the same length as the top/bottom panel (`W − 2·tBody`). The constant is
+ *  retained as a structural seam — re-enable here if a future carpentry
+ *  convention calls for a clearance reveal. cm. */
+export const SHELF_WIDTH_REVEAL_CM = 0;
 
-/** Total depth reduction on shelves — shelves don't reach the front so the
- *  fingertips clear the facade. cm (20 mm). */
-export const SHELF_DEPTH_REVEAL_CM = 2.0;
+/** Total depth reduction on shelves. Kept at 0 so a shelf width matches
+ *  the body depth `D` exactly (same as top/bottom). cm. */
+export const SHELF_DEPTH_REVEAL_CM = 0;
 
 /** Back-panel thickness — default 5 mm sheet. Overridable per-call via
  *  `backThicknessCm` in BuildBoardModelArgs (and per-cabinet via the form

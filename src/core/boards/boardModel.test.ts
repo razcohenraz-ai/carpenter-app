@@ -4,8 +4,6 @@ import {
   resolveJointMethod,
   deriveEnvelopeFlags,
   boardsToCutItems,
-  SHELF_WIDTH_REVEAL_CM,
-  SHELF_DEPTH_REVEAL_CM,
   BACK_THICKNESS_CM,
   type Board,
 } from './boardModel';
@@ -156,8 +154,8 @@ describe('buildBoardModel — shelves from items', () => {
     expect(s.yTo).toBeCloseTo(140);
     expect(s.xFrom).toBeCloseTo(t);
     expect(s.xTo).toBeCloseTo(80 - t);
-    // length applies the reveal offset (-2 × SHELF_WIDTH_REVEAL_CM)
-    expect(s.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
+    // shelf length matches the top/bottom panel exactly — no reveal.
+    expect(s.length).toBeCloseTo(80 - 2 * t);
   });
 
   it('drawers and rods are NOT boards', () => {
@@ -370,37 +368,41 @@ describe('buildBoardModel — plinth', () => {
   });
 });
 
-// ── 11. Shelf reveal offsets ─────────────────────────────────────────────────
+// ── 11. Shelf dimensions match top/bottom (no reveal) ───────────────────────
 
-describe('buildBoardModel — shelf reveal', () => {
-  it('regular shelf: length = (W − 2·t) − 2·SHELF_WIDTH_REVEAL_CM; width = D − SHELF_DEPTH_REVEAL_CM', () => {
+describe('buildBoardModel — shelf dimensions match top/bottom', () => {
+  it('regular shelf: length = W − 2·t, width = D (same as top/bottom)', () => {
     const b = box({ W: 80, H: 200, D: 60 });
     const boards = buildBoardModel({
       ...baseArgs, box: b,
       items: [shelf('s', 100)],
     });
     const s = byRole(boards, 'shelf')[0]!;
-    expect(s.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
-    expect(s.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+    const top = byRole(boards, 'top')[0]!;
+    expect(s.length).toBeCloseTo(80 - 2 * t);
+    expect(s.width).toBeCloseTo(60);
+    // Shelves are cut exactly the same as the top/bottom panel.
+    expect(s.length).toBeCloseTo(top.length);
+    expect(s.width).toBeCloseTo(top.width);
   });
 
-  it('internal-shelf: same reveal applied', () => {
+  it('internal-shelf: length = W − 2·t, width = D', () => {
     const b = box({ W: 80, H: 200, D: 60, internalShelves: [100] });
     const boards = buildBoardModel({ ...baseArgs, box: b });
     const ins = byRole(boards, 'internal-shelf')[0]!;
-    expect(ins.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
-    expect(ins.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+    expect(ins.length).toBeCloseTo(80 - 2 * t);
+    expect(ins.width).toBeCloseTo(60);
   });
 
-  it('fixed-shelf: same reveal applied', () => {
+  it('fixed-shelf: length = W − 2·t, width = D', () => {
     const b = box({ W: 80, H: 200, D: 60 });
     const boards = buildBoardModel({
       ...baseArgs, box: b,
       items: [shelf('fix', 18.2, { isFixedAboveExternals: true })],
     });
     const fs = byRole(boards, 'fixed-shelf')[0]!;
-    expect(fs.length).toBeCloseTo(80 - 2 * t - 2 * SHELF_WIDTH_REVEAL_CM);
-    expect(fs.width).toBeCloseTo(60 - SHELF_DEPTH_REVEAL_CM);
+    expect(fs.length).toBeCloseTo(80 - 2 * t);
+    expect(fs.width).toBeCloseTo(60);
   });
 });
 
