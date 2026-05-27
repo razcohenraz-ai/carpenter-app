@@ -24,6 +24,13 @@ export interface CutItem {
    *  use fixed thicknesses (12 mm sides, 6 mm bottom) outside the cabinet
    *  catalog, so they fall through to an "Other" group. */
   materialId?: MaterialId;
+  /** Carpentry role this piece plays (e.g. 'top', 'bottom', 'side-left',
+   *  'envelope-right'). Mirrors `BoardRole` from `core/boards/boardModel.ts`
+   *  but typed as `string` here to keep the types layer free of core deps.
+   *  Set by `boardsToCutItems`; left unset for doors / drawer-box parts.
+   *  `mergeCutItems` reads it to fold known pairs (top+bottom, sides,
+   *  envelope sides) into a single combined-label row. */
+  role?: string;
 }
 
 // ── Sheet usage summary ───────────────────────────────────────────────────────

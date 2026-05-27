@@ -166,6 +166,10 @@ export interface Translations {
     /** Fallback section header for cuts that don't map to a catalog material
      *  (e.g. drawer-box sides/back/bottom at fixed 12mm/6mm). */
     noMaterial: string;
+    /** Combined-row labels for known carpentry pairs in mergeCutItems. */
+    pairTopBottom: string;
+    pairSides: string;
+    pairEnvelopeSides: string;
   };
 }
 
@@ -332,6 +336,9 @@ const he: Translations = {
     totalArea: 'סה"כ שטח',
     exportPdf: 'ייצוא PDF',
     noMaterial: 'אביזרי מגירה / אחר',
+    pairTopBottom: 'עליון / תחתון',
+    pairSides: 'צד ימין / צד שמאל',
+    pairEnvelopeSides: 'מעטפת ימין / מעטפת שמאל',
   },
 };
 
@@ -498,6 +505,9 @@ const en: Translations = {
     totalArea: 'Total area',
     exportPdf: 'Export PDF',
     noMaterial: 'Drawer parts / Other',
+    pairTopBottom: 'Top / Bottom',
+    pairSides: 'Right / Left Side',
+    pairEnvelopeSides: 'Right / Left Envelope',
   },
 };
 

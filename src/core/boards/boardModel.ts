@@ -441,6 +441,9 @@ export function boardsToCutItems(boards: Board[], label: string): CutItem[] {
       group: ROLE_GROUP[b.role],
       note: noteMm,
       materialId: b.materialId,
+      // Carried through so mergeCutItems can detect role pairs (e.g. top +
+      // bottom of same dims → "עליון / תחתון").
+      role: b.role,
     } satisfies CutItem;
   });
 }

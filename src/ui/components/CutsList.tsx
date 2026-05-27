@@ -44,8 +44,13 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
   // Collapse identical pieces (same material + dims + name) into a single row
   // with summed qty BEFORE grouping by material. The merge logic lives in
   // core so other consumers (sheet calculator, export) see the same compact
-  // list.
-  const groups = groupByMaterial(mergeCutItems(cuts));
+  // list. Pair labels (top+bottom, sides, envelope sides) come from the
+  // translations so the combined row reads correctly in HE / EN.
+  const groups = groupByMaterial(mergeCutItems(cuts, {
+    topBottom: t.cutsList.pairTopBottom,
+    sides: t.cutsList.pairSides,
+    envelopeSides: t.cutsList.pairEnvelopeSides,
+  }));
 
   function handleExportPdf(): void {
     window.print();
