@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### תוקן — שיטת חיבור לוחות (rabbet/butt) נקבעת ברמת הארון, לא ברמת הגוף
+- **שורש הבאג**: `resolveJointMethod(box)` נקרא בתוך `buildBoardModel` עם הקופסה הספציפית של כל גוף. בארון 2-קומות שגובה הגוף התחתון נופל מתחת ל-W/2 (למשל W=200, H=130, plinth=10 → top H=71.5 → rabbet, bottom H=48.5 → butt), שיטת החיבור התהפכה בין הקומות. תוצאה: תקרה/רצפה של העליון באורך `W − 2·tBody = 94.6 ס"מ` ושל התחתון באורך `W = 98.2 ס"מ` — פער של 3.6 ס"מ למרות שרוחב הארון זהה.
+- **התיקון**: נוסף helper חדש `resolveCabinetJointMethod(cabinetW, cabinetH)` ב-`core/boards/boardModel.ts` שמקבל את המידות החיצוניות של הארון. `useCabinet.calculate()` ו-`CabinetSketch` מחשבים את הערך **פעם אחת** לפני לולאת הגופים ומעבירים אותו כ-`joint` ל-`buildBoardModel` של כל גוף.
+- **API חדש ב-`BuildBoardModelArgs`**: `joint?: JointMethod` — override אופציונלי. כשלא מסופק, `buildBoardModel` חוזר ל-`resolveJointMethod(box)` (תאימות לאחור עם בדיקות היחידה). הקריאות מ-`useCabinet` ומ-`CabinetSketch` מספקות תמיד `joint` כדי לכפות עקביות בין רמות.
+- **תוצאה**: בארון מרובה קומות, כל הגופים מקבלים אותה שיטת חיבור ואותה נוסחת אורך לתקרה/רצפה. גוף בודד שגובהו דק במיוחד לא משפיע על הקומות האחרות.
+- **בדיקות חדשות** ב-`boardModel.test.ts`: (א) override joint מצליח לכפות `butt` על גוף שהיה rabbet ברירת מחדל; (ב) override `rabbet` על גוף שהיה butt; (ג) `resolveCabinetJointMethod` נכון עבור `200×130 → rabbet` ועבור `240×80 → butt`; (ד) regression — תרחיש המקור (שני גופים W=98.2 בגבהים שונים) מפיק תקרה/רצפה זהים אחרי החלטה ברמת הארון.
+- **docs/CARPENTRY_RULES.md**: סקציית "שיטת חיבור לוחות" עודכנה — הכלל הוא ברמת הארון, עם הסבר מפורש למה לא ברמת הגוף.
+
 ### תוקן — מדף נחתך בדיוק כמו תקרה/רצפה (ללא reveal)
 - `SHELF_WIDTH_REVEAL_CM` ו-`SHELF_DEPTH_REVEAL_CM` ב-`core/boards/boardModel.ts` שונו מ-`0.1` ו-`2.0` ל-`0`. תוצאה: מדף רגיל, מדף קבוע ו-internal-shelf מקבלים `length = W − 2·tBody` ו-`width = D` — זהה לחלוטין ללוח התקרה/רצפה של אותו גוף. לא מתבצעת עוד הקטנה של 1 מ"מ לצדדים ולא הקטנה של 20 מ"מ מהעומק.
 - הקבועים נשמרים כ-`export` ב-API לתאימות לאחור ולכך שניתן להחזיר reveal בעתיד בלי לשנות חתימות. הסכמה והערות עודכנו כדי לתעד שהערך הנוכחי הוא 0.

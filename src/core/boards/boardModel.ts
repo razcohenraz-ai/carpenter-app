@@ -94,8 +94,23 @@ export const LEVELER_GAP_CM = 0.6;
 
 export type JointMethod = 'rabbet' | 'butt';
 
+/** Per-body helper kept for legacy callers / unit tests. Production code
+ *  (`useCabinet`, `CabinetSketch`) decides the joint method ONCE per cabinet
+ *  via {@link resolveCabinetJointMethod} so all bodies in a multi-row
+ *  cabinet share the same top/bottom-panel cut formula. */
 export function resolveJointMethod(box: Box): JointMethod {
   return box.W > 2 * box.H ? 'butt' : 'rabbet';
+}
+
+/** Cabinet-level joint method. Takes the user's H and W input (the external
+ *  cabinet dimensions including plinth) so multi-row cabinets do not flip
+ *  joint between rows when one row's box.H drops below the W/2 threshold.
+ *  Carpentry intent: a tall cabinet rests load on its sides (rabbet);
+ *  a wide-short cabinet rests load on its top/bottom (butt). The overall
+ *  cabinet's slenderness drives the choice — not the slenderness of any
+ *  individual row. */
+export function resolveCabinetJointMethod(cabinetW: number, cabinetH: number): JointMethod {
+  return cabinetW > 2 * cabinetH ? 'butt' : 'rabbet';
 }
 
 // ── Envelope flag derivation ─────────────────────────────────────────────────
@@ -178,6 +193,12 @@ export interface BuildBoardModelArgs {
    *  cabinet side and are shortened by `LEVELER_GAP_CM` so they sit on
    *  plastic levelers. Defaults to box.H for legacy / unit-test callers. */
   cabinetTotalH?: number;
+  /** Joint method override — when provided, replaces the per-box default
+   *  from `resolveJointMethod(box)`. Production callers (`useCabinet`,
+   *  `CabinetSketch`) compute this once at cabinet level via
+   *  {@link resolveCabinetJointMethod} so every body in the cabinet shares
+   *  the same top/bottom-panel cut formula. */
+  joint?: JointMethod;
 }
 
 export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
@@ -190,6 +211,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     envelopeDepth,
     backThicknessCm = BACK_THICKNESS_CM,
     cabinetTotalH,
+    joint: jointOverride,
   } = args;
 
   if (box.level === 'plinth') return [];
@@ -208,7 +230,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   const envSideLength = (cabinetTotalH ?? H) - LEVELER_GAP_CM;
   const matId = bodyMaterial.id;
   const frontMatId = frontMaterial.id;
-  const joint = resolveJointMethod(box);
+  const joint = jointOverride ?? resolveJointMethod(box);
 
   const out: Board[] = [];
 

@@ -30,6 +30,7 @@ import {
   buildBoardModel,
   boardsToCutItems,
   deriveEnvelopeFlags,
+  resolveCabinetJointMethod,
   HINGE_GAP_CM,
 } from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
@@ -725,6 +726,13 @@ export function useCabinet(): {
     // legacy shell+body+plinth+back+shelves output of calcCuts. The
     // 'partition' role is filtered out because `computePartitionCuts` above
     // already emits partition cuts with richer Hebrew labels.
+    //
+    // Joint method (rabbet vs butt) is decided ONCE at cabinet level so every
+    // body shares the same top/bottom-panel formula. Without this, a 2-row
+    // cabinet whose bottom row dips below the W/2 threshold would flip to
+    // butt while the top stayed rabbet — producing inconsistent panel lengths
+    // across rows.
+    const cabinetJoint = resolveCabinetJointMethod(W, H);
     const boardCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
       const envFlags = deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop);
@@ -752,6 +760,7 @@ export function useCabinet(): {
         // + envelopeTop). Pass it so envelope-left/right cut to the right
         // length regardless of which body emits them.
         cabinetTotalH: H,
+        joint: cabinetJoint,
       }).filter(b => b.role !== 'partition'); // partition emitted separately
       boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
     }

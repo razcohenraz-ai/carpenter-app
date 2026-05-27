@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildBoardModel,
   resolveJointMethod,
+  resolveCabinetJointMethod,
   deriveEnvelopeFlags,
   boardsToCutItems,
   BACK_THICKNESS_CM,
@@ -123,6 +124,60 @@ describe('buildBoardModel — butt (wide & short)', () => {
   it('boundary: W=2·H → rabbet (strict > triggers butt)', () => {
     expect(resolveJointMethod(box({ W: 100, H: 50 }))).toBe('rabbet');
     expect(resolveJointMethod(box({ W: 101, H: 50 }))).toBe('butt');
+  });
+
+  it('joint override: a tall box rendered as butt → length = W', () => {
+    // Cabinet-level override forces butt on a box that would default to rabbet
+    // via resolveJointMethod(box). Verifies the per-cabinet joint applies
+    // uniformly across rows regardless of any one body's W/H ratio.
+    const b = box({ W: 98.2, H: 71.5 }); // tall enough for rabbet per-box
+    expect(resolveJointMethod(b)).toBe('rabbet');
+    const boards = buildBoardModel({ ...baseArgs, box: b, joint: 'butt' });
+    const top = byRole(boards, 'top')[0]!;
+    expect(top.length).toBeCloseTo(98.2); // butt: full W (not W - 2t)
+    expect(top.xFrom).toBe(0);
+    expect(top.xTo).toBeCloseTo(98.2);
+  });
+
+  it('joint override: a short box rendered as rabbet → length = W − 2·t', () => {
+    // Reverse direction: cabinet-level decides rabbet even though this box
+    // would have flipped to butt on its own.
+    const b = box({ W: 98.2, H: 48.5 }); // wide enough for butt per-box
+    expect(resolveJointMethod(b)).toBe('butt');
+    const boards = buildBoardModel({ ...baseArgs, box: b, joint: 'rabbet' });
+    const top = byRole(boards, 'top')[0]!;
+    expect(top.length).toBeCloseTo(98.2 - 2 * t);
+  });
+});
+
+// ── 2b. Cabinet-level joint helper ───────────────────────────────────────────
+
+describe('resolveCabinetJointMethod', () => {
+  it('W ≤ 2·H → rabbet (tall cabinet)', () => {
+    expect(resolveCabinetJointMethod(80, 220)).toBe('rabbet');
+    expect(resolveCabinetJointMethod(200, 130)).toBe('rabbet'); // user's flip case
+    expect(resolveCabinetJointMethod(100, 50)).toBe('rabbet'); // boundary
+  });
+
+  it('W > 2·H → butt (wide-short cabinet)', () => {
+    expect(resolveCabinetJointMethod(240, 80)).toBe('butt');
+    expect(resolveCabinetJointMethod(101, 50)).toBe('butt'); // just past boundary
+  });
+
+  it('regression: 2-row cabinet — both rows get same joint via cabinet helper', () => {
+    // Reproduces the user's flip case: W=200 H=130 with a 2-row split where
+    // top H=71.5 (rabbet per-box) and bottom H=48.5 (butt per-box). The
+    // cabinet helper resolves to rabbet → both bodies emit length = W − 2·t.
+    const topBox = box({ W: 98.2, H: 71.5, level: 'top', position: 'left' });
+    const botBox = box({ W: 98.2, H: 48.5, level: 'bottom', position: 'left' });
+    const cabinetJoint = resolveCabinetJointMethod(200, 130);
+    expect(cabinetJoint).toBe('rabbet');
+    const topBoards = buildBoardModel({ ...baseArgs, box: topBox, joint: cabinetJoint });
+    const botBoards = buildBoardModel({ ...baseArgs, box: botBox, joint: cabinetJoint });
+    const topTop = byRole(topBoards, 'top')[0]!;
+    const botTop = byRole(botBoards, 'top')[0]!;
+    expect(topTop.length).toBeCloseTo(botTop.length);
+    expect(topTop.width).toBeCloseTo(botTop.width);
   });
 });
 

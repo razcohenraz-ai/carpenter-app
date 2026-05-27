@@ -8,7 +8,7 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
-import { buildBoardModel, deriveEnvelopeFlags, HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, HINGE_GAP_CM } from '../../core/boards/boardModel';
 import { getMaterial } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -83,6 +83,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : null;
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
   const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
+  // Cabinet-level joint method — same source of truth as useCabinet so the
+  // sketch never disagrees with the cut list. Per-row dimensions can vary,
+  // but the joint convention is uniform across the whole cabinet.
+  const cabinetJoint = resolveCabinetJointMethod(parseFloat(W), parseFloat(H));
   if (hasBoards) {
     for (const box of geo.boxes) {
       if (box.level === 'plinth') continue;
@@ -108,6 +112,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         hasBack: true,
         envelopeDepth: fullD,
         backThicknessCm,
+        joint: cabinetJoint,
       });
       boardsByBoxId.set(box.id, boards);
     }
