@@ -530,6 +530,10 @@ describe('boardsToCutItems', () => {
     expect(backCut).toBeDefined();
     expect(backCut!.group).toBe('back');
     expect(backCut!.note).toBe(`${Math.round(BACK_THICKNESS_CM * 10)}mm`);
+    // Back panel name carries NO body tag — the saw operator only needs the
+    // dimensions, so identical backs across multiple bodies collapse into
+    // one row in mergeCutItems.
+    expect(backCut!.name).toBe('גב');
   });
 
   it('emits one CutItem per Board with mm dimensions', () => {

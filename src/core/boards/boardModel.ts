@@ -433,8 +433,13 @@ export function boardsToCutItems(boards: Board[], label: string): CutItem[] {
   const tag = label ? ` — ${label}` : '';
   return boards.map(b => {
     const noteMm = `${Math.round(b.thickness * 10)}mm`;
+    // Back panels are anonymous to the saw operator — only their dimensions
+    // matter, not which body they belong to. Dropping the body tag lets
+    // identical backs from a multi-body cabinet (e.g. 3 columns × 1 row,
+    // all at the same W×H) collapse into one row in mergeCutItems.
+    const nameTag = b.role === 'back' ? '' : tag;
     return {
-      name: `${ROLE_NAME_HE[b.role]}${tag}`,
+      name: `${ROLE_NAME_HE[b.role]}${nameTag}`,
       qty: 1,
       w: Math.round(b.length * 10),
       h: Math.round(b.width * 10),

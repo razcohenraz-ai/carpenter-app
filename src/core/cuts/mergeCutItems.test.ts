@@ -199,6 +199,22 @@ describe('mergeCutItems — pair merge (labels supplied)', () => {
     expect(out[1]!.qty).toBe(2);
   });
 
+  it('regression: 3 identical backs from a 3-column cabinet → 1 row qty=3', () => {
+    // Multi-body cabinet (W=240 → 3 columns of W=78.8). Each body emits a
+    // back panel; all 3 have the same dims+material. Because boardsToCutItems
+    // omits the body tag for role='back', the names are identical and they
+    // collapse here.
+    const out = mergeCutItems([
+      ci({ name: 'גב', w: 788, h: 1210, materialId: 'mdf18', role: 'back', note: '5mm' }),
+      ci({ name: 'גב', w: 788, h: 1210, materialId: 'mdf18', role: 'back', note: '5mm' }),
+      ci({ name: 'גב', w: 788, h: 1210, materialId: 'mdf18', role: 'back', note: '5mm' }),
+    ], PAIR_LABELS);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.name).toBe('גב');
+    expect(out[0]!.qty).toBe(3);
+    expect(out[0]!.role).toBe('back'); // single-role merge keeps the role
+  });
+
   it('merged row appears at the first-occurrence position', () => {
     const out = mergeCutItems([
       ci({ name: 'מדף', w: 760, h: 574, materialId: 'mdf18', role: 'shelf' }),
