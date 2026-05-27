@@ -46,9 +46,11 @@ interface Props {
   onBoxClick?: (boxId: string) => void;
   /** Click handler for an external drawer rect. Opens the drawer editor. */
   onDrawerFrontClick?: (drawerId: string) => void;
+  /** Click handler for the plinth rectangle. Opens the plinth top-view editor. */
+  onPlinthClick?: () => void;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -160,7 +162,13 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             y={geo.plinthRect.y}
             width={geo.plinthRect.w}
             height={geo.plinthRect.h}
-            className={styles.plinthRect}
+            className={`${styles.plinthRect}${onPlinthClick ? ` ${styles.plinthClickable}` : ''}`}
+            {...(onPlinthClick ? {
+              onClick: (e: React.MouseEvent) => {
+                e.stopPropagation();
+                onPlinthClick();
+              },
+            } : {})}
           />
         )}
 

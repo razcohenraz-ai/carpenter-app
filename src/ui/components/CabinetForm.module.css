@@ -208,10 +208,6 @@
   color: var(--color-text-secondary);
 }
 
-.modeBtnPlinth {
-  color: var(--color-wood-dark);
-}
-
 .modeBtn + .modeBtn {
   border-inline-start: var(--border-width) solid var(--color-border);
 }

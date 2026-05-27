@@ -71,19 +71,22 @@ export default function CabinetForm(): React.JSX.Element {
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
   } = useCabinet();
 
-  // Unified editor state: one editor open at a time. The body/door editors
-  // replace the main view; the drawer editor renders as an overlay above it.
+  // Unified editor state: one editor open at a time. The body/door/plinth
+  // editors replace the main view; the drawer editor renders as an overlay
+  // above it.
   type Editing =
     | { type: 'none' }
     | { type: 'box'; boxId: string }
     | { type: 'door'; doorId: string }
-    | { type: 'drawer'; drawerId: string };
+    | { type: 'drawer'; drawerId: string }
+    | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
-  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'plinth'>('bodies');
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts'>('bodies');
 
   function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
   function handleDrawerFrontClick(drawerId: string): void { setEditing({ type: 'drawer', drawerId }); }
+  function handlePlinthClick(): void { setEditing({ type: 'plinth' }); }
   function closeEditor(): void { setEditing({ type: 'none' }); }
 
   // Lookup of all DrawerItems by id (across body interiors and partitioned
@@ -342,6 +345,21 @@ export default function CabinetForm(): React.JSX.Element {
     }
   }
 
+  if (editing.type === 'plinth' && result) {
+    return (
+      <div className={styles.form}>
+        <PlinthEditor
+          cabinetW={parseFloat(form.W) || 0}
+          cabinetD={parseFloat(form.D) || 0}
+          plinthHeight={parseFloat(form.plinth) || 0}
+          boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
+          bodyMaterial={getMaterial(form.bodyMaterialId)}
+          onBack={closeEditor}
+        />
+      </div>
+    );
+  }
+
   if (editing.type === 'door') {
     const door = doorsById[editing.doorId];
     if (door) {
@@ -568,29 +586,13 @@ export default function CabinetForm(): React.JSX.Element {
               >
                 {t.cutsList.tab}
               </button>
-              {(parseFloat(form.plinth) || 0) > 0 && (
-                <button
-                  type="button"
-                  className={`${styles.modeBtn} ${styles.modeBtnPlinth} ${sketchMode === 'plinth' ? styles.modeBtnActive : ''}`}
-                  onClick={() => setSketchMode('plinth')}
-                >
-                  {t.cutsList.plinthTab}
-                </button>
-              )}
             </div>
           )}
 
-          {/* Main sketch — bodies layout doubles as the cuts-tab reference;
-              plinth tab swaps in the top-view PlinthEditor. */}
-          {sketchMode === 'plinth' && result ? (
-            <PlinthEditor
-              cabinetW={parseFloat(form.W) || 0}
-              cabinetD={parseFloat(form.D) || 0}
-              plinthHeight={parseFloat(form.plinth) || 0}
-              boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
-              bodyMaterial={getMaterial(form.bodyMaterialId)}
-            />
-          ) : sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
+          {/* Main sketch — bodies layout doubles as the cuts-tab reference.
+              Clicking the plinth rect opens the PlinthEditor full-screen
+              (see editing.type === 'plinth' block above). */}
+          {sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
             <CabinetSketch
               W={form.W}
               H={form.H}
@@ -609,6 +611,7 @@ export default function CabinetForm(): React.JSX.Element {
               numFrontsPerBox={numFrontsPerBox}
               bodyMaterialId={form.bodyMaterialId}
               frontMaterialId={form.frontMaterialId}
+              {...(result && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
             />
           ) : (

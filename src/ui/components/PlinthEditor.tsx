@@ -12,6 +12,8 @@ interface Props {
   /** Bottom-row body boxes (excluding plinth boxes themselves). */
   boxes: Box[];
   bodyMaterial: Material;
+  /** Close handler — returns to the main view. */
+  onBack: () => void;
 }
 
 // SVG canvas dimensions — the cabinet rectangle is scaled to fit inside this
@@ -24,14 +26,21 @@ const PAD_TOP = 50;
 const PAD_BOTTOM = 50;
 
 export default function PlinthEditor({
-  cabinetW, cabinetD, plinthHeight, boxes, bodyMaterial,
+  cabinetW, cabinetD, plinthHeight, boxes, bodyMaterial, onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (plinthHeight <= 0 || cabinetW <= 0 || cabinetD <= 0) {
     return (
-      <div className={styles.placeholder}>
-        <span className={styles.hint}>{t.sketch.invalidDimensions}</span>
+      <div className={styles.wrapper}>
+        <div className={styles.header}>
+          <button type="button" className={styles.backBtn} onClick={onBack}>
+            ← {t.interior.back}
+          </button>
+        </div>
+        <div className={styles.placeholder}>
+          <span className={styles.hint}>{t.sketch.invalidDimensions}</span>
+        </div>
       </div>
     );
   }
@@ -68,7 +77,13 @@ export default function PlinthEditor({
 
   return (
     <div className={styles.wrapper}>
-      <p className={styles.title}>{t.cutsList.plinthEditorTitle}</p>
+      <div className={styles.header}>
+        <button type="button" className={styles.backBtn} onClick={onBack}>
+          ← {t.interior.back}
+        </button>
+        <p className={styles.title}>{t.cutsList.plinthEditorTitle}</p>
+        <span className={styles.headerSpacer} />
+      </div>
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
         className={styles.svg}

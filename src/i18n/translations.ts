@@ -171,8 +171,8 @@ export interface Translations {
     pairSides: string;
     pairEnvelopeSides: string;
     pairPlinthGables: string;
-    /** Tab label and title for the plinth top-view editor. */
-    plinthTab: string;
+    /** Title for the plinth top-view editor (opened by clicking the
+     *  plinth rect in the main cabinet sketch). */
     plinthEditorTitle: string;
   };
 }
@@ -344,7 +344,6 @@ const he: Translations = {
     pairSides: 'צד ימין / צד שמאל',
     pairEnvelopeSides: 'מעטפת ימין / מעטפת שמאל',
     pairPlinthGables: 'גיבל צוקל',
-    plinthTab: 'צוקל',
     plinthEditorTitle: 'תצוגת על — צוקל',
   },
 };
@@ -516,7 +515,6 @@ const en: Translations = {
     pairSides: 'Right / Left Side',
     pairEnvelopeSides: 'Right / Left Envelope',
     pairPlinthGables: 'Plinth Gable',
-    plinthTab: 'Plinth',
     plinthEditorTitle: 'Top view — Plinth',
   },
 };

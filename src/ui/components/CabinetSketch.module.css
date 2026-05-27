@@ -39,6 +39,15 @@
   stroke-width: 1;
 }
 
+.plinthClickable {
+  cursor: pointer;
+  transition: fill 0.12s ease;
+}
+
+.plinthClickable:hover {
+  fill: var(--color-wood-light);
+}
+
 .splitLine {
   stroke: var(--color-border-strong);
   stroke-width: 1;

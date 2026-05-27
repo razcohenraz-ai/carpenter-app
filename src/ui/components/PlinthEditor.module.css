@@ -1,19 +1,50 @@
 .wrapper {
   background: var(--color-surface);
   border-radius: var(--radius-md);
-  padding: var(--spacing-sm);
+  padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   width: 100%;
 }
 
-.title {
+/* Header row: back button on the start, centered title, spacer on the end
+   so the title stays centered regardless of the button's text width. */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.backBtn {
+  background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.backBtn:hover {
+  background: var(--color-border);
+}
+
+.headerSpacer {
+  /* Mirror the back button's approximate width so the title is centered. */
+  min-width: 5em;
+}
+
+.title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
   margin: 0;
   text-align: center;
+  flex: 1;
 }
 
 .svg {
