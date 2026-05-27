@@ -2,6 +2,7 @@ import React from 'react';
 import type { CutItem } from '../../types/cuts';
 import type { MaterialId } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
+import { mergeCutItems } from '../../core/cuts/mergeCutItems';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './CutsList.module.css';
 
@@ -40,7 +41,11 @@ function groupByMaterial(cuts: CutItem[]): MaterialGroup[] {
 
 export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
   const { t } = useTranslation();
-  const groups = groupByMaterial(cuts);
+  // Collapse identical pieces (same material + dims + name) into a single row
+  // with summed qty BEFORE grouping by material. The merge logic lives in
+  // core so other consumers (sheet calculator, export) see the same compact
+  // list.
+  const groups = groupByMaterial(mergeCutItems(cuts));
 
   function handleExportPdf(): void {
     window.print();
