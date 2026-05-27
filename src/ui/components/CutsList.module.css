@@ -106,6 +106,13 @@
 .colQty  { text-align: end;   width: 60px; }
 .colArea { text-align: end;   width: 90px; white-space: nowrap; }
 
+/* ── Dimension axis colors: same vars as the cabinet sketches (theme.css).
+   First number = width axis (red); second = height axis (green). Matches the
+   CAD-convention coloring on the CabinetSketch labels so the carpenter reads
+   the same color for the same axis in both views. */
+.dimW { color: var(--color-width);  font-weight: var(--font-weight-medium); }
+.dimH { color: var(--color-height); font-weight: var(--font-weight-medium); }
+
 .footerLabel {
   color: var(--color-text-secondary);
   text-align: start;

@@ -98,7 +98,9 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
                           {c.note && <span className={styles.note}> ({c.note})</span>}
                         </td>
                         <td className={styles.colDims}>
-                          {lengthCm.toFixed(1)} × {widthCm.toFixed(1)}
+                          <span className={styles.dimW}>{lengthCm.toFixed(1)}</span>
+                          {' × '}
+                          <span className={styles.dimH}>{widthCm.toFixed(1)}</span>
                         </td>
                         <td className={styles.colQty}>{c.qty}</td>
                         <td className={styles.colArea}>{Math.round(areaCm2).toLocaleString()}</td>
