@@ -83,6 +83,21 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : null;
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
   const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
+
+  // Plinth split lines — drawn ONLY between adjacent plinth units when the
+  // cabinet is wide enough that decomposeBoxes splits the plinth into
+  // multiple boxes (MAX_PLINTH_W=240). The plinth itself renders as a single
+  // full-width `geo.plinthRect`; these thin dashed lines mark the joints.
+  const plinthSegments = geo.boxes.filter(b => b.level === 'plinth');
+  const plinthSplitLines: Array<{ x: number; y1: number; y2: number }> = [];
+  if (plinthSegments.length > 1 && geo.plinthRect) {
+    let cumW = 0;
+    for (let i = 0; i < plinthSegments.length - 1; i++) {
+      cumW += plinthSegments[i]!.W;
+      const x = geo.plinthRect.x + cumW * geo.scale;
+      plinthSplitLines.push({ x, y1: geo.plinthRect.y, y2: geo.plinthRect.y + geo.plinthRect.h });
+    }
+  }
   // Cabinet-level joint method — same source of truth as useCabinet so the
   // sketch never disagrees with the cut list. Per-row dimensions can vary,
   // but the joint convention is uniform across the whole cabinet.
@@ -137,7 +152,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
           className={styles.cabinetRect}
         />
 
-        {/* Plinth fill */}
+        {/* Plinth fill — one continuous rectangle across the full cabinet
+            width. Per-body `plinth-front` boards are intentionally filtered
+            out from CabinetCutSketch below (they would visually slice the
+            plinth into segments with gaps between body columns). */}
         {geo.plinthRect && (
           <rect
             x={geo.plinthRect.x}
@@ -147,6 +165,18 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             className={styles.plinthRect}
           />
         )}
+
+        {/* Plinth unit splits — only when the plinth itself decomposes into
+            multiple units (cabinet wider than MAX_PLINTH_W). Thin dashed
+            lines only; no separate rectangles. */}
+        {plinthSplitLines.map((line, i) => (
+          <line
+            key={`plinth-split-${i}`}
+            x1={line.x} y1={line.y1}
+            x2={line.x} y2={line.y2}
+            className={styles.splitLine}
+          />
+        ))}
 
         {/* Outer envelope side panels — drawn only PRE-calc.
             Post-calc the per-body board model emits envelope boards. */}
@@ -182,14 +212,19 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
 
         {/* Per-body cut sketch — sides, top, bottom, shelves, partition,
             envelope. Drawn BEFORE interior items (rods, drawers) so those
-            sit on top. */}
+            sit on top. Plinth boards are filtered out so the plinth shows
+            as ONE continuous rect (drawn above) instead of per-body
+            segments with column gaps. */}
         {hasBoards && [...boardsByBoxId.entries()].map(([boxId, boards]) => {
           const rect = geo.boxSvgRects[boxId];
           if (!rect || !bodyMat) return null;
+          const visibleBoards = boards.filter(
+            b => b.role !== 'plinth-front' && b.role !== 'plinth-back',
+          );
           return (
             <CabinetCutSketch
               key={`cut-${boxId}`}
-              boards={boards}
+              boards={visibleBoards}
               offsetX={rect.x}
               offsetY={rect.y}
               scale={geo.scale}
