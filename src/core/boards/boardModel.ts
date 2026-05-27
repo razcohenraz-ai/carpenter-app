@@ -32,7 +32,9 @@ export type BoardRole =
   | 'envelope-top'
   | 'back'
   | 'plinth-front'
-  | 'plinth-back';
+  | 'plinth-back'
+  | 'plinth-gable-a'
+  | 'plinth-gable-b';
 
 export interface Board {
   id: string;
@@ -48,9 +50,14 @@ export interface Board {
   xFrom: number;
   /** cm — visual front-view rect, right edge. */
   xTo: number;
-  /** cm — visual front-view rect, top edge (y grows downward). */
+  /** cm — visual rect, top edge (y grows downward). For carcass / envelope
+   *  / back / shelf roles this is the FRONT-VIEW Y (vertical, body-local).
+   *  For plinth-* roles, y means DEPTH (top-view): yFrom is closer to the
+   *  cabinet front, yTo is closer to the back. The dual semantic keeps
+   *  every board in one rectangular footprint; renderers read the field
+   *  according to the board's role family. */
   yFrom: number;
-  /** cm — visual front-view rect, bottom edge. */
+  /** cm — visual rect, bottom edge. See `yFrom` for the dual semantic. */
   yTo: number;
   /** Whether this board is rendered by the cross-section sketch. The back
    *  panel sits BEHIND the carcass so it is invisible in front view, but it
@@ -172,10 +179,6 @@ export interface BuildBoardModelArgs {
    *  When present, `items` is ignored for shelves; each cell's shelves are
    *  emitted with cell-width xFrom/xTo. */
   cellItems?: [InteriorItem[], InteriorItem[]];
-  /** Plinth height in cm — when > 0 this body sits on a plinth and emits
-   *  plinth-front + plinth-back boards. Caller (useCabinet) sets this only
-   *  for boxes that physically sit on the plinth (bottom row). */
-  plinthHeight?: number;
   /** Include a back panel (visible:false). Defaults to true. */
   hasBack?: boolean;
   /** Outer envelope depth in cm — used for envelope-* board `width`. The
@@ -206,7 +209,6 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     box, bodyMaterial, frontMaterial,
     hasEnvelopeLeft, hasEnvelopeRight, hasEnvelopeTop,
     items, hasPartition, cellItems,
-    plinthHeight = 0,
     hasBack = true,
     envelopeDepth,
     backThicknessCm = BACK_THICKNESS_CM,
@@ -344,20 +346,6 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     });
   }
 
-  // ── Plinth (front + back) ────────────────────────────────────────────────
-  if (plinthHeight > 0) {
-    out.push({
-      id: newItemId(), role: 'plinth-front', materialId: matId,
-      length: W - 2 * t, width: D, thickness: t,
-      xFrom: t, xTo: W - t, yFrom: H, yTo: H + plinthHeight, visible: true,
-    });
-    out.push({
-      id: newItemId(), role: 'plinth-back', materialId: matId,
-      length: W - 2 * t, width: D, thickness: t,
-      xFrom: t, xTo: W - t, yFrom: H, yTo: H + plinthHeight, visible: false,
-    });
-  }
-
   // ── Envelope ─────────────────────────────────────────────────────────────
   // Envelope panels use `envD` (full cabinet depth) rather than box.D
   // (carcass depth) — the outer shell wraps around the back panel and the
@@ -389,6 +377,188 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   return out;
 }
 
+// ── Plinth board model ──────────────────────────────────────────────────────
+// The plinth is a kick-board cabinet base. Unlike carcass boards (which are
+// per-body), the plinth is constructed once for the whole cabinet:
+//
+//   ┌─────────────────────────────────────────┐  ← plinth-back  (visual y top)
+//   │  ▓                ▓                ▓    │
+//   │  ▓ L              ▓                ▓ L  │     gables (L-shapes) in between
+//   │  ▓                ▓                ▓    │
+//   └─────────────────────────────────────────┘  ← plinth-front (visual y bot)
+//
+// Visual coordinates here are TOP-VIEW: x = cabinet-width axis (0..cabinetW),
+// y = cabinet-depth axis (0 = front, cabinetD = back).
+//
+// A "gable" is an L-shape vertical support: panel A is a thin standing wall
+// (tBody × (D-2t) × (plinthH-0.6)), panel B is a flat cap lying on top
+// ((plinthH-0.6) × (D-2t) × tBody). Both cut to the same flat size
+// `(D-2t) × (plinthH-0.6)`. Gables sit:
+//   - flush at the left edge (x=0).
+//   - flush at the right edge (x=cabinetW), mirrored.
+//   - centered at every joint between adjacent bottom-row bodies.
+//   - mid-body for any body whose width > 80 cm (extra support).
+
+export interface PlinthGable {
+  /** Cabinet-X position the gable is anchored on. Edge gables flush their
+   *  Panel A against this side; internal gables center Panel A's thickness
+   *  on this x. */
+  xAnchor: number;
+  /** Which side Panel B (the flat cap) extends to.
+   *  - 'right': Panel B is at higher x than Panel A (the default).
+   *  - 'left':  Panel B is at lower x than Panel A (right-edge mirror).
+   *  - 'flush-left': Panel A at x=[0, tBody], Panel B to its right.
+   *  - 'flush-right': Panel A at x=[cabinetW-tBody, cabinetW], Panel B to its left.
+   */
+  direction: 'right' | 'left' | 'flush-left' | 'flush-right';
+  /** Diagnostic — origin of this gable, useful for tests and the editor. */
+  kind: 'edge-left' | 'edge-right' | 'joint' | 'mid-body';
+}
+
+/** Threshold above which a single body gets an extra middle gable. */
+export const PLINTH_GABLE_MID_BODY_THRESHOLD_CM = 80;
+
+/** Computes the gable positions for the cabinet's plinth. `boxes` must be
+ *  the BOTTOM-ROW bodies (not plinth boxes themselves, not top/middle rows).
+ *  The caller is expected to filter; this function does not validate
+ *  `box.level`. */
+export function calcPlinthGables(cabinetW: number, boxes: Box[], tBody: number): PlinthGable[] {
+  const gables: PlinthGable[] = [];
+
+  // Left edge — Panel A flush at x=0.
+  gables.push({ xAnchor: 0, direction: 'flush-left', kind: 'edge-left' });
+
+  // Internal joints + mid-body extras. Sort boxes by their left x in the row.
+  const sorted = [...boxes].sort((a, b) => positionRank(a) - positionRank(b));
+  let cumX = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const box = sorted[i]!;
+    // Mid-body gable for wide bodies.
+    if (box.W > PLINTH_GABLE_MID_BODY_THRESHOLD_CM) {
+      gables.push({
+        xAnchor: cumX + box.W / 2,
+        direction: 'right',
+        kind: 'mid-body',
+      });
+    }
+    cumX += box.W;
+    // Joint between this body and the next.
+    if (i < sorted.length - 1) {
+      gables.push({ xAnchor: cumX, direction: 'right', kind: 'joint' });
+    }
+  }
+
+  // Right edge — Panel A flush at x=cabinetW.
+  gables.push({ xAnchor: cabinetW, direction: 'flush-right', kind: 'edge-right' });
+
+  // Don't suppress tBody — keep gables for unused boxes etc; the caller can
+  // skip the call when plinth is absent.
+  void tBody;
+  return gables;
+}
+
+/** Sort key reused from the existing sketch ordering: 'single'/'left' first,
+ *  then 'right', then unit_N by index. Plinth-row bodies typically follow
+ *  the bottom-row decomposition so this matches the visual order. */
+function positionRank(box: Box): number {
+  if (box.position === 'single' || box.position === 'left') return 0;
+  if (box.position === 'right') return 1;
+  return box.unitIndex ?? 0;
+}
+
+export interface BuildPlinthBoardModelArgs {
+  cabinetW: number;
+  cabinetD: number;
+  plinthHeight: number;
+  bodyMaterial: Material;
+  /** Bottom-row body boxes (caller filters out plinth boxes and other rows).
+   *  Used to compute internal gable positions. */
+  boxes: Box[];
+}
+
+/** Emits every board in the plinth (front, back, and each gable's Panel A +
+ *  Panel B). Returns [] when plinthHeight <= 0. Boards' xFrom/yFrom etc are
+ *  in TOP-VIEW coordinates (y = depth) per the dual semantic documented on
+ *  `Board.yFrom`. */
+export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] {
+  const { cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes } = args;
+  if (plinthHeight <= 0) return [];
+
+  const t = bodyMaterial.thickness / 10; // cm
+  const matId = bodyMaterial.id;
+  // The plinth panels are cut LEVELER_GAP_CM short so the cabinet sits on
+  // plastic levelers — same rationale as the envelope sides.
+  const panelH = Math.max(0, plinthHeight - LEVELER_GAP_CM);
+  // Gable cut length (the D-2t edge runs across the plinth's depth between
+  // the front and back panels).
+  const gableLength = Math.max(0, cabinetD - 2 * t);
+  const out: Board[] = [];
+
+  // Front and back strips — full cabinet width, standing vertical.
+  out.push({
+    id: newItemId(), role: 'plinth-front', materialId: matId,
+    length: cabinetW, width: panelH, thickness: t,
+    xFrom: 0, xTo: cabinetW, yFrom: 0, yTo: t, visible: true,
+  });
+  out.push({
+    id: newItemId(), role: 'plinth-back', materialId: matId,
+    length: cabinetW, width: panelH, thickness: t,
+    xFrom: 0, xTo: cabinetW, yFrom: cabinetD - t, yTo: cabinetD, visible: true,
+  });
+
+  // Gables — Panel A is the vertical wall (top-view: tBody wide × gableLength
+  // deep). Panel B is the flat cap on top of A (top-view: (plinthH-0.6) wide
+  // × gableLength deep). Both panels' Y range is [t, cabinetD - t].
+  const gables = calcPlinthGables(cabinetW, boxes, t);
+  const gableYFrom = t;
+  const gableYTo = cabinetD - t;
+  const panelBWidth = panelH; // the lying-flat Panel B is `panelH` wide in plan view
+  for (const g of gables) {
+    let aFrom: number;
+    let aTo: number;
+    let bFrom: number;
+    let bTo: number;
+    switch (g.direction) {
+      case 'flush-left':
+        aFrom = g.xAnchor;
+        aTo   = g.xAnchor + t;
+        bFrom = aTo;
+        bTo   = aTo + panelBWidth;
+        break;
+      case 'flush-right':
+        aTo   = g.xAnchor;
+        aFrom = g.xAnchor - t;
+        bTo   = aFrom;
+        bFrom = aFrom - panelBWidth;
+        break;
+      case 'right':
+        aFrom = g.xAnchor - t / 2;
+        aTo   = g.xAnchor + t / 2;
+        bFrom = aTo;
+        bTo   = aTo + panelBWidth;
+        break;
+      case 'left':
+        aFrom = g.xAnchor - t / 2;
+        aTo   = g.xAnchor + t / 2;
+        bTo   = aFrom;
+        bFrom = aFrom - panelBWidth;
+        break;
+    }
+    out.push({
+      id: newItemId(), role: 'plinth-gable-a', materialId: matId,
+      length: gableLength, width: panelH, thickness: t,
+      xFrom: aFrom, xTo: aTo, yFrom: gableYFrom, yTo: gableYTo, visible: true,
+    });
+    out.push({
+      id: newItemId(), role: 'plinth-gable-b', materialId: matId,
+      length: gableLength, width: panelH, thickness: t,
+      xFrom: bFrom, xTo: bTo, yFrom: gableYFrom, yTo: gableYTo, visible: true,
+    });
+  }
+
+  return out;
+}
+
 // ── Board → CutItem conversion ───────────────────────────────────────────────
 // Translates the physical board model into the cut-list format used by the
 // saw operator and the sheet calculator. Includes ALL boards (visible flag
@@ -410,6 +580,8 @@ const ROLE_NAME_HE: Record<BoardRole, string> = {
   'back': 'גב',
   'plinth-front': 'צוקל קדמי',
   'plinth-back': 'צוקל אחורי',
+  'plinth-gable-a': 'גיבל צוקל א׳',
+  'plinth-gable-b': 'גיבל צוקל ב׳',
 };
 
 const ROLE_GROUP: Record<BoardRole, CutGroup> = {
@@ -427,17 +599,20 @@ const ROLE_GROUP: Record<BoardRole, CutGroup> = {
   'back': 'back',
   'plinth-front': 'plinth',
   'plinth-back': 'plinth',
+  'plinth-gable-a': 'plinth',
+  'plinth-gable-b': 'plinth',
 };
 
 export function boardsToCutItems(boards: Board[], label: string): CutItem[] {
   const tag = label ? ` — ${label}` : '';
   return boards.map(b => {
     const noteMm = `${Math.round(b.thickness * 10)}mm`;
-    // Back panels are anonymous to the saw operator — only their dimensions
-    // matter, not which body they belong to. Dropping the body tag lets
-    // identical backs from a multi-body cabinet (e.g. 3 columns × 1 row,
-    // all at the same W×H) collapse into one row in mergeCutItems.
-    const nameTag = b.role === 'back' ? '' : tag;
+    // Back panels and plinth boards are anonymous to the saw operator —
+    // they are not per-body pieces and only their dimensions matter.
+    // Dropping the body tag lets identical backs (and the cabinet-level
+    // plinth boards) collapse into single rows in mergeCutItems.
+    const isAnonymous = b.role === 'back' || b.role.startsWith('plinth-');
+    const nameTag = isAnonymous ? '' : tag;
     return {
       name: `${ROLE_NAME_HE[b.role]}${nameTag}`,
       qty: 1,

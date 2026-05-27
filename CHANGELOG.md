@@ -7,6 +7,25 @@
 
 ## [Unreleased]
 
+### נוסף — BoardModel לצוקל + עורך צוקל (PlinthEditor) ממבט על
+- **`buildPlinthBoardModel(args)`** חדש ב-`core/boards/boardModel.ts`. הצוקל מיוצר עכשיו ברמת הארון (לא per-body): קדמי, אחורי, וגיבלים דינמיים. נקרא מ-`useCabinet` עם רק גופי השורה התחתונה (`level === 'bottom' | 'single'`).
+- **גיבל = L-shape** (לוח א' עומד כקיר + לוח ב' שוכב כמכסה עליון). שני הלוחות באותו חיתוך: `(D − 2·tBody) × (plinthH − LEVELER_GAP_CM)`. בתצוגת על: footprint = `(tBody + plinthH − 0.6) × (D − 2·tBody)`.
+- **`calcPlinthGables(cabinetW, boxes, tBody)`** חדש — לוגיקת מיקום:
+  - גיבל שמאל: flush ב-`x=[0, tBody]`, לוח ב' נמשך ימינה.
+  - גיבל ימין: flush ב-`x=[cabinetW − tBody, cabinetW]`, לוח ב' נמשך שמאלה.
+  - חיבור בין גופים סמוכים: גיבל ממורכז על `xJoint`, לוח ב' ימינה.
+  - גוף רוחב > 80 ס"מ: גיבל נוסף ב-`box.x + W/2`, לוח ב' ימינה.
+- **`PlinthEditor`** (חדש, `ui/components/PlinthEditor.tsx` + `.module.css`) — תצוגת על SVG: outline של הארון, קדמי/אחורי כפסים, כל גיבל כ-L-shape מובחן בצבעים (לוח א' כהה, לוח ב' בהיר). קווי חיבור מקווקווים בין גופים. תוויות מימדים בצבעי width/depth.
+- **טאב "צוקל" / "Plinth"** רביעי ב-`CabinetForm`, מוצג רק כש-`plinthHeight > 0`. `sketchMode` הורחב ל-`'bodies' | 'fronts' | 'cuts' | 'plinth'`.
+- **roles חדשים ב-`BoardRole`**: `'plinth-gable-a'`, `'plinth-gable-b'`. `ROLE_NAME_HE` ו-`ROLE_GROUP` עודכנו (group = `'plinth'`).
+- **mergeCutItems**: זוג חדש `[plinth-gable-a, plinth-gable-b]` → "גיבל צוקל" qty=2N (שני לוחות לכל גיבל, מאוחדים לשורה אחת).
+- **`PairLabels.plinthGables`** חדש; `t.cutsList.pairPlinthGables` ב-translations (HE: "גיבל צוקל", EN: "Plinth Gable").
+- **`Board.yFrom/yTo`**: סמנטיקה כפולה — לוחות קרקס: y אנכי בתצוגת חזית; לוחות צוקל: y = עומק בתצוגת על. תועד מפורשות ב-interface.
+- **boardsToCutItems**: לוחות צוקל וגב מקבלים שם ללא tag של גוף (כמו בגב — הם cabinet-level), כך שלוחות זהים מאחדים ב-mergeCutItems.
+
+### הוסר — `plinthHeight` מ-`BuildBoardModelArgs`
+- ה-`buildBoardModel` הקיים לא פולט יותר `plinth-front`/`plinth-back`. הצוקל הוא source נפרד דרך `buildPlinthBoardModel`. אין שכפול ברשימת החיתוכים; אין `plinth-front` per-body שיוצר מראה מחולק בסקיצה. `useCabinet` ו-`CabinetSketch` כבר לא מעבירים את הפרמטר.
+
 ### תוקן — שיטת חיבור לוחות (rabbet/butt) נקבעת ברמת הארון, לא ברמת הגוף
 - **שורש הבאג**: `resolveJointMethod(box)` נקרא בתוך `buildBoardModel` עם הקופסה הספציפית של כל גוף. בארון 2-קומות שגובה הגוף התחתון נופל מתחת ל-W/2 (למשל W=200, H=130, plinth=10 → top H=71.5 → rabbet, bottom H=48.5 → butt), שיטת החיבור התהפכה בין הקומות. תוצאה: תקרה/רצפה של העליון באורך `W − 2·tBody = 94.6 ס"מ` ושל התחתון באורך `W = 98.2 ס"מ` — פער של 3.6 ס"מ למרות שרוחב הארון זהה.
 - **התיקון**: נוסף helper חדש `resolveCabinetJointMethod(cabinetW, cabinetH)` ב-`core/boards/boardModel.ts` שמקבל את המידות החיצוניות של הארון. `useCabinet.calculate()` ו-`CabinetSketch` מחשבים את הערך **פעם אחת** לפני לולאת הגופים ומעבירים אותו כ-`joint` ל-`buildBoardModel` של כל גוף.

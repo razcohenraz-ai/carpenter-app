@@ -1,0 +1,92 @@
+.wrapper {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+}
+
+.title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin: 0;
+  text-align: center;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 600 / 360;
+  max-height: 60vh;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  background: var(--color-surface-raised);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Boards in the plan view ────────────────────────────────────────────── */
+
+.cabinetOutline {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}
+
+/* Front + back strips */
+.boardStrip {
+  fill: var(--color-wood);
+  stroke: var(--color-wood-dark);
+  stroke-width: 1;
+}
+
+/* Gable Panel A (vertical wall, thin strip in plan) */
+.boardGableA {
+  fill: var(--color-wood-dark);
+  stroke: var(--color-text-primary);
+  stroke-width: 0.75;
+}
+
+/* Gable Panel B (flat cap, wider strip in plan) */
+.boardGableB {
+  fill: var(--color-wood-light);
+  stroke: var(--color-wood-dark);
+  stroke-width: 0.75;
+}
+
+.boardOther {
+  fill: var(--color-surface);
+  stroke: var(--color-text-secondary);
+  stroke-width: 1;
+}
+
+/* Dashed vertical between adjacent bodies */
+.jointMarker {
+  stroke: var(--color-text-primary);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.45;
+}
+
+/* ── Dimension labels ──────────────────────────────────────────────────── */
+
+.dimLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.dimLabelWidth { fill: var(--color-width); }
+.dimLabelDepth { fill: var(--color-depth); }

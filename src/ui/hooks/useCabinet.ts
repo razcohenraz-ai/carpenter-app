@@ -28,6 +28,7 @@ import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import {
   buildBoardModel,
+  buildPlinthBoardModel,
   boardsToCutItems,
   deriveEnvelopeFlags,
   resolveCabinetJointMethod,
@@ -739,7 +740,6 @@ export function useCabinet(): {
       const items = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
       const hasPartitionBox = newPartitionsMap.get(box.id) === true;
-      const isBottomRow = box.level === 'bottom' || box.level === 'single';
       const boards = buildBoardModel({
         box,
         bodyMaterial,
@@ -752,7 +752,6 @@ export function useCabinet(): {
         ...(hasPartitionBox && cellItems
           ? { cellItems: [cellItems[0] ?? [], cellItems[1] ?? []] as [InteriorItem[], InteriorItem[]] }
           : {}),
-        plinthHeight: isBottomRow ? plinth : 0,
         hasBack: true,
         envelopeDepth: D,
         backThicknessCm: backThickness,
@@ -764,6 +763,20 @@ export function useCabinet(): {
       }).filter(b => b.role !== 'partition'); // partition emitted separately
       boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
     }
+
+    // ── Plinth board model ─────────────────────────────────────────────────
+    // The plinth lives at the cabinet level: one cabinet-wide front + back +
+    // gables (L-shaped supports). We feed it only the bottom-row bodies so it
+    // knows where to place internal gables (joints + mid-body for wide ones).
+    const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    const plinthBoards = buildPlinthBoardModel({
+      cabinetW: W,
+      cabinetD: D,
+      plinthHeight: plinth,
+      bodyMaterial,
+      boxes: bottomRowBoxes,
+    });
+    boardCuts.push(...boardsToCutItems(plinthBoards, ''));
 
     // Enrich every non-board cut with a materialId so the cut-list view can
     // group by material. boardsToCutItems already sets materialId from

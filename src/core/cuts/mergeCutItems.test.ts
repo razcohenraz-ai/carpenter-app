@@ -10,6 +10,7 @@ const PAIR_LABELS: PairLabels = {
   topBottom: 'עליון / תחתון',
   sides: 'צד ימין / צד שמאל',
   envelopeSides: 'מעטפת ימין / מעטפת שמאל',
+  plinthGables: 'גיבל צוקל',
 };
 
 describe('mergeCutItems', () => {
@@ -145,6 +146,23 @@ describe('mergeCutItems — pair merge (labels supplied)', () => {
     expect(out).toHaveLength(1);
     expect(out[0]!.name).toBe('מעטפת ימין / מעטפת שמאל');
     expect(out[0]!.qty).toBe(2);
+  });
+
+  it('plinth-gable-a + plinth-gable-b (3 gables × 2 panels) → 1 row qty=6', () => {
+    // Cabinet with 3 plinth gables — each emits Panel A + Panel B at the
+    // SAME cut size. With the gable pair label, all 6 collapse.
+    const make = (role: 'plinth-gable-a' | 'plinth-gable-b'): import('../../types/cuts').CutItem =>
+      ci({ name: role === 'plinth-gable-a' ? 'גיבל צוקל א׳' : 'גיבל צוקל ב׳',
+           w: 464, h: 94, materialId: 'mdf18', role, note: '18mm' });
+    const out = mergeCutItems([
+      make('plinth-gable-a'), make('plinth-gable-b'),
+      make('plinth-gable-a'), make('plinth-gable-b'),
+      make('plinth-gable-a'), make('plinth-gable-b'),
+    ], PAIR_LABELS);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.name).toBe('גיבל צוקל');
+    expect(out[0]!.qty).toBe(6);
+    expect(out[0]!.role).toBeUndefined();
   });
 
   it('different dims → NOT merged even if roles form a pair', () => {

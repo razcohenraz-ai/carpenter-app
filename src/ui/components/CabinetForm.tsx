@@ -10,6 +10,7 @@ import BoxInteriorEditor from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import CutsList from './CutsList';
+import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import styles from './CabinetForm.module.css';
 
@@ -78,7 +79,7 @@ export default function CabinetForm(): React.JSX.Element {
     | { type: 'door'; doorId: string }
     | { type: 'drawer'; drawerId: string };
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
-  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts'>('bodies');
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'plinth'>('bodies');
 
   function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
@@ -567,11 +568,29 @@ export default function CabinetForm(): React.JSX.Element {
               >
                 {t.cutsList.tab}
               </button>
+              {(parseFloat(form.plinth) || 0) > 0 && (
+                <button
+                  type="button"
+                  className={`${styles.modeBtn} ${styles.modeBtnPlinth} ${sketchMode === 'plinth' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('plinth')}
+                >
+                  {t.cutsList.plinthTab}
+                </button>
+              )}
             </div>
           )}
 
-          {/* Main sketch — bodies layout doubles as the cuts-tab reference. */}
-          {sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
+          {/* Main sketch — bodies layout doubles as the cuts-tab reference;
+              plinth tab swaps in the top-view PlinthEditor. */}
+          {sketchMode === 'plinth' && result ? (
+            <PlinthEditor
+              cabinetW={parseFloat(form.W) || 0}
+              cabinetD={parseFloat(form.D) || 0}
+              plinthHeight={parseFloat(form.plinth) || 0}
+              boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
+              bodyMaterial={getMaterial(form.bodyMaterialId)}
+            />
+          ) : sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
             <CabinetSketch
               W={form.W}
               H={form.H}

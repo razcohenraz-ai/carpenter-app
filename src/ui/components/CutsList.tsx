@@ -50,6 +50,7 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
     topBottom: t.cutsList.pairTopBottom,
     sides: t.cutsList.pairSides,
     envelopeSides: t.cutsList.pairEnvelopeSides,
+    plinthGables: t.cutsList.pairPlinthGables,
   }));
 
   function handleExportPdf(): void {

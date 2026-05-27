@@ -170,6 +170,10 @@ export interface Translations {
     pairTopBottom: string;
     pairSides: string;
     pairEnvelopeSides: string;
+    pairPlinthGables: string;
+    /** Tab label and title for the plinth top-view editor. */
+    plinthTab: string;
+    plinthEditorTitle: string;
   };
 }
 
@@ -339,6 +343,9 @@ const he: Translations = {
     pairTopBottom: 'עליון / תחתון',
     pairSides: 'צד ימין / צד שמאל',
     pairEnvelopeSides: 'מעטפת ימין / מעטפת שמאל',
+    pairPlinthGables: 'גיבל צוקל',
+    plinthTab: 'צוקל',
+    plinthEditorTitle: 'תצוגת על — צוקל',
   },
 };
 
@@ -508,6 +515,9 @@ const en: Translations = {
     pairTopBottom: 'Top / Bottom',
     pairSides: 'Right / Left Side',
     pairEnvelopeSides: 'Right / Left Envelope',
+    pairPlinthGables: 'Plinth Gable',
+    plinthTab: 'Plinth',
+    plinthEditorTitle: 'Top view — Plinth',
   },
 };
 

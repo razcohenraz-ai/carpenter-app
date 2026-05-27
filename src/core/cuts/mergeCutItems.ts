@@ -17,13 +17,17 @@ import type { CutItem } from '../../types/cuts';
 // "עליון / תחתון". The labels are passed in (not hardcoded) so the UI can
 // supply translations.
 
-/** Display labels for the three known carpentry pairs. Pass to
+/** Display labels for the known carpentry pairs. Pass to
  *  {@link mergeCutItems} to enable the pair-merge second pass. Each label
  *  replaces the `name` of the merged row. */
 export interface PairLabels {
   topBottom: string;
   sides: string;
   envelopeSides: string;
+  /** Combined label for `plinth-gable-a` + `plinth-gable-b`. Both panels
+   *  are cut to identical dimensions — a single row with summed qty (2 per
+   *  gable) reads more cleanly on the saw operator's list. */
+  plinthGables: string;
 }
 
 interface PairDef {
@@ -35,6 +39,7 @@ const PAIRS: readonly PairDef[] = [
   { roles: ['top', 'bottom'], labelKey: 'topBottom' },
   { roles: ['side-left', 'side-right'], labelKey: 'sides' },
   { roles: ['envelope-left', 'envelope-right'], labelKey: 'envelopeSides' },
+  { roles: ['plinth-gable-a', 'plinth-gable-b'], labelKey: 'plinthGables' },
 ];
 
 function mergeKey(c: CutItem): string {

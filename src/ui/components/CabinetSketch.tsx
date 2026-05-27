@@ -112,7 +112,6 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
       // the legacy inline check missed unit_1 / unit_N (only 'left' / 'right'
       // / 'single' got envelope panels).
       const env = deriveEnvelopeFlags(box, !!hasShell, !!hasEnvelopeTop);
-      const isBottomRow = box.level === 'bottom' || box.level === 'single';
       const boards = buildBoardModel({
         box,
         bodyMaterial: bodyMat!,
@@ -123,7 +122,6 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         items,
         hasPartition,
         ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
-        plinthHeight: isBottomRow ? (parseFloat(plinth) || 0) : 0,
         hasBack: true,
         envelopeDepth: fullD,
         backThicknessCm,
@@ -212,19 +210,16 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
 
         {/* Per-body cut sketch — sides, top, bottom, shelves, partition,
             envelope. Drawn BEFORE interior items (rods, drawers) so those
-            sit on top. Plinth boards are filtered out so the plinth shows
-            as ONE continuous rect (drawn above) instead of per-body
-            segments with column gaps. */}
+            sit on top. Plinth boards live at the cabinet level (separate
+            buildPlinthBoardModel call in useCabinet) and never appear in
+            this per-body list. */}
         {hasBoards && [...boardsByBoxId.entries()].map(([boxId, boards]) => {
           const rect = geo.boxSvgRects[boxId];
           if (!rect || !bodyMat) return null;
-          const visibleBoards = boards.filter(
-            b => b.role !== 'plinth-front' && b.role !== 'plinth-back',
-          );
           return (
             <CabinetCutSketch
               key={`cut-${boxId}`}
-              boards={visibleBoards}
+              boards={boards}
               offsetX={rect.x}
               offsetY={rect.y}
               scale={geo.scale}

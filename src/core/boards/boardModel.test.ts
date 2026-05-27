@@ -1,12 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildBoardModel,
+  buildPlinthBoardModel,
+  calcPlinthGables,
   resolveJointMethod,
   resolveCabinetJointMethod,
   deriveEnvelopeFlags,
   boardsToCutItems,
   BACK_THICKNESS_CM,
+  LEVELER_GAP_CM,
+  PLINTH_GABLE_MID_BODY_THRESHOLD_CM,
   type Board,
+  type PlinthGable,
 } from './boardModel';
 import { getMaterial } from '../../catalog';
 import type { Box } from '../../types/geometry';
@@ -397,29 +402,213 @@ describe('buildBoardModel — back panel', () => {
   });
 });
 
-// ── 10. Plinth boards ────────────────────────────────────────────────────────
+// ── 10. Plinth board model (cabinet-level) ──────────────────────────────────
 
-describe('buildBoardModel — plinth', () => {
-  it('plinthHeight=10 → plinth-front + plinth-back (front visible, back hidden)', () => {
-    const b = box({ W: 80, H: 100 });
-    const boards = buildBoardModel({ ...baseArgs, box: b, plinthHeight: 10 });
+describe('buildPlinthBoardModel — front + back', () => {
+  const baseBoxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+
+  it('plinthHeight=10 → 1 front + 1 back, both panels cabinetW × (plinthH-LEVELER)', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
     const front = byRole(boards, 'plinth-front')[0]!;
     const back  = byRole(boards, 'plinth-back')[0]!;
     expect(front).toBeDefined();
     expect(back).toBeDefined();
-    expect(front.length).toBeCloseTo(80 - 2 * t);
+    expect(front.length).toBeCloseTo(80);
+    expect(back.length).toBeCloseTo(80);
+    expect(front.width).toBeCloseTo(10 - LEVELER_GAP_CM);
+    expect(back.width).toBeCloseTo(10 - LEVELER_GAP_CM);
     expect(front.thickness).toBeCloseTo(t);
-    expect(front.yFrom).toBe(100);
-    expect(front.yTo).toBe(110);
-    expect(front.visible).toBe(true);
-    expect(back.visible).toBe(false);
+    // Top-view rects: front at y=[0,t]; back at y=[D-t, D].
+    expect(front.yFrom).toBe(0);
+    expect(front.yTo).toBeCloseTo(t);
+    expect(back.yFrom).toBeCloseTo(60 - t);
+    expect(back.yTo).toBe(60);
   });
 
-  it('plinthHeight=0 (default) → no plinth boards', () => {
-    const b = box({ W: 80, H: 100 });
-    const boards = buildBoardModel({ ...baseArgs, box: b });
-    expect(byRole(boards, 'plinth-front')).toHaveLength(0);
-    expect(byRole(boards, 'plinth-back')).toHaveLength(0);
+  it('plinthHeight=0 → empty', () => {
+    expect(buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 0,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    })).toEqual([]);
+  });
+});
+
+describe('calcPlinthGables', () => {
+  it('single 80cm body → 2 edge gables only (no joints, no mid-body)', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const gables = calcPlinthGables(80, boxes, t);
+    expect(gables).toHaveLength(2);
+    expect(gables[0]!.kind).toBe('edge-left');
+    expect(gables[0]!.xAnchor).toBe(0);
+    expect(gables[0]!.direction).toBe('flush-left');
+    expect(gables[1]!.kind).toBe('edge-right');
+    expect(gables[1]!.xAnchor).toBe(80);
+    expect(gables[1]!.direction).toBe('flush-right');
+  });
+
+  it('two 80cm bodies (at threshold) → 2 edges + 1 joint = 3 gables; joint at xJoint=80', () => {
+    const boxes: Box[] = [
+      box({ W: 80, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 80, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const gables = calcPlinthGables(160, boxes, t);
+    expect(gables).toHaveLength(3);
+    expect(gables.map(g => g.kind)).toEqual(['edge-left', 'joint', 'edge-right']);
+    const joint = gables.find(g => g.kind === 'joint')!;
+    expect(joint.xAnchor).toBe(80);
+    expect(joint.direction).toBe('right');
+  });
+
+  it('two 100cm bodies → 2 edges + 1 joint + 2 mid-body = 5 gables', () => {
+    const boxes: Box[] = [
+      box({ W: 100, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 100, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const gables = calcPlinthGables(200, boxes, t);
+    expect(gables).toHaveLength(5);
+    // Emission order: edge-left, mid-body (box 0), joint, mid-body (box 1), edge-right.
+    expect(gables.map(g => g.kind)).toEqual([
+      'edge-left', 'mid-body', 'joint', 'mid-body', 'edge-right',
+    ]);
+    expect(gables[1]!.xAnchor).toBe(50);  // mid of left body
+    expect(gables[2]!.xAnchor).toBe(100); // joint
+    expect(gables[3]!.xAnchor).toBe(150); // mid of right body
+  });
+
+  it('body wider than 80cm → adds a mid-body gable at box.x + W/2', () => {
+    const boxes: Box[] = [box({ W: 120, H: 100, level: 'bottom' })];
+    const gables = calcPlinthGables(120, boxes, t);
+    // edges + 1 mid-body
+    expect(gables).toHaveLength(3);
+    const mid = gables.find(g => g.kind === 'mid-body')!;
+    expect(mid.xAnchor).toBe(60);
+    expect(mid.direction).toBe('right');
+  });
+
+  it('threshold is strict — body exactly 80 → no mid-body', () => {
+    const boxes: Box[] = [box({ W: PLINTH_GABLE_MID_BODY_THRESHOLD_CM, H: 100, level: 'bottom' })];
+    const gables = calcPlinthGables(PLINTH_GABLE_MID_BODY_THRESHOLD_CM, boxes, t);
+    expect(gables.filter(g => g.kind === 'mid-body')).toHaveLength(0);
+  });
+
+  it('joint between adjacent bodies sits exactly at xJoint', () => {
+    const boxes: Box[] = [
+      box({ W: 60, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 90, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const gables = calcPlinthGables(150, boxes, t);
+    const joint = gables.find(g => g.kind === 'joint')!;
+    // Body widths cumulative: 60 then 60+90=150. Joint at the first cumulative.
+    expect(joint.xAnchor).toBe(60);
+  });
+});
+
+describe('buildPlinthBoardModel — gables', () => {
+  it('cabinet 120×50, one body 120cm → 8 boards (2 base + 3 gables × 2 panels)', () => {
+    // 1 body of 120cm is > 80cm threshold → 1 mid-body gable.
+    // Total gables: edge-L + mid + edge-R = 3. Each gable = 2 panels. Plus
+    // 2 base panels (front + back) = 2 + 6 = 8.
+    const boxes: Box[] = [box({ W: 120, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 120, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    expect(boards).toHaveLength(8);
+    expect(byRole(boards, 'plinth-front')).toHaveLength(1);
+    expect(byRole(boards, 'plinth-back')).toHaveLength(1);
+    expect(byRole(boards, 'plinth-gable-a')).toHaveLength(3);
+    expect(byRole(boards, 'plinth-gable-b')).toHaveLength(3);
+  });
+
+  it('cabinet 200×50, two 100cm bodies → 12 boards (2 base + 5 gables × 2)', () => {
+    // 2 bodies neither > 80cm → no mid-body. Gables: edge-L + joint + edge-R = 3.
+    // Wait — 100cm > 80cm threshold, so each body ALSO gets a mid-body gable.
+    // Edges (2) + joint (1) + 2 mid-body = 5 gables × 2 panels = 10. Plus 2 base.
+    const boxes: Box[] = [
+      box({ W: 100, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 100, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    expect(boards).toHaveLength(12);
+    expect(byRole(boards, 'plinth-gable-a')).toHaveLength(5);
+    expect(byRole(boards, 'plinth-gable-b')).toHaveLength(5);
+  });
+
+  it('each gable Panel A and Panel B have identical cut dimensions', () => {
+    const boxes: Box[] = [box({ W: 100, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 100, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const a = byRole(boards, 'plinth-gable-a')[0]!;
+    const b = byRole(boards, 'plinth-gable-b')[0]!;
+    expect(a.length).toBeCloseTo(50 - 2 * t);
+    expect(a.width).toBeCloseTo(10 - LEVELER_GAP_CM);
+    expect(b.length).toBeCloseTo(a.length);
+    expect(b.width).toBeCloseTo(a.width);
+    expect(b.thickness).toBeCloseTo(a.thickness);
+  });
+
+  it('flush-left gable: Panel A at x=[0, t], Panel B to its right at x=[t, t+panelH]', () => {
+    const boxes: Box[] = [box({ W: 100, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 100, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const panelH = 10 - LEVELER_GAP_CM;
+    // The first plinth-gable-a in emission order is the left-edge one.
+    const a = byRole(boards, 'plinth-gable-a')[0]!;
+    const b = byRole(boards, 'plinth-gable-b')[0]!;
+    expect(a.xFrom).toBe(0);
+    expect(a.xTo).toBeCloseTo(t);
+    expect(b.xFrom).toBeCloseTo(t);
+    expect(b.xTo).toBeCloseTo(t + panelH);
+  });
+
+  it('flush-right gable: Panel A at x=[W-t, W], Panel B to its left', () => {
+    const boxes: Box[] = [box({ W: 100, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 100, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const panelH = 10 - LEVELER_GAP_CM;
+    const gablesA = byRole(boards, 'plinth-gable-a');
+    const gablesB = byRole(boards, 'plinth-gable-b');
+    const aRight = gablesA[gablesA.length - 1]!;
+    const bRight = gablesB[gablesB.length - 1]!;
+    expect(aRight.xFrom).toBeCloseTo(100 - t);
+    expect(aRight.xTo).toBe(100);
+    expect(bRight.xFrom).toBeCloseTo(100 - t - panelH);
+    expect(bRight.xTo).toBeCloseTo(100 - t);
+  });
+
+  it('joint gable: Panel A centered on xJoint, Panel B to the right', () => {
+    const boxes: Box[] = [
+      box({ W: 60, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 60, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 120, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    // Find the joint gable by matching xAnchor = 60 from calcPlinthGables.
+    const gables: PlinthGable[] = calcPlinthGables(120, boxes, t);
+    const jointIdx = gables.findIndex(g => g.kind === 'joint');
+    const aBoards = byRole(boards, 'plinth-gable-a');
+    const bBoards = byRole(boards, 'plinth-gable-b');
+    const a = aBoards[jointIdx]!;
+    const b = bBoards[jointIdx]!;
+    const panelH = 10 - LEVELER_GAP_CM;
+    expect(a.xFrom).toBeCloseTo(60 - t / 2);
+    expect(a.xTo).toBeCloseTo(60 + t / 2);
+    expect(b.xFrom).toBeCloseTo(60 + t / 2);
+    expect(b.xTo).toBeCloseTo(60 + t / 2 + panelH);
   });
 });
 
@@ -569,11 +758,16 @@ describe('boardsToCutItems', () => {
     expect(cuts.find(c => c.name === 'מעטפת תקרה')!.group).toBe('shell');
   });
 
-  it('plinth boards map to group "plinth"', () => {
-    const b = box({ W: 80, H: 100 });
-    const boards = buildBoardModel({ ...baseArgs, box: b, plinthHeight: 10 });
+  it('plinth boards (cabinet-level) map to group "plinth"', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
     const cuts = boardsToCutItems(boards, '');
     expect(cuts.find(c => c.name === 'צוקל קדמי')!.group).toBe('plinth');
     expect(cuts.find(c => c.name === 'צוקל אחורי')!.group).toBe('plinth');
+    expect(cuts.find(c => c.name === 'גיבל צוקל א׳')!.group).toBe('plinth');
+    expect(cuts.find(c => c.name === 'גיבל צוקל ב׳')!.group).toBe('plinth');
   });
 });
