@@ -810,7 +810,11 @@ export function useCabinet(): {
     const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
     const plinthBoards = buildPlinthBoardModel({
       cabinetW: W,
-      cabinetD: D,
+      // Plinth depth = carcass depth (same as the body sitting on top), NOT
+      // the raw input D. The cabinet's front-facing reductions (back panel,
+      // hinge gap, front material) shrink the carcass, and the plinth follows
+      // the body footprint so the structure is flush front-to-back.
+      cabinetD: carcassD,
       plinthHeight: plinth,
       bodyMaterial,
       // Production cabinets always have a front-material cladding facade so

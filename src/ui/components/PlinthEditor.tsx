@@ -10,11 +10,16 @@ import {
   snapPlinthGableX,
   type PlinthGable,
 } from '../../core/boards/boardModel';
+import { formatDim } from '../../core/utils/round';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './PlinthEditor.module.css';
 
 interface Props {
   cabinetW: number;
+  /** Carcass depth (= D − backThickness − HINGE_GAP − tFront) — the same
+   *  value `useCabinet` feeds into `buildPlinthBoardModel`. Drives both the
+   *  plan-view scale and the depth label, so the editor and the cut list
+   *  read the same number. */
   cabinetD: number;
   plinthHeight: number;
   /** Front-cladding setback (cm). 0 = flush with the cabinet front. */
@@ -400,10 +405,12 @@ export default function PlinthEditor({
           className={`${styles.dimLabel} ${styles.dimLabelWidth}`}
           textAnchor="middle"
         >
-          {cabinetW.toFixed(1)}
+          {formatDim(cabinetW)}
         </text>
 
-        {/* Depth label (left, rotated) */}
+        {/* Depth label (left, rotated) — shows the EFFECTIVE plinth depth
+            (carcassD − recess). Same number a saw operator would see for
+            the plinth-back's net span in the cut list. */}
         <text
           x={PAD_LEFT / 2} y={originY + cabPxD / 2}
           className={`${styles.dimLabel} ${styles.dimLabelDepth}`}
@@ -411,7 +418,7 @@ export default function PlinthEditor({
           dominantBaseline="middle"
           transform={`rotate(-90, ${PAD_LEFT / 2}, ${originY + cabPxD / 2})`}
         >
-          {cabinetD.toFixed(1)}
+          {formatDim(Math.max(0, cabinetD - plinthRecess))}
         </text>
       </svg>
     </div>

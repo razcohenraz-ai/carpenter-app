@@ -933,6 +933,33 @@ describe('buildPlinthBoardModel — recessed plinth', () => {
     });
     expect(recessed.map(x => x.yFrom)).toEqual(baseline.map(x => x.yFrom));
   });
+
+  it('effective plinth depth = cabinetD − recess (matches what PlinthEditor shows)', () => {
+    // The "effective depth" the carpenter sees runs from the front-most
+    // panel's near face to the plinth-back's far face. With cladding it's
+    // the cladding's yFrom; without it the plinth-front's yFrom. Recess
+    // pushes that front face back, and the formula must be identical
+    // whether or not cladding is present — that's how the editor's depth
+    // label and the cut list end up at the same number.
+    const cabinetD = 57.4; // carcass depth example from the spec
+    const recess = 2;
+    const withCladding = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat, recessCm: recess,
+    });
+    const noCladding = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      recessCm: recess,
+    });
+    const claddingFront = byRole(withCladding, 'plinth-front-cladding')[0]!;
+    const plinthFront   = byRole(noCladding,   'plinth-front')[0]!;
+    const backWith      = byRole(withCladding, 'plinth-back')[0]!;
+    const backNo        = byRole(noCladding,   'plinth-back')[0]!;
+    expect(backWith.yTo - claddingFront.yFrom).toBeCloseTo(cabinetD - recess);
+    expect(backNo.yTo   - plinthFront.yFrom).toBeCloseTo(cabinetD - recess);
+  });
 });
 
 describe('buildPlinthBoardModel — gables', () => {

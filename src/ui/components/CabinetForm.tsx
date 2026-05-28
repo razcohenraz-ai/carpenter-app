@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS, getMaterial } from '../../catalog';
+import { HINGE_GAP_CM } from '../../core/boards/boardModel';
 import type { MaterialId } from '../../types';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
@@ -411,11 +412,16 @@ export default function CabinetForm(): React.JSX.Element {
   }
 
   if (editing.type === 'plinth' && result) {
+    // Plinth depth shown to the carpenter = the CARCASS depth (matches the
+    // body sitting on top), not the raw input D. Same formula as
+    // useCabinet.calculate so the editor and the cut list never disagree.
+    const rawD = parseFloat(form.D) || 0;
+    const plinthCarcassD = Math.max(0, rawD - backThicknessCm - HINGE_GAP_CM - frontThicknessCm);
     return (
       <div className={styles.form}>
         <PlinthEditor
           cabinetW={parseFloat(form.W) || 0}
-          cabinetD={parseFloat(form.D) || 0}
+          cabinetD={plinthCarcassD}
           plinthHeight={parseFloat(form.plinth) || 0}
           plinthRecess={(() => {
             const r = parseFloat(form.plinthRecess);
