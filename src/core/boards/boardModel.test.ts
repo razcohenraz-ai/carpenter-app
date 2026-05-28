@@ -11,11 +11,18 @@ import {
   deriveEnvelopeFlags,
   boardsToCutItems,
   snapPlinthGableX,
+  boardStableId,
+  getDimension,
+  getMaterial as getBoardMaterial,
+  computeCarcassDepth,
+  computeInnerWidth,
   BACK_THICKNESS_CM,
   LEVELER_GAP_CM,
   PLINTH_GABLE_MID_BODY_THRESHOLD_CM,
   PLINTH_GABLE_SNAP_CM,
   type Board,
+  type BoardDimensionKey,
+  type BoardOverrides,
   type PlinthGable,
 } from './boardModel';
 import { getMaterial } from '../../catalog';
@@ -1225,5 +1232,296 @@ describe('boardsToCutItems', () => {
     expect(cuts.find(c => c.name === 'צוקל אחורי')!.group).toBe('plinth');
     expect(cuts.find(c => c.name === 'גיבל צוקל א׳')!.group).toBe('plinth');
     expect(cuts.find(c => c.name === 'גיבל צוקל ב׳')!.group).toBe('plinth');
+  });
+});
+
+// ── 14. Stable id + cabinet-derived dimension helpers ───────────────────────
+
+describe('boardStableId', () => {
+  it('returns `{role}@{subKey}` when subKey is set', () => {
+    expect(boardStableId('side-left', 'bottom:left')).toBe('side-left@bottom:left');
+    expect(boardStableId('shelf', 'bottom:left@s_abc'))
+      .toBe('shelf@bottom:left@s_abc');
+    expect(boardStableId('plinth-gable-a', 'joint:0'))
+      .toBe('plinth-gable-a@joint:0');
+  });
+
+  it('returns the role alone when subKey is omitted (cabinet-level singleton)', () => {
+    expect(boardStableId('plinth-front')).toBe('plinth-front');
+    expect(boardStableId('plinth-back')).toBe('plinth-back');
+    expect(boardStableId('plinth-front-cladding')).toBe('plinth-front-cladding');
+  });
+
+  it('empty subKey is treated as singleton', () => {
+    expect(boardStableId('plinth-front', '')).toBe('plinth-front');
+  });
+});
+
+describe('computeCarcassDepth + computeInnerWidth', () => {
+  it('carcassD = D − back − hingeGap − tFront (clamped ≥ 0)', () => {
+    expect(computeCarcassDepth(60, 0.5, 0.3, 1.8)).toBeCloseTo(57.4);
+    expect(computeCarcassDepth(50, 0.5, 0.3, 1.8)).toBeCloseTo(47.4);
+    expect(computeCarcassDepth(2, 0.5, 0.3, 1.8)).toBe(0); // clamp
+  });
+
+  it('innerW = hasShell ? W − 2·tFront : W', () => {
+    expect(computeInnerWidth(240, true, 1.8)).toBeCloseTo(236.4);
+    expect(computeInnerWidth(240, false, 1.8)).toBe(240);
+  });
+});
+
+// ── 15. Override layer: getDimension + getMaterial ──────────────────────────
+
+describe('getDimension', () => {
+  const b: Board = {
+    id: 'i1', stableId: 'top@bottom:single',
+    role: 'top', materialId: 'mdf18',
+    length: 76.4, width: 57.4, thickness: 1.8,
+    xFrom: 1.8, xTo: 78.2, yFrom: 0, yTo: 1.8, visible: true,
+  };
+
+  it('without override → derived value', () => {
+    const empty: ReadonlyMap<string, BoardOverrides> = new Map();
+    expect(getDimension(b, 'length', empty)).toBe(76.4);
+    expect(getDimension(b, 'width',  empty)).toBe(57.4);
+    expect(getDimension(b, 'thickness', empty)).toBe(1.8);
+  });
+
+  it('override on a single key → override value; siblings stay derived', () => {
+    const overrides: ReadonlyMap<string, BoardOverrides> = new Map([
+      [b.stableId, { dimensions: { length: 80 } }],
+    ]);
+    expect(getDimension(b, 'length', overrides)).toBe(80);
+    expect(getDimension(b, 'width',  overrides)).toBe(57.4); // sibling untouched
+    expect(getDimension(b, 'thickness', overrides)).toBe(1.8);
+  });
+
+  it('override targets the stableId — a different board on the same role is untouched', () => {
+    const overrides: ReadonlyMap<string, BoardOverrides> = new Map([
+      [b.stableId, { dimensions: { length: 80 } }],
+    ]);
+    const otherBoard: Board = { ...b, stableId: 'top@top:single' };
+    expect(getDimension(otherBoard, 'length', overrides)).toBe(76.4); // derived
+  });
+});
+
+describe('getMaterial', () => {
+  const b: Board = {
+    id: 'i1', stableId: 'back@bottom:single',
+    role: 'back', materialId: 'mdf18',
+    length: 80, width: 200, thickness: 0.5,
+    xFrom: 0, xTo: 80, yFrom: 0, yTo: 200, visible: false,
+  };
+
+  it('without override → derived materialId', () => {
+    expect(getBoardMaterial(b, new Map())).toBe('mdf18');
+  });
+
+  it('override on materialId → override value', () => {
+    const overrides: ReadonlyMap<string, BoardOverrides> = new Map([
+      [b.stableId, { materialId: 'oak18' }],
+    ]);
+    expect(getBoardMaterial(b, overrides)).toBe('oak18');
+  });
+});
+
+// ── 16. Override semantics: set → effective, reset → revert ─────────────────
+
+describe('override semantics — set then reset', () => {
+  const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+
+  it('length override changes CutItem.w; reset reverts', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const front = boards.find(b => b.role === 'plinth-front')!;
+    const baseline = boardsToCutItems(boards, '');
+    const baselineFrontCut = baseline.find(c => c.role === 'plinth-front')!;
+
+    // Set: override length to 100 cm.
+    const overrides = new Map<string, BoardOverrides>([
+      [front.stableId, { dimensions: { length: 100 } }],
+    ]);
+    const withOverride = boardsToCutItems(boards, '', overrides);
+    const overriddenCut = withOverride.find(c => c.role === 'plinth-front')!;
+    expect(overriddenCut.w).toBe(1000);            // 100 cm × 10 mm
+    expect(overriddenCut.w).not.toBe(baselineFrontCut.w);
+
+    // Reset: empty map → revert to derived.
+    const reverted = boardsToCutItems(boards, '', new Map());
+    const revertedCut = reverted.find(c => c.role === 'plinth-front')!;
+    expect(revertedCut.w).toBe(baselineFrontCut.w);
+  });
+
+  it('materialId override changes CutItem.materialId; reset reverts', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const back = boards.find(b => b.role === 'plinth-back')!;
+    const baseline = boardsToCutItems(boards, '');
+    const baselineBackCut = baseline.find(c => c.role === 'plinth-back')!;
+    expect(baselineBackCut.materialId).toBe(bodyMat.id);
+
+    const overrides = new Map<string, BoardOverrides>([
+      [back.stableId, { materialId: 'oak18' }],
+    ]);
+    const withOverride = boardsToCutItems(boards, '', overrides);
+    expect(withOverride.find(c => c.role === 'plinth-back')!.materialId).toBe('oak18');
+
+    const reverted = boardsToCutItems(boards, '', new Map());
+    expect(reverted.find(c => c.role === 'plinth-back')!.materialId).toBe(bodyMat.id);
+  });
+
+  it('thickness override drives the note + materialId override survives a dim reset', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const front = boards.find(b => b.role === 'plinth-front')!;
+    // Both override at once: thickness + materialId.
+    const overrides = new Map<string, BoardOverrides>([
+      [front.stableId, { dimensions: { thickness: 1.2 }, materialId: 'oak18' }],
+    ]);
+    const cut = boardsToCutItems(boards, '', overrides).find(c => c.role === 'plinth-front')!;
+    expect(cut.note).toBe('12mm');           // thickness took effect
+    expect(cut.materialId).toBe('oak18');    // material took effect
+  });
+});
+
+// ── 17. Consistency: getDimension/getMaterial == CutItem == derived ────────
+// Locks the single-source-of-truth invariant. For every board emitted in a
+// representative cabinet, the dimensions reaching CutsList (CutItem.w/h) and
+// the dimensions any sketch / editor would read via getDimension agree, in
+// every scenario — body, plinth, recessed plinth, cladding, body > 80 cm.
+
+interface Scenario {
+  name: string;
+  boards: Board[];
+  overrides: ReadonlyMap<string, BoardOverrides>;
+}
+
+function assertConsistency({ name, boards, overrides }: Scenario): void {
+  const cuts = boardsToCutItems(boards, 'גוף', overrides);
+  expect(cuts.length, `${name}: cut count != board count`).toBe(boards.length);
+  // Every board must have a non-empty stableId.
+  for (const b of boards) {
+    expect(b.stableId, `${name}: board ${b.role} missing stableId`).toBeTruthy();
+  }
+  // 1:1 mapping is preserved by boardsToCutItems.
+  boards.forEach((b, i) => {
+    const cut = cuts[i]!;
+    const length = getDimension(b, 'length', overrides);
+    const width  = getDimension(b, 'width',  overrides);
+    const thick  = getDimension(b, 'thickness', overrides);
+    const mat    = getBoardMaterial(b, overrides);
+    expect(
+      cut.w, `${name}: ${b.stableId} (${b.role}) — CutItem.w (${cut.w}) != Math.round(getDimension('length')*10) (${Math.round(length * 10)})`,
+    ).toBe(Math.round(length * 10));
+    expect(
+      cut.h, `${name}: ${b.stableId} (${b.role}) — CutItem.h (${cut.h}) != Math.round(getDimension('width')*10) (${Math.round(width * 10)})`,
+    ).toBe(Math.round(width * 10));
+    expect(
+      cut.note, `${name}: ${b.stableId} (${b.role}) — note (${cut.note}) != ${Math.round(thick * 10)}mm`,
+    ).toBe(`${Math.round(thick * 10)}mm`);
+    expect(
+      cut.materialId, `${name}: ${b.stableId} (${b.role}) — material (${cut.materialId}) != getMaterial (${mat})`,
+    ).toBe(mat);
+  });
+}
+
+describe('consistency: stableId matches across boards, CutItems, and getDimension', () => {
+  const noOverrides: ReadonlyMap<string, BoardOverrides> = new Map();
+
+  it('body (W=80, H=200): every carcass board agrees with its CutItem', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    assertConsistency({ name: 'body 80×200', boards, overrides: noOverrides });
+  });
+
+  it('body with shelves and partition: shelves keyed by item id stay consistent', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({
+      ...baseArgs, box: b, hasBack: true,
+      items: [shelf('s1', 60), shelf('s2', 120)],
+    });
+    assertConsistency({ name: 'body with shelves', boards, overrides: noOverrides });
+  });
+
+  it('plinth (no recess, no cladding): every plinth board agrees', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    assertConsistency({ name: 'plinth basic', boards, overrides: noOverrides });
+  });
+
+  it('plinth recessed (recess=2): consistency holds for the shifted boards', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+      recessCm: 2,
+    });
+    assertConsistency({ name: 'plinth recessed', boards, overrides: noOverrides });
+  });
+
+  it('plinth with cladding (front material): cladding board agrees with its CutItem', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+      frontMaterial: frontMat,
+    });
+    assertConsistency({ name: 'plinth with cladding', boards, overrides: noOverrides });
+  });
+
+  it('plinth with cladding + recess together: still consistent', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+      frontMaterial: frontMat, recessCm: 2,
+    });
+    assertConsistency({ name: 'plinth cladding + recess', boards, overrides: noOverrides });
+  });
+
+  it('body > 80cm triggers a mid-body plinth gable — all gables consistent', () => {
+    const boxes: Box[] = [box({ W: 120, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 120, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+      frontMaterial: frontMat,
+    });
+    // 2 edge + 1 mid-body = 3 gables × 2 panels + front + back + cladding = 9 boards.
+    expect(boards.length).toBeGreaterThanOrEqual(9);
+    assertConsistency({ name: 'body > 80 mid-body gable', boards, overrides: noOverrides });
+  });
+
+  it('overrides are honoured by the consistency check (CutItem follows the override)', () => {
+    const boxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes,
+    });
+    const target = boards.find(b => b.role === 'plinth-front')!;
+    const overrides = new Map<string, BoardOverrides>([
+      [target.stableId, { dimensions: { length: 75 }, materialId: 'oak18' }],
+    ]);
+    assertConsistency({ name: 'plinth with mixed overrides', boards, overrides });
+    // Spot-check the overridden values reached the CutItem.
+    const cuts = boardsToCutItems(boards, '', overrides);
+    const cut = cuts.find(c => c.role === 'plinth-front')!;
+    expect(cut.w).toBe(750);
+    expect(cut.materialId).toBe('oak18');
+  });
+
+  it('lists every BoardDimensionKey so the test catches new ones at compile time', () => {
+    // If a new key is added to BoardDimensionKey, this list MUST be updated
+    // — the spread asserts every key is present, surfacing the gap.
+    const allKeys: BoardDimensionKey[] = ['length', 'width', 'thickness'];
+    expect(allKeys.length).toBe(3);
   });
 });

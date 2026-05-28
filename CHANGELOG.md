@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### שונה — BoardModel כמקור-אמת יחיד למידות לוחות + שכבת override פר-לוח
+- **`Board.stableId: string`** חדש (חובה). יציב בין `calculate()` rebuilds; מפתח לאחסון overrides. `Board.id` ה-ad-hoc נשמר אך משמש רק כ-React key.
+- **שכבת override**: `useCabinet` חושף `boardOverridesByStableId: Map<stableId, { dimensions?, materialId? }>` + 5 setters (`setBoardDimensionOverride`/`reset`, `setBoardMaterialOverride`/`reset`, `resetAllBoardOverrides`). דפוס זהה ל-`userPositionX` של גיבלי הצוקל: `override ?? derived`.
+- **`getDimension(board, key, overrides)`** ו-**`getMaterial(board, overrides)`** ב-`core/boards/boardModel.ts` — נקודת קריאה אחידה לערכים אפקטיביים. `boardsToCutItems` קיבל פרמטר `overrides` (ברירת מחדל Map ריק → תאימות לאחור).
+- **`computeCarcassDepth`** ו-**`computeInnerWidth`** חדשים ב-core — מבטלים את ה-3 כפילויות של נוסחאות `carcassD`/`innerW` שהיו ב-`CabinetSketch.tsx`, `CabinetSketch.utils.ts`, ו-`CabinetForm.tsx`. `useCabinet` חושף `carcassD` ו-`innerW` על `CabinetResult` כדי שצרכני UI יקראו, לא יחשבו.
+- **`CabinetCutSketch`** קיבל `overrides` prop ומסמן effective material דרך `data-material` ו-`data-material-overridden` ב-`<rect>`. ה-rect הוויזואלי עצמו נשאר ב-`xFrom..yTo` נגזרים.
+- **`PlinthEditor`** קיבל `boardOverrides` prop. תווית הרוחב נגזרת מ-`getDimension('length')` של `plinth-back`; תווית העומק = `back.yTo − frontMost.yFrom` (קואורדינטות המודל) — אין יותר חישוב `cabinetD − recess` בקומפוננטה.
+- **`CabinetResult`** הורחב ב-`carcassD: number, innerW: number`.
+- **23 בדיקות חדשות** ב-`boardModel.test.ts`: `boardStableId` × 3, `computeCarcassDepth`/`InnerWidth` × 2, `getDimension`/`getMaterial` × 5, override semantics (set + reset על length / materialId / thickness) × 3, ו-consistency lock ב-9 תרחישים מייצגים (גוף, מדפים, צוקל בסיסי, צוקל נסוג, צוקל עם חיפוי, חיפוי + נסיגה, גוף > 80, override מעורב, BoardDimensionKey compile-time check). 533 בסך הכל עוברים.
+- **תיעוד**: `DESIGN_PRINCIPLES.md` קיבל עיקרון שביעי ("BoardModel כמקור-אמת יחיד"); `ARCHITECTURE.md` עודכן עם זרימת ה-override; `DECISIONS_LOG.md` 2026-05-29 מתעד את ההחלטה ואת הטריידאוף לעומת `userLength?` ישירות על `Board`.
+
 ### נוסף — חיפוי קדמי לצוקל + אופציית "צוקל נסוג"
 - **חיפוי צוקל** (role חדש `'plinth-front-cladding'`) — לוח קדמי **נוסף** של הצוקל, מחומר החזיתות (`frontMaterial`), שיושב לפני ה-`plinth-front` של חומר הגוף. מידות זהות ל-`plinth-front` (אורך = cabinetW, גובה = `plinthH − LEVELER_GAP_CM`), עובי = `tFront`. ה-`plinth-front` הקיים נסוג ב-`tFront` ועומק החיתוך של הגיבלים מתקצר ב-`tFront`. מופיע ברשימת החיתוכים כ-"חיפוי צוקל" תחת קבוצת חומר החזיתות.
 - **צוקל נסוג (recessed plinth)** — `CabinetInput.plinthRecess: number` (ברירת מחדל 0). כשהערך > 0, כל הקצה הקדמי של הצוקל זז אחורה ב-`recess` ס"מ; הקצה האחורי לא זז; אורך הגיבלים מתקצר באותה כמות. הקרקס המלא של הארון לא משתנה — הנסיגה היא חלל ריק בתוך ה-footprint.

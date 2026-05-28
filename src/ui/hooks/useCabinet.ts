@@ -32,7 +32,11 @@ import {
   boardsToCutItems,
   deriveEnvelopeFlags,
   resolveCabinetJointMethod,
+  computeCarcassDepth,
+  computeInnerWidth,
   HINGE_GAP_CM,
+  type BoardDimensionKey,
+  type BoardOverrides,
 } from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
@@ -119,6 +123,14 @@ export interface CabinetResult {
   boxes: Box[];
   cuts: CutItem[];
   doors: DoorCalcResult;
+  /** Carcass depth in cm — `D − backThickness − HINGE_GAP_CM − tFront`,
+   *  produced by {@link computeCarcassDepth}. Exposed so UI consumers
+   *  (sketches, the plinth editor, etc.) never re-derive the formula. */
+  carcassD: number;
+  /** Inner cabinet width in cm — `hasShell ? W − 2·tFront : W`, produced
+   *  by {@link computeInnerWidth}. Single source of truth for the front
+   *  layout, the body decomposition, and the live sketches. */
+  innerW: number;
 }
 
 export function useCabinet(): {
@@ -156,6 +168,23 @@ export function useCabinet(): {
   setPlinthGableOverride: (gableId: string, x: number | undefined) => void;
   /** Drop every override at once. */
   resetPlinthGableOverrides: () => void;
+  /** Per-board override layer keyed by `Board.stableId`. Holds dimension
+   *  and material-id overrides; the derived (carpentry-rule) values live
+   *  inside `buildBoardModel` / `buildPlinthBoardModel` and stay untouched.
+   *  Effective values are read via `getDimension` / `getMaterial` from
+   *  `core/boards/boardModel`. */
+  boardOverridesByStableId: ReadonlyMap<string, BoardOverrides>;
+  /** Set one dimension override on a single board. */
+  setBoardDimensionOverride: (stableId: string, key: BoardDimensionKey, value: number) => void;
+  /** Drop a single dimension override; reverts to derived. */
+  resetBoardDimensionOverride: (stableId: string, key: BoardDimensionKey) => void;
+  /** Set the material id override for a single board (e.g. real-wood back
+   *  in an otherwise-MDF cabinet). */
+  setBoardMaterialOverride: (stableId: string, materialId: MaterialId) => void;
+  /** Drop the material id override; reverts to derived. */
+  resetBoardMaterialOverride: (stableId: string) => void;
+  /** Drop every board-level override (dimensions and materials) at once. */
+  resetAllBoardOverrides: () => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -168,6 +197,8 @@ export function useCabinet(): {
   const [drawerFrontsById, setDrawerFrontsByIdState] = useState<DrawerFrontById>({});
   const [plinthGableOverrides, setPlinthGableOverridesState] = useState<ReadonlyMap<string, number>>(new Map());
   const plinthGableOverridesRef = useRef<ReadonlyMap<string, number>>(new Map());
+  const [boardOverridesByStableId, setBoardOverridesState] = useState<ReadonlyMap<string, BoardOverrides>>(new Map());
+  const boardOverridesRef = useRef<ReadonlyMap<string, BoardOverrides>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -523,6 +554,69 @@ export function useCabinet(): {
     }
   }
 
+  // ── Per-board overrides (dimensions + materialId) ─────────────────────────
+  // The override layer is "soft" state: it never changes box decomposition
+  // or board emission — only the effective values consumers see at read
+  // time. Each write triggers a recalculate so the cut list and sketches
+  // pull the latest derived board list with overrides applied downstream.
+
+  /** Internal commit — copy ref to state, optionally recalculate. */
+  function _commitBoardOverrides(next: ReadonlyMap<string, BoardOverrides>): void {
+    boardOverridesRef.current = next;
+    setBoardOverridesState(next);
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+    }
+  }
+
+  function setBoardDimensionOverride(stableId: string, key: BoardDimensionKey, value: number): void {
+    const next = new Map(boardOverridesRef.current);
+    const existing = next.get(stableId) ?? {};
+    const dimensions = { ...(existing.dimensions ?? {}), [key]: value };
+    next.set(stableId, { ...existing, dimensions });
+    _commitBoardOverrides(next);
+  }
+
+  function resetBoardDimensionOverride(stableId: string, key: BoardDimensionKey): void {
+    const existing = boardOverridesRef.current.get(stableId);
+    if (!existing?.dimensions || existing.dimensions[key] === undefined) return;
+    const dimensions = { ...existing.dimensions };
+    delete dimensions[key];
+    const next = new Map(boardOverridesRef.current);
+    if (Object.keys(dimensions).length > 0) {
+      next.set(stableId, { ...existing, dimensions });
+    } else if (existing.materialId !== undefined) {
+      // Strip the empty dimensions object to keep the entry minimal.
+      next.set(stableId, { materialId: existing.materialId });
+    } else {
+      next.delete(stableId);
+    }
+    _commitBoardOverrides(next);
+  }
+
+  function setBoardMaterialOverride(stableId: string, materialId: MaterialId): void {
+    const next = new Map(boardOverridesRef.current);
+    const existing = next.get(stableId) ?? {};
+    next.set(stableId, { ...existing, materialId });
+    _commitBoardOverrides(next);
+  }
+
+  function resetBoardMaterialOverride(stableId: string): void {
+    const existing = boardOverridesRef.current.get(stableId);
+    if (existing?.materialId === undefined) return;
+    const next = new Map(boardOverridesRef.current);
+    if (existing.dimensions && Object.keys(existing.dimensions).length > 0) {
+      next.set(stableId, { dimensions: existing.dimensions });
+    } else {
+      next.delete(stableId);
+    }
+    _commitBoardOverrides(next);
+  }
+
+  function resetAllBoardOverrides(): void {
+    _commitBoardOverrides(new Map());
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -533,12 +627,12 @@ export function useCabinet(): {
     const frontMaterial = getMaterial(frontMaterialId);
     const tBody  = bodyMaterial.thickness / 10;   // cm
     const tFront = frontMaterial.thickness / 10;  // cm
-    const innerW = hasShell ? W - 2 * tFront : W;
+    const innerW = computeInnerWidth(W, hasShell, tFront);
     // Carcass depth: sides/top/bottom/shelves/partition/back/plinth all stop
     // short of the cabinet's front+back faces. The full cabinet depth D
     // is preserved for the outer envelope only (see buildBoardModel call
     // below — envelopeDepth=D).
-    const carcassD = Math.max(0, D - backThickness - HINGE_GAP_CM - tFront);
+    const carcassD = computeCarcassDepth(D, backThickness, HINGE_GAP_CM, tFront);
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
     const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
@@ -800,7 +894,7 @@ export function useCabinet(): {
         cabinetTotalH: H,
         joint: cabinetJoint,
       }).filter(b => b.role !== 'partition'); // partition emitted separately
-      boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box)));
+      boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box), boardOverridesRef.current));
     }
 
     // ── Plinth board model ─────────────────────────────────────────────────
@@ -828,7 +922,7 @@ export function useCabinet(): {
         : {}),
       ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
     });
-    boardCuts.push(...boardsToCutItems(plinthBoards, ''));
+    boardCuts.push(...boardsToCutItems(plinthBoards, '', boardOverridesRef.current));
 
     // Enrich every non-board cut with a materialId so the cut-list view can
     // group by material. boardsToCutItems already sets materialId from
@@ -865,7 +959,7 @@ export function useCabinet(): {
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),
     ];
-    setResult({ boxes, cuts: allCuts, doors });
+    setResult({ boxes, cuts: allCuts, doors, carcassD, innerW });
   }
 
   return {
@@ -879,5 +973,9 @@ export function useCabinet(): {
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
     plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
+    boardOverridesByStableId,
+    setBoardDimensionOverride, resetBoardDimensionOverride,
+    setBoardMaterialOverride, resetBoardMaterialOverride,
+    resetAllBoardOverrides,
   };
 }

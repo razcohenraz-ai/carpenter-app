@@ -1,4 +1,5 @@
 import { decomposeBoxes } from '../../core';
+import { computeInnerWidth } from '../../core/boards/boardModel';
 import type { Box, BoxLevel } from '../../types';
 import type { BodyLevel } from '../../types/interior';
 
@@ -120,7 +121,7 @@ export function computeSketchGeometry(
     : null;
 
   const envelopePx = tEnvelope ? tEnvelope * scale : 0;
-  const innerW = tEnvelope ? W - 2 * tEnvelope : W;
+  const innerW = computeInnerWidth(W, tEnvelope !== undefined, tEnvelope ?? 0);
 
   const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
 

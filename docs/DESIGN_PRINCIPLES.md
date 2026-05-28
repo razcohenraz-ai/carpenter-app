@@ -70,3 +70,23 @@
 
 נתוני חומרים ופרזולים חיים ב-JSON, לא בקוד.
 לשינוי מחיר, עובי או הוספת חומר חדש — ערוך `catalog/materials.json` בלבד. אין צורך לנגוע בקוד TypeScript.
+
+---
+
+## עיקרון שביעי: BoardModel כמקור-אמת יחיד למידות לוחות
+
+כל מידה של לוח (length / width / thickness / materialId) מגיעה מ-`buildBoardModel` או מ-`buildPlinthBoardModel`. רכיבי UI **לא מחשבים מידות** — הם קוראים את הערך ה-effective דרך `getDimension(board, key, overrides)` ו-`getMaterial(board, overrides)`.
+
+**שכבת override**: ל-`useCabinet` יש מפה `boardOverridesByStableId: Map<stableId, BoardOverrides>` שדורסת ערכים נגזרים. הדפוס זהה ל-`userPositionX` של גיבלי הצוקל — `override ?? derived`. ה-setters (`setBoardDimensionOverride`, `setBoardMaterialOverride`) מפעילים recalculate; ה-reset מחזיר ל-derived ללא בנייה מחדש של הלוחות.
+
+**stableId**: כל לוח מקבל `stableId` יציב שורד `calculate()` rebuilds (לדוגמה `side-left@bottom:left`, `plinth-gable-a@joint:0`). `Board.id` ה-ad-hoc משמש רק כ-React key לרינדור — לא לאחסון.
+
+**helpers מרכזיים** (יוצאים מ-`core/boards/boardModel.ts`):
+- `computeCarcassDepth(D, backThickness, hingeGap, tFront)` — חישוב אחד למידה המופיעה בכל מקום (useCabinet + סקיצות + טופס).
+- `computeInnerWidth(W, hasShell, tFront)` — אותו עיקרון.
+- `getDimension`, `getMaterial`, `boardStableId`, `BoardOverrides`, `BoardDimensionKey` — ה-API של שכבת ה-override.
+
+**אסור**:
+- חישוב inline של carcassD/innerW בקומפוננטות UI.
+- קריאה ישירה ל-`board.length` במצבים שבהם override רלוונטי (תמיד דרך `getDimension`).
+- אחסון מידות מחושבות (single source of truth — חוזרים ל-עיקרון 2).

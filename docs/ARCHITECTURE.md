@@ -28,7 +28,7 @@ src/
 │   │   ├── boxDecomposition.ts   פיצול ארון לגופים פיזיים
 │   │   └── frontGeometry.ts      מקור יחיד לחישוב x ו-width של כל החזיתות (ברמת הארון)
 │   ├── boards/
-│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף; buildBoardModel, boardsToCutItems, deriveEnvelopeFlags
+│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף; buildBoardModel, buildPlinthBoardModel, boardsToCutItems, deriveEnvelopeFlags, getDimension, getMaterial, boardStableId, computeCarcassDepth, computeInnerWidth
 │   ├── doors/
 │   │   ├── doorCalc.ts           חישוב מספר דלתות ושורות
 │   │   ├── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorHeight, derivation helpers
@@ -78,16 +78,36 @@ src/
 CabinetForm (input) 
     → useCabinet.calculate(input)
         → decomposeBoxes()     → boxes: Box[]
-        → calcCuts()           → cuts: CutItem[]
+        → calcCuts()           → cuts: CutItem[] (doors + drawer-box)
         → calcDoors()          → doors: DoorCalcResult
-        → door preservation    → doorsById: DoorById (heights from calcMainDoorHeight)
+        → buildBoardModel()    → Board[] per body (every board carries stableId)
+        → buildPlinthBoardModel() → Board[] (cabinet-level plinth)
+        → boardsToCutItems(_, _, boardOverridesByStableId)
+                               → cuts: CutItem[] (carcass + plinth, effective values)
+        → door preservation    → doorsById: DoorById
         → interior preservation → interiorById: InteriorById
         → external drawer cuts → cuts (group 'front')
         → deriveDrawerFronts()  → drawerFrontsById: DrawerFrontById
         → cell interior preservation → cellInteriorById: CellInteriorById
         → partition preservation → partitionsById: Map<string,boolean>
+        → CabinetResult { …, carcassD, innerW } — UI never re-derives these
     → setState → תצוגה מתעדכנת
 ```
+
+### שכבת override ללוחות
+
+```
+useCabinet.setBoardDimensionOverride(stableId, key, value)
+    → boardOverridesByStableId Map updated
+    → calculate(lastInput) reruns
+        → buildBoardModel emits derived boards (formulas unchanged)
+        → boardsToCutItems applies overrides → effective CutItem dimensions
+        → CutsList renders effective values
+        → CabinetCutSketch + PlinthEditor read effective via getDimension / getMaterial
+    → reset → derived restored, no rebuild needed
+```
+
+`Board.stableId` is the persistence key (e.g. `side-left@bottom:left`, `plinth-gable-a@joint:0`). `Board.id` is freshly generated each `calculate()` and is only safe as a React key.
 
 ## ממשקים מרכזיים
 

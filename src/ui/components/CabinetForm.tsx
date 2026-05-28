@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS, getMaterial } from '../../catalog';
-import { HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { computeInnerWidth } from '../../core/boards/boardModel';
 import type { MaterialId } from '../../types';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
@@ -75,6 +75,7 @@ export default function CabinetForm(): React.JSX.Element {
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
     plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
+    boardOverridesByStableId,
   } = useCabinet();
 
   // Unified editor state: one editor open at a time. The body/door/plinth
@@ -298,7 +299,7 @@ export default function CabinetForm(): React.JSX.Element {
     ? backThicknessMmParsed / 10
     : 0.5;
   const parsedW = parseFloat(form.W);
-  const innerBodyW = form.hasShell && !isNaN(parsedW) ? parsedW - 2 * frontThicknessCm : parsedW;
+  const innerBodyW = !isNaN(parsedW) ? computeInnerWidth(parsedW, form.hasShell, frontThicknessCm) : parsedW;
   const shellWidthWarning = form.hasShell && !isNaN(parsedW) && innerBodyW < 30
     ? t.form.shellWidthWarning(innerBodyW)
     : null;
@@ -413,15 +414,14 @@ export default function CabinetForm(): React.JSX.Element {
 
   if (editing.type === 'plinth' && result) {
     // Plinth depth shown to the carpenter = the CARCASS depth (matches the
-    // body sitting on top), not the raw input D. Same formula as
-    // useCabinet.calculate so the editor and the cut list never disagree.
-    const rawD = parseFloat(form.D) || 0;
-    const plinthCarcassD = Math.max(0, rawD - backThicknessCm - HINGE_GAP_CM - frontThicknessCm);
+    // body sitting on top), not the raw input D. Lifted off `result` so the
+    // formula has a single source of truth (useCabinet via
+    // computeCarcassDepth) — no carcassD arithmetic in this component.
     return (
       <div className={styles.form}>
         <PlinthEditor
           cabinetW={parseFloat(form.W) || 0}
-          cabinetD={plinthCarcassD}
+          cabinetD={result.carcassD}
           plinthHeight={parseFloat(form.plinth) || 0}
           plinthRecess={(() => {
             const r = parseFloat(form.plinthRecess);
@@ -431,6 +431,7 @@ export default function CabinetForm(): React.JSX.Element {
           bodyMaterial={getMaterial(form.bodyMaterialId)}
           frontMaterial={getMaterial(form.frontMaterialId)}
           gableOverrides={plinthGableOverrides}
+          boardOverrides={boardOverridesByStableId}
           onSetGableOverride={setPlinthGableOverride}
           onResetGables={resetPlinthGableOverrides}
           onPlinthHeightChange={handlePlinthHeightChange}
@@ -694,6 +695,7 @@ export default function CabinetForm(): React.JSX.Element {
               frontMaterialId={form.frontMaterialId}
               {...(result && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
+              boardOverrides={boardOverridesByStableId}
             />
           ) : (
             <CabinetFrontsSketch

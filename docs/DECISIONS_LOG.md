@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-05-29 — שכבת override ללוחות + stableId יציב
+
+**ההחלטה**: כל לוח שמיוצר ע"י `buildBoardModel` או `buildPlinthBoardModel` מקבל `stableId` יציב הבנוי כ-`{role}@{containerStableKey}` (או `{role}` ל-cabinet-level singletons). `useCabinet` מחזיק מפת overrides נפרדת `boardOverridesByStableId: Map<stableId, { dimensions?, materialId? }>` שדורסת ערכים נגזרים בקריאה דרך `getDimension(board, key, overrides)` ו-`getMaterial(board, overrides)`. הערכים הנגזרים נשארים פנימית ב-build functions ולא משתנים — ה-override שכבה מעליהם.
+
+**הנימוק**:
+- העתיד: עורך פר-לוח שיאפשר לנגר לדרוס מידה (length/width/thickness/חומר) של לוח ספציפי, בלי לגעת בכללים הכלליים. הדפוס זהה ל-`userPositionX` של גיבלי הצוקל — שכבת override שמשוחזרת ל-derived ב-reset.
+- מקור-אמת יחיד: `boardsToCutItems` קוראת את הערך האפקטיבי דרך `getDimension` → CutsList, CabinetCutSketch ו-PlinthEditor רואים את אותה התוצאה. אם override נשמר נכון, כל הצרכנים מתאחדים אוטומטית.
+- יציבות: ה-`Board.id` ה-ad-hoc משתנה בכל `calculate()`. לא ניתן לתלות עליו override. ה-`stableId` שורד שינויי מבנה כל עוד הגוף + ה-role נשארים — אם המבנה משתנה כך שהלוח לא קיים יותר, ה-override "מתייתם" בשקט (אותו דפוס כמו `partitionsById`/`plinthGableOverrides`).
+
+**טריידאוף**:
+- ה-rect הוויזואלי ב-`CabinetCutSketch` מצויר עדיין בקואורדינטות `xFrom..yTo` הנגזרות. override על length משפיע על רשימת החיתוכים בלבד, לא על המיקום בסקיצה. במידת הצורך נוסיף שכבת sync של xFrom/xTo בעתיד (כשעורך הלוח-הבודד יתחבר).
+- ה-override Map דורש `calculate()` חוזר על כל set/reset (כדי שרשימת החיתוכים תתחדש). זה זול כי `buildBoardModel` עצמו לא משתנה — הפעלה חוזרת של הצנרת שטוחה.
+
+**אלטרנטיבה שנדחתה**: הוספת `userLength?`, `userWidth?` וכו' ישירות על `Board`. נדחה כי `Board` נבנה מחדש בכל `calculate()`; השכבה החיצונית מאפשרת לאפס ע"י מחיקת כניסה ב-Map, בלי בנייה מחדש.
+
+**יישום**:
+- `Board.stableId: string` (חובה). `boardStableId(role, subKey?)` כ-builder.
+- `BoardOverrides = { dimensions?: Partial<Record<BoardDimensionKey, number>>; materialId?: MaterialId }`.
+- `getDimension(board, key, overrides): number` ו-`getMaterial(board, overrides): MaterialId`.
+- `useCabinet`: state חדש + setters (`setBoardDimensionOverride`/`reset`, `setBoardMaterialOverride`/`reset`, `resetAllBoardOverrides`).
+- `boardsToCutItems` קיבל פרמטר `overrides` (ברירת מחדל Map ריק לתאימות לאחור).
+- `CabinetCutSketch` ו-`PlinthEditor` קיבלו `overrides` prop וקוראים דרך ה-helpers.
+- חישובי `carcassD`/`innerW` ב-UI עברו ל-helpers (`computeCarcassDepth`/`computeInnerWidth`); הערכים נחשפים על `CabinetResult` כדי שטופס + עורך הצוקל יקראו פעם אחת.
+- בדיקת consistency (`assertConsistency`) מוודאת ש-`CutItem.w/h/note/materialId` תואמים ל-`getDimension`/`getMaterial` עבור כל לוח ב-7 תרחישים מייצגים.
+
+---
+
 ## 2026-05-28 — גיבלי צוקל: גרירה חופשית, כללי flush/centered = defaults
 
 **ההחלטה**: בעורך הצוקל כל גיבל ניתן לגרירה ב-X לכל מיקום בתוך הצוקל. הכללים הקיימים (flush בקצוות, ממורכז על חיבור גופים, אמצע גוף כש-W > 80) הם **defaults בלבד** — נקודת המוצא של הגיבל כשאין override מהמשתמש. ה-`userPositionX` (אופציונלי, ב-`PlinthGable`) דורס את הברירה ומועבר ל-`buildPlinthBoardModel` דרך `gableOverrides: Map<id, x>`.

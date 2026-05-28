@@ -7,7 +7,10 @@ import {
   clampPlinthGableX,
   defaultPlinthGableLeftX,
   effectivePlinthGableLeftX,
+  getDimension,
   snapPlinthGableX,
+  type Board,
+  type BoardOverrides,
   type PlinthGable,
 } from '../../core/boards/boardModel';
 import { formatDim } from '../../core/utils/round';
@@ -31,6 +34,10 @@ interface Props {
   frontMaterial: Material;
   /** User-set Panel-A x overrides keyed by `PlinthGable.id`. */
   gableOverrides: ReadonlyMap<string, number>;
+  /** Per-board override layer (length / width / thickness / materialId).
+   *  Consumed via `getDimension` / `getMaterial` so the dim labels and the
+   *  cut list always agree on the effective value of each plinth board. */
+  boardOverrides: ReadonlyMap<string, BoardOverrides>;
   /** Set or clear (`x === undefined`) a single gable's override. */
   onSetGableOverride: (gableId: string, x: number | undefined) => void;
   /** Drop every override at once. */
@@ -69,7 +76,7 @@ interface DragState {
 
 export default function PlinthEditor({
   cabinetW, cabinetD, plinthHeight, plinthRecess, boxes, bodyMaterial, frontMaterial,
-  gableOverrides, onSetGableOverride, onResetGables, onPlinthHeightChange,
+  gableOverrides, boardOverrides, onSetGableOverride, onResetGables, onPlinthHeightChange,
   onPlinthRecessChange, onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -167,6 +174,22 @@ export default function PlinthEditor({
     [invalidInputs, cabinetW, cabinetD, plinthHeight, bodyMaterial, frontMaterial,
      boxes, effectiveOverrides, plinthRecess],
   );
+
+  // ── Dimension labels (sourced from the model, not re-derived here) ───────
+  // The depth label runs from the front-most face (cladding when present,
+  // else plinth-front) to plinth-back. The width label is the plinth-back's
+  // effective `length` via `getDimension` so a board-level override is
+  // reflected on the editor's canvas the moment the user sets it.
+  const plinthBack = boards.find((b: Board) => b.role === 'plinth-back');
+  const plinthFrontMost =
+       boards.find((b: Board) => b.role === 'plinth-front-cladding')
+    ?? boards.find((b: Board) => b.role === 'plinth-front');
+  const widthLabel = plinthBack
+    ? getDimension(plinthBack, 'length', boardOverrides)
+    : cabinetW;
+  const depthLabel = (plinthBack && plinthFrontMost)
+    ? plinthBack.yTo - plinthFrontMost.yFrom
+    : Math.max(0, cabinetD - plinthRecess);
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
   // SVG → cabinet-cm conversion uses the live bounding rect because the SVG
@@ -399,18 +422,20 @@ export default function PlinthEditor({
           );
         })}
 
-        {/* Width label (top) */}
+        {/* Width label (top) — pulled from the plinth-back board's effective
+            length (via `getDimension`) so an override is reflected. */}
         <text
           x={originX + cabPxW / 2} y={originY - 16}
           className={`${styles.dimLabel} ${styles.dimLabelWidth}`}
           textAnchor="middle"
         >
-          {formatDim(cabinetW)}
+          {formatDim(widthLabel)}
         </text>
 
-        {/* Depth label (left, rotated) — shows the EFFECTIVE plinth depth
-            (carcassD − recess). Same number a saw operator would see for
-            the plinth-back's net span in the cut list. */}
+        {/* Depth label (left, rotated) — derived from the boards: the depth
+            from the front-most face (cladding when present, else
+            plinth-front) to the plinth-back's far face. No carcassD
+            arithmetic in this component. */}
         <text
           x={PAD_LEFT / 2} y={originY + cabPxD / 2}
           className={`${styles.dimLabel} ${styles.dimLabelDepth}`}
@@ -418,7 +443,7 @@ export default function PlinthEditor({
           dominantBaseline="middle"
           transform={`rotate(-90, ${PAD_LEFT / 2}, ${originY + cabPxD / 2})`}
         >
-          {formatDim(Math.max(0, cabinetD - plinthRecess))}
+          {formatDim(depthLabel)}
         </text>
       </svg>
     </div>

@@ -8,7 +8,7 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
-import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
 import { getMaterial } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -48,9 +48,12 @@ interface Props {
   onDrawerFrontClick?: (drawerId: string) => void;
   /** Click handler for the plinth rectangle. Opens the plinth top-view editor. */
   onPlinthClick?: () => void;
+  /** Per-board override map; the cut-sketch surface uses it via
+   *  `getMaterial` to tag boards with an effective material attribute. */
+  boardOverrides?: ReadonlyMap<string, import('../../core/boards/boardModel').BoardOverrides>;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -74,7 +77,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   // envelope boards via `envelopeDepth` below.
   const fullD = parseFloat(D);
   const tFrontCm = frontMaterialThickness ?? 0;
-  const carcassD = Math.max(0, fullD - backThicknessCm - HINGE_GAP_CM - tFrontCm);
+  const carcassD = computeCarcassDepth(fullD, backThicknessCm, HINGE_GAP_CM, tFrontCm);
   const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
@@ -232,6 +235,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
               offsetY={rect.y}
               scale={geo.scale}
               bodyMaterialId={bodyMat.id}
+              {...(boardOverrides ? { overrides: boardOverrides } : {})}
             />
           );
         })}

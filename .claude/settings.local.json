@@ -18,7 +18,10 @@
       "Bash(grep -E \"\\\\.ts$\")",
       "Bash(echo \"TSC_EXIT=$?\")",
       "Bash(echo \"VITEST_EXIT=$?\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(jobs -p)",
+      "Bash(xargs -r kill)",
+      "Bash(jobs)"
     ]
   }
 }

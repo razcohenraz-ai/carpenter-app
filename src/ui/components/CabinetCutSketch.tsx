@@ -1,5 +1,6 @@
 import React from 'react';
-import type { Board } from '../../core/boards/boardModel';
+import type { Board, BoardOverrides } from '../../core/boards/boardModel';
+import { getMaterial } from '../../core/boards/boardModel';
 import styles from './CabinetCutSketch.module.css';
 
 interface Props {
@@ -14,6 +15,12 @@ interface Props {
   /** Material id of the body's main carcass — used to colour boards
    *  differently from envelope boards (which use the front material). */
   bodyMaterialId: string;
+  /** Per-board override map; the painter surfaces a `data-material-overridden`
+   *  attribute when the board's effective material differs from the derived
+   *  one, so the sketch can hint at carpenter-side material changes. The
+   *  visual rectangle stays at the model's positional coords (xFrom..yTo)
+   *  because length/width overrides target the cut list, not the layout. */
+  overrides?: ReadonlyMap<string, BoardOverrides>;
 }
 
 // Maps a board role to a CSS class. Envelope and internal-shelf get distinct
@@ -26,8 +33,10 @@ function classForRole(role: Board['role']): string {
   return styles.carcassBoard ?? '';
 }
 
+const EMPTY_OVERRIDES: ReadonlyMap<string, BoardOverrides> = new Map();
+
 export default function CabinetCutSketch({
-  boards, offsetX, offsetY, scale,
+  boards, offsetX, offsetY, scale, overrides = EMPTY_OVERRIDES,
 }: Props): React.JSX.Element {
   return (
     <g className={styles.bodyGroup}>
@@ -36,12 +45,16 @@ export default function CabinetCutSketch({
         const y = offsetY + b.yFrom * scale;
         const w = (b.xTo - b.xFrom) * scale;
         const h = (b.yTo - b.yFrom) * scale;
+        const effectiveMaterial = getMaterial(b, overrides);
+        const materialOverridden = effectiveMaterial !== b.materialId;
         return (
           <rect
             key={b.id}
             x={x} y={y} width={w} height={h}
             className={classForRole(b.role)}
             data-role={b.role}
+            data-material={effectiveMaterial}
+            {...(materialOverridden ? { 'data-material-overridden': 'true' } : {})}
           />
         );
       })}
