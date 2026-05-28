@@ -28,6 +28,12 @@
 ### Plinth / צוקל / סוקל
 בסיס מבני מתחת לארון. גוף `level='plinth'` — ללא דלתות ופרזולים.
 
+### חיפוי צוקל (Plinth front cladding)
+לוח קדמי **נוסף** של הצוקל, מחומר החזיתות (`frontMaterial`), שיושב לפני ה-`plinth-front` של חומר הגוף. role `'plinth-front-cladding'` ב-`BoardRole`; ברשימת החיתוכים מופיע בשם "חיפוי צוקל" תחת קבוצת חומר החזיתות. מידות: זהות ל-`plinth-front` (אורך = cabinetW, גובה = `plinthH − 0.6`), עובי = `tFront`. הפעלה: הגדרת `frontMaterial` ב-`BuildPlinthBoardModelArgs` (תמיד מסופק על-ידי `useCabinet`; בדיקות יכולות לדלג).
+
+### צוקל נסוג (Recessed plinth)
+מבנה הצוקל זז אחורה מקצה הארון הקדמי באופן מבוקר, כך שנשאר חלל ריק בקדמת ה-footprint של הארון (לדריכת רגליים במטבחים, או לאסתטיקה). פרמטר: `plinthRecess` (ס"מ) על `CabinetInput`, ו-`recessCm` על `BuildPlinthBoardModelArgs`. ברירת מחדל 0. הקצה הקדמי של הצוקל (חיפוי + plinth-front) זז ב-`recess` ס"מ אחורה; ה-`plinth-back` לא זז (נשאר ב-`y = cabinetD − tBody`); אורך הגיבלים מתקצר באותה כמות. ב-UI: checkbox "צוקל נסוג" + שדה "נסיגה (ס"מ)".
+
 ### Shell / מעטפת
 לוחות עיטוף חיצוניים מחומר החזיתות: שני לוחות צד (envelope outer) ואופציונלית לוח תקרה (envelope top).
 

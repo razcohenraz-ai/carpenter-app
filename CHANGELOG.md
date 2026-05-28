@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### נוסף — חיפוי קדמי לצוקל + אופציית "צוקל נסוג"
+- **חיפוי צוקל** (role חדש `'plinth-front-cladding'`) — לוח קדמי **נוסף** של הצוקל, מחומר החזיתות (`frontMaterial`), שיושב לפני ה-`plinth-front` של חומר הגוף. מידות זהות ל-`plinth-front` (אורך = cabinetW, גובה = `plinthH − LEVELER_GAP_CM`), עובי = `tFront`. ה-`plinth-front` הקיים נסוג ב-`tFront` ועומק החיתוך של הגיבלים מתקצר ב-`tFront`. מופיע ברשימת החיתוכים כ-"חיפוי צוקל" תחת קבוצת חומר החזיתות.
+- **צוקל נסוג (recessed plinth)** — `CabinetInput.plinthRecess: number` (ברירת מחדל 0). כשהערך > 0, כל הקצה הקדמי של הצוקל זז אחורה ב-`recess` ס"מ; הקצה האחורי לא זז; אורך הגיבלים מתקצר באותה כמות. הקרקס המלא של הארון לא משתנה — הנסיגה היא חלל ריק בתוך ה-footprint.
+- **`BuildPlinthBoardModelArgs`** קיבל שני שדות אופציונליים: `frontMaterial?: Material` (כשמסופק → cladding) ו-`recessCm?: number` (ברירת מחדל 0). שניהם backward-compatible — בדיקות יחידה ישנות שלא מעבירות אותם ממשיכות לפעול ללא שינוי.
+- **`useCabinet`** מעביר `frontMaterial` תמיד ל-`buildPlinthBoardModel` (production), ואת `plinthRecess` מ-`CabinetInput`.
+- **PlinthEditor**: ב-header נוסף checkbox "צוקל נסוג" + שדה מספרי "נסיגה (ס"מ)" שמופיע רק כשה-checkbox דלוק. כיבוי שולח 0 למודל אך שומר את הערך המקומי כדי שהפעלה חוזרת תשחזר אותו. בתצוגת על — לוח החיפוי מצויר ב-`--color-fronts` (כתום) כדי להבחין מהקדמי של הגוף.
+- **`CabinetForm.applyPlinthUpdate({ plinth?, plinthRecess? })`** — helper משותף חדש שמחליף את `handlePlinthHeightChange` הישן. שני handlers (גובה + נסיגה) משתמשים בו, מבטל כפילות לוגיקה.
+- **תרגומים חדשים** ב-`cutsList`: `plinthRecessedLabel`, `plinthRecessLabel` (HE/EN).
+- **12 בדיקות חדשות** ב-`boardModel.test.ts`: 6 לחיפוי (without/with frontMaterial, shift של plinth-front, קיצור גיבל, plinth-back ללא השפעה, materialId נכון ב-cut list) + 6 לנסיגה (recess=0 → identical, shift של plinth-front, קיצור גיבל בדיוק ב-recess, recess+cladding משולב, cabinet outline נשמר, recess שלילי clamped ל-0). 510/510 עוברים.
+- **תיעוד**: `CARPENTRY_RULES.md` קיבל סעיפי "חיפוי צוקל" ו-"צוקל נסוג"; `GLOSSARY.md` הוסיף שני המונחים.
+
 ### נוסף — עורך צוקל: גובה ניתן לעריכה + גרירת גיבלים חופשית
 - **שדה גובה צוקל** ב-header של `PlinthEditor` — input מספרי בס"מ עם min 3, step 0.5, commit ב-blur/Enter. שינוי הערך מפעיל `calculate()` מלא דרך `CabinetForm.handlePlinthHeightChange`, כך שכל ה-board models והגב מתעדכנים live.
 - **גרירה חופשית של גיבלים** — `mousedown` על לוח א' של כל גיבל מתחיל drag (cursor `ew-resize`). `mousemove` מעדכן live עם snap 0.5 ס"מ ו-clamp ל-gaps תקפים (gap-analysis: חוסם חפיפה עם גיבל אחר במרחק `≥ tBody`). `mouseup` שומר את ה-override; `Esc` משחזר למיקום שלפני הגרירה.

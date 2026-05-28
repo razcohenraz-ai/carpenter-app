@@ -746,6 +746,195 @@ describe('buildPlinthBoardModel — gable overrides', () => {
   });
 });
 
+// ── 10d. Plinth cladding (front-material facade) ─────────────────────────────
+
+describe('buildPlinthBoardModel — front cladding', () => {
+  const baseBoxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+  const tF = frontMat.thickness / 10; // same as t for mdf18 — covered by other test
+
+  it('without frontMaterial → no cladding board (backward-compatible)', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    expect(byRole(boards, 'plinth-front-cladding')).toHaveLength(0);
+  });
+
+  it('with frontMaterial → 1 cladding board at the front, full width', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+    });
+    const cladding = byRole(boards, 'plinth-front-cladding')[0]!;
+    expect(cladding).toBeDefined();
+    expect(cladding.length).toBeCloseTo(80);
+    expect(cladding.width).toBeCloseTo(10 - LEVELER_GAP_CM);
+    expect(cladding.thickness).toBeCloseTo(tF);
+    // Sits at the cabinet's front face.
+    expect(cladding.yFrom).toBe(0);
+    expect(cladding.yTo).toBeCloseTo(tF);
+    // Material id is the FRONT material, not the body — drives cut-list grouping.
+    expect(cladding.materialId).toBe(frontMat.id);
+  });
+
+  it('cladding shifts plinth-front back by tFront; width stays cabinetW', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+    });
+    const front = byRole(boards, 'plinth-front')[0]!;
+    expect(front.yFrom).toBeCloseTo(tF);
+    expect(front.yTo).toBeCloseTo(tF + t);
+    expect(front.length).toBeCloseTo(80); // total width unchanged
+  });
+
+  it('cladding shortens gables by tFront (carcass loses front-edge depth)', () => {
+    const without = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    const withCladding = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+    });
+    const gW = byRole(without, 'plinth-gable-a')[0]!;
+    const gC = byRole(withCladding, 'plinth-gable-a')[0]!;
+    expect(gC.length).toBeCloseTo(gW.length - tF);
+  });
+
+  it('plinth-back is unaffected by cladding', () => {
+    const without = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    const withCladding = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+    });
+    const bW = byRole(without, 'plinth-back')[0]!;
+    const bC = byRole(withCladding, 'plinth-back')[0]!;
+    expect(bC.yFrom).toBeCloseTo(bW.yFrom);
+    expect(bC.yTo).toBeCloseTo(bW.yTo);
+    expect(bC.length).toBeCloseTo(bW.length);
+  });
+
+  it('cladding board → cut-list name "חיפוי צוקל", group "plinth", front material', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+    });
+    const cuts = boardsToCutItems(boards, '');
+    const cut = cuts.find(c => c.name === 'חיפוי צוקל');
+    expect(cut).toBeDefined();
+    expect(cut!.group).toBe('plinth');
+    expect(cut!.materialId).toBe(frontMat.id);
+  });
+});
+
+// ── 10e. Recessed plinth ────────────────────────────────────────────────────
+
+describe('buildPlinthBoardModel — recessed plinth', () => {
+  const baseBoxes: Box[] = [box({ W: 80, H: 100, level: 'bottom' })];
+  const tF = frontMat.thickness / 10;
+
+  it('recess=0 (default) → identical to no-recess build', () => {
+    const a = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    const b = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      recessCm: 0,
+    });
+    expect(b.map(x => ({ role: x.role, yFrom: x.yFrom, yTo: x.yTo, length: x.length })))
+      .toEqual(a.map(x => ({ role: x.role, yFrom: x.yFrom, yTo: x.yTo, length: x.length })));
+  });
+
+  it('recess=5 → plinth-front shifts to y=[5, 5+t]; back unchanged', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      recessCm: 5,
+    });
+    const front = byRole(boards, 'plinth-front')[0]!;
+    const back  = byRole(boards, 'plinth-back')[0]!;
+    expect(front.yFrom).toBeCloseTo(5);
+    expect(front.yTo).toBeCloseTo(5 + t);
+    expect(back.yFrom).toBeCloseTo(60 - t);
+    expect(back.yTo).toBe(60);
+  });
+
+  it('recess shortens gables by exactly the recess amount', () => {
+    const without = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    const recessed = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      recessCm: 5,
+    });
+    const gW = byRole(without, 'plinth-gable-a')[0]!;
+    const gR = byRole(recessed, 'plinth-gable-a')[0]!;
+    expect(gR.length).toBeCloseTo(gW.length - 5);
+  });
+
+  it('recess + cladding combined: plinth-front at y=[recess + tF, recess + tF + t]; gable shorter by recess + tF', () => {
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+      recessCm: 5,
+    });
+    const cladding = byRole(boards, 'plinth-front-cladding')[0]!;
+    const front    = byRole(boards, 'plinth-front')[0]!;
+    const gable    = byRole(boards, 'plinth-gable-a')[0]!;
+    // Cladding sits at the front of the (recessed) plinth.
+    expect(cladding.yFrom).toBeCloseTo(5);
+    expect(cladding.yTo).toBeCloseTo(5 + tF);
+    // Plinth-front retreats behind the cladding.
+    expect(front.yFrom).toBeCloseTo(5 + tF);
+    expect(front.yTo).toBeCloseTo(5 + tF + t);
+    // Gable length = (60 - t) - (5 + tF + t) = 60 - 2t - tF - 5.
+    expect(gable.length).toBeCloseTo(60 - 2 * t - tF - 5);
+  });
+
+  it('cabinet outline (cabinetW × cabinetD) is unchanged — recess is internal', () => {
+    // Width is the cladding's length; depth still reaches the cabinetD via
+    // plinth-back. The recess is an empty zone INSIDE [0, cabinetD].
+    const boards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      frontMaterial: frontMat,
+      recessCm: 5,
+    });
+    const cladding = byRole(boards, 'plinth-front-cladding')[0]!;
+    const back = byRole(boards, 'plinth-back')[0]!;
+    expect(cladding.length).toBeCloseTo(80);
+    expect(back.length).toBeCloseTo(80);
+    expect(back.yTo).toBe(60);
+  });
+
+  it('negative recess is clamped to 0 (defensive)', () => {
+    const recessed = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      recessCm: -3,
+    });
+    const baseline = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 60, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    expect(recessed.map(x => x.yFrom)).toEqual(baseline.map(x => x.yFrom));
+  });
+});
+
 describe('buildPlinthBoardModel — gables', () => {
   it('cabinet 120×50, one body 120cm → 8 boards (2 base + 3 gables × 2 panels)', () => {
     // 1 body of 120cm is > 80cm threshold → 1 mid-body gable.

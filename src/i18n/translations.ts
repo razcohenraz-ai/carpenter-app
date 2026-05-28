@@ -179,6 +179,9 @@ export interface Translations {
     /** Reset button — clears every gable override. */
     plinthResetGables: string;
     plinthResetGablesTooltip: string;
+    /** Recess (קונסולי / נסוג) — checkbox + input. */
+    plinthRecessedLabel: string;
+    plinthRecessLabel: string;
   };
 }
 
@@ -353,6 +356,8 @@ const he: Translations = {
     plinthHeightLabel: 'גובה צוקל (ס"מ)',
     plinthResetGables: 'אפס מיקומי גיבלים',
     plinthResetGablesTooltip: 'החזר את הגיבלים למיקומים האוטומטיים (קצוות וחיבורי גופים)',
+    plinthRecessedLabel: 'צוקל נסוג',
+    plinthRecessLabel: 'נסיגה (ס"מ)',
   },
 };
 
@@ -527,6 +532,8 @@ const en: Translations = {
     plinthHeightLabel: 'Plinth height (cm)',
     plinthResetGables: 'Reset gable positions',
     plinthResetGablesTooltip: 'Restore gables to their automatic positions (edges and body joints)',
+    plinthRecessedLabel: 'Recessed plinth',
+    plinthRecessLabel: 'Recess (cm)',
   },
 };
 

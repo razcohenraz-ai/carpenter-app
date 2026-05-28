@@ -17,9 +17,13 @@ interface Props {
   cabinetW: number;
   cabinetD: number;
   plinthHeight: number;
+  /** Front-cladding setback (cm). 0 = flush with the cabinet front. */
+  plinthRecess: number;
   /** Bottom-row body boxes (excluding plinth boxes themselves). */
   boxes: Box[];
   bodyMaterial: Material;
+  /** Front material — drives the plinth cladding panel. */
+  frontMaterial: Material;
   /** User-set Panel-A x overrides keyed by `PlinthGable.id`. */
   gableOverrides: ReadonlyMap<string, number>;
   /** Set or clear (`x === undefined`) a single gable's override. */
@@ -28,6 +32,8 @@ interface Props {
   onResetGables: () => void;
   /** Commit a new plinth height (cm). Triggers a full re-calculate upstream. */
   onPlinthHeightChange: (h: number) => void;
+  /** Commit a new recess depth (cm). Pass 0 to disable the recess. */
+  onPlinthRecessChange: (cm: number) => void;
   /** Close handler — returns to the main view. */
   onBack: () => void;
 }
@@ -57,9 +63,9 @@ interface DragState {
 }
 
 export default function PlinthEditor({
-  cabinetW, cabinetD, plinthHeight, boxes, bodyMaterial,
+  cabinetW, cabinetD, plinthHeight, plinthRecess, boxes, bodyMaterial, frontMaterial,
   gableOverrides, onSetGableOverride, onResetGables, onPlinthHeightChange,
-  onBack,
+  onPlinthRecessChange, onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -77,6 +83,43 @@ export default function PlinthEditor({
     } else {
       // Invalid or unchanged — revert the input to the live value.
       setHeightInput(String(plinthHeight));
+    }
+  }
+
+  // Recess: a checkbox decides whether the recess is active. While the
+  // checkbox is OFF, upstream stores 0; the local input value is kept so
+  // toggling back ON restores the user's last setting without retyping.
+  const [recessEnabled, setRecessEnabled] = useState<boolean>(plinthRecess > 0);
+  const [recessInput, setRecessInput] = useState<string>(plinthRecess > 0 ? String(plinthRecess) : '5');
+  useEffect(() => {
+    if (plinthRecess > 0) {
+      setRecessEnabled(true);
+      setRecessInput(String(plinthRecess));
+    } else {
+      setRecessEnabled(false);
+      // Don't clear `recessInput` — keep the last typed value so a toggle
+      // back resumes where the user left off.
+    }
+  }, [plinthRecess]);
+
+  function commitRecess(): void {
+    if (!recessEnabled) return;
+    const r = parseFloat(recessInput);
+    if (Number.isFinite(r) && r > 0 && r !== plinthRecess) {
+      onPlinthRecessChange(r);
+    } else {
+      // Invalid or unchanged — revert the input to the live value.
+      setRecessInput(plinthRecess > 0 ? String(plinthRecess) : recessInput);
+    }
+  }
+
+  function toggleRecess(next: boolean): void {
+    setRecessEnabled(next);
+    if (next) {
+      const r = parseFloat(recessInput);
+      onPlinthRecessChange(Number.isFinite(r) && r > 0 ? r : 5);
+    } else {
+      onPlinthRecessChange(0);
     }
   }
 
@@ -112,9 +155,12 @@ export default function PlinthEditor({
   const boards = useMemo(
     () => (invalidInputs ? [] : buildPlinthBoardModel({
       cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes,
+      frontMaterial,
       gableOverrides: effectiveOverrides,
+      ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
     })),
-    [invalidInputs, cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes, effectiveOverrides],
+    [invalidInputs, cabinetW, cabinetD, plinthHeight, bodyMaterial, frontMaterial,
+     boxes, effectiveOverrides, plinthRecess],
   );
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
@@ -228,6 +274,31 @@ export default function PlinthEditor({
             }}
           />
         </label>
+        <label className={styles.recessToggle}>
+          <input
+            type="checkbox"
+            checked={recessEnabled}
+            onChange={e => toggleRecess(e.target.checked)}
+          />
+          <span>{t.cutsList.plinthRecessedLabel}</span>
+        </label>
+        {recessEnabled && (
+          <label className={styles.heightField}>
+            <span className={styles.heightLabel}>{t.cutsList.plinthRecessLabel}</span>
+            <input
+              type="number"
+              className={styles.heightInput}
+              value={recessInput}
+              min={0.5}
+              step={0.5}
+              onChange={e => setRecessInput(e.target.value)}
+              onBlur={commitRecess}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitRecess(); }
+              }}
+            />
+          </label>
+        )}
         <button
           type="button"
           className={styles.resetBtn}
@@ -279,11 +350,12 @@ export default function PlinthEditor({
           />
         ))}
 
-        {/* Plinth boards — front, back, and gables */}
+        {/* Plinth boards — cladding, front, back, and gables */}
         {boards.map(b => {
           const r = rectPx(b.xFrom, b.xTo, b.yFrom, b.yTo);
           let cls = styles.boardOther;
-          if (b.role === 'plinth-front' || b.role === 'plinth-back') cls = styles.boardStrip;
+          if (b.role === 'plinth-front-cladding') cls = styles.boardCladding;
+          else if (b.role === 'plinth-front' || b.role === 'plinth-back') cls = styles.boardStrip;
           else if (b.role === 'plinth-gable-a') cls = styles.boardGableA;
           else if (b.role === 'plinth-gable-b') cls = styles.boardGableB;
           return (

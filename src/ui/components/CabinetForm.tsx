@@ -24,6 +24,10 @@ interface FormState {
    *  here as the raw input string; converted to cm at submit time. */
   backThicknessMm: string;
   plinth: string;
+  /** Recess depth in cm. Stored as a string so the input field can hold
+   *  partial entries; converted at submit / live-update time. "0" means
+   *  no recess. */
+  plinthRecess: string;
   lowerDoorH: string;
   middleDoorH: string;
   hasShell: boolean;
@@ -90,11 +94,17 @@ export default function CabinetForm(): React.JSX.Element {
   function handlePlinthClick(): void { setEditing({ type: 'plinth' }); }
   function closeEditor(): void { setEditing({ type: 'none' }); }
 
-  // Reuse the form's current values + the new plinth height to push a full
-  // recalculate. Lives here (not in useCabinet) so the form remains the
-  // single source of truth for `CabinetInput`.
-  function handlePlinthHeightChange(newPlinthCm: number): void {
-    setForm(p => ({ ...p, plinth: String(newPlinthCm) }));
+  // Shared live-update path for the plinth editor. Both the height input
+  // and the recess input call this with `{ plinth?, plinthRecess? }`; the
+  // values that aren't passed fall back to the current form state. Keeps
+  // the CabinetInput-building logic in one place — mirrors handleSubmit
+  // for everything except the field the user just changed.
+  function applyPlinthUpdate(patch: { plinth?: number; plinthRecess?: number }): void {
+    setForm(p => ({
+      ...p,
+      ...(patch.plinth      !== undefined ? { plinth:       String(patch.plinth)       } : {}),
+      ...(patch.plinthRecess !== undefined ? { plinthRecess: String(patch.plinthRecess) } : {}),
+    }));
     const W = parseFloat(form.W);
     const H = parseFloat(form.H);
     const D = parseFloat(form.D);
@@ -110,6 +120,9 @@ export default function CabinetForm(): React.JSX.Element {
     const midDoor = parseFloat(form.middleDoorH);
     const needsLo = showLowerDoor(form.doorsPerColumn, form.H);
     const needsMid = form.doorsPerColumn === '3';
+    const effectivePlinth = patch.plinth ?? (parseFloat(form.plinth) || 0);
+    const recessParsed = patch.plinthRecess ?? parseFloat(form.plinthRecess);
+    const effectiveRecess = Number.isFinite(recessParsed) && recessParsed > 0 ? recessParsed : 0;
     calculate({
       W, H, D,
       backThickness: backThicknessCm,
@@ -117,7 +130,8 @@ export default function CabinetForm(): React.JSX.Element {
       hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
-      plinth: newPlinthCm,
+      plinth: effectivePlinth,
+      plinthRecess: effectiveRecess,
       doorCoversPlinth: form.doorCoversPlinth,
       lowerDoorH: needsLo ? loDoor : undefined,
       middleDoorH: needsMid ? midDoor : undefined,
@@ -125,6 +139,13 @@ export default function CabinetForm(): React.JSX.Element {
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
     });
+  }
+
+  function handlePlinthHeightChange(newPlinthCm: number): void {
+    applyPlinthUpdate({ plinth: newPlinthCm });
+  }
+  function handlePlinthRecessChange(newRecessCm: number): void {
+    applyPlinthUpdate({ plinthRecess: newRecessCm });
   }
 
   // Lookup of all DrawerItems by id (across body interiors and partitioned
@@ -150,7 +171,8 @@ export default function CabinetForm(): React.JSX.Element {
   const [form, setForm] = useState<FormState>({
     W: '240', H: '220', D: '60',
     backThicknessMm: '5',
-    plinth: '10', lowerDoorH: '110', middleDoorH: '80',
+    plinth: '10', plinthRecess: '0',
+    lowerDoorH: '110', middleDoorH: '80',
     hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
     bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
     doorGap: '2', doorGapManuallySet: false,
@@ -234,6 +256,10 @@ export default function CabinetForm(): React.JSX.Element {
       ? backThicknessMm / 10
       : 0.5;
 
+    const plinthRecessParsed = parseFloat(form.plinthRecess);
+    const plinthRecess = Number.isFinite(plinthRecessParsed) && plinthRecessParsed > 0
+      ? plinthRecessParsed : 0;
+
     calculate({
       W, H, D,
       backThickness: backThicknessCm,
@@ -242,6 +268,7 @@ export default function CabinetForm(): React.JSX.Element {
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth,
+      plinthRecess,
       doorCoversPlinth: form.doorCoversPlinth,
       lowerDoorH: needsLo ? loDoor : undefined,
       middleDoorH: needsMid ? midDoor : undefined,
@@ -390,12 +417,18 @@ export default function CabinetForm(): React.JSX.Element {
           cabinetW={parseFloat(form.W) || 0}
           cabinetD={parseFloat(form.D) || 0}
           plinthHeight={parseFloat(form.plinth) || 0}
+          plinthRecess={(() => {
+            const r = parseFloat(form.plinthRecess);
+            return Number.isFinite(r) && r > 0 ? r : 0;
+          })()}
           boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
           bodyMaterial={getMaterial(form.bodyMaterialId)}
+          frontMaterial={getMaterial(form.frontMaterialId)}
           gableOverrides={plinthGableOverrides}
           onSetGableOverride={setPlinthGableOverride}
           onResetGables={resetPlinthGableOverrides}
           onPlinthHeightChange={handlePlinthHeightChange}
+          onPlinthRecessChange={handlePlinthRecessChange}
           onBack={closeEditor}
         />
       </div>

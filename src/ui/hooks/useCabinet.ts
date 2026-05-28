@@ -104,6 +104,9 @@ export interface CabinetInput {
   bodyMaterialId: MaterialId;
   frontMaterialId: MaterialId;
   plinth: number;
+  /** Recess depth in cm — pushes the plinth back from the cabinet's front
+   *  face. 0 (default) = flush with the front. */
+  plinthRecess: number;
   doorCoversPlinth: boolean;
   lowerDoorH: number | undefined;
   middleDoorH: number | undefined;
@@ -525,7 +528,7 @@ export function useCabinet(): {
   function calculate(input: CabinetInput): void {
     lastInputRef.current = input;
 
-    const { W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
+    const { W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
     const bodyMaterial  = getMaterial(bodyMaterialId);
     const frontMaterial = getMaterial(frontMaterialId);
     const tBody  = bodyMaterial.thickness / 10;   // cm
@@ -810,10 +813,16 @@ export function useCabinet(): {
       cabinetD: D,
       plinthHeight: plinth,
       bodyMaterial,
+      // Production cabinets always have a front-material cladding facade so
+      // the visible plinth face matches the cabinet doors. Tests opt out by
+      // omitting frontMaterial — `buildPlinthBoardModel` skips the cladding
+      // board when this is undefined.
+      frontMaterial,
       boxes: bottomRowBoxes,
       ...(plinthGableOverridesRef.current.size > 0
         ? { gableOverrides: plinthGableOverridesRef.current }
         : {}),
+      ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
     });
     boardCuts.push(...boardsToCutItems(plinthBoards, ''));
 

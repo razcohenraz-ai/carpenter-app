@@ -34,7 +34,8 @@ export type BoardRole =
   | 'plinth-front'
   | 'plinth-back'
   | 'plinth-gable-a'
-  | 'plinth-gable-b';
+  | 'plinth-gable-b'
+  | 'plinth-front-cladding';
 
 export interface Board {
   id: string;
@@ -589,6 +590,19 @@ export interface BuildPlinthBoardModelArgs {
    *  A number replaces the default position; an absent key falls back to
    *  the flush/centered default. The editor's free-form drag writes here. */
   gableOverrides?: ReadonlyMap<string, number>;
+  /** Front-material override for the plinth's cladding panel. When provided,
+   *  an additional `plinth-front-cladding` board is emitted at the cabinet
+   *  front (same length × height as plinth-front, thickness = frontMaterial
+   *  thickness), and the body-material `plinth-front` shifts back by that
+   *  thickness — the carcass keeps the cabinet's external footprint while
+   *  the visible facade gets a separate, replaceable cladding piece. Pass
+   *  `undefined` to skip cladding entirely (legacy / unit tests). */
+  frontMaterial?: Material;
+  /** Recess depth in cm — pushes the plinth back from the cabinet's front
+   *  face. The cabinet footprint stays at `cabinetD`; the plinth structure
+   *  (cladding + plinth-front + gables + plinth-back) sits inside it,
+   *  starting at `y = recessCm`. Defaults to 0 (no recess). */
+  recessCm?: number;
 }
 
 /** Emits every board in the plinth (front, back, and each gable's Panel A +
@@ -596,7 +610,10 @@ export interface BuildPlinthBoardModelArgs {
  *  in TOP-VIEW coordinates (y = depth) per the dual semantic documented on
  *  `Board.yFrom`. */
 export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] {
-  const { cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes, gableOverrides } = args;
+  const {
+    cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes,
+    gableOverrides, frontMaterial, recessCm = 0,
+  } = args;
   if (plinthHeight <= 0) return [];
 
   const t = bodyMaterial.thickness / 10; // cm
@@ -604,34 +621,62 @@ export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] 
   // The plinth panels are cut LEVELER_GAP_CM short so the cabinet sits on
   // plastic levelers — same rationale as the envelope sides.
   const panelH = Math.max(0, plinthHeight - LEVELER_GAP_CM);
-  // Gable cut length (the D-2t edge runs across the plinth's depth between
-  // the front and back panels).
-  const gableLength = Math.max(0, cabinetD - 2 * t);
+  // Cladding piece (front material) — sits as a separate front face. When
+  // present, the body-material plinth-front retreats by tFront so the
+  // cabinet's external footprint at the front stays exactly `recess + 0`.
+  const tFront = frontMaterial ? frontMaterial.thickness / 10 : 0;
+  const hasCladding = !!frontMaterial;
+  // Recess pushes the entire plinth structure (cladding + front + gables +
+  // back) back from the cabinet's front face. Negative values are clamped.
+  const recess = Math.max(0, recessCm);
+  // Y positions along the cabinet's depth axis (top-view):
+  //   recess              cladding starts
+  //   recess + tFront     plinth-front starts (body material)
+  //   recess + tFront+ t  gables start
+  //   cabinetD - t        plinth-back starts
+  //   cabinetD            plinth-back ends (cabinet rear face).
+  const claddingYFrom = recess;
+  const claddingYTo   = recess + tFront;
+  const frontYFrom    = claddingYTo;
+  const frontYTo      = frontYFrom + t;
+  const backYFrom     = cabinetD - t;
+  const backYTo       = cabinetD;
+  // Gable cut length (the inner edge runs across the plinth's depth between
+  // the body-material front and back panels — cladding is OUTSIDE this).
+  const gableLength = Math.max(0, backYFrom - frontYTo);
   const out: Board[] = [];
 
-  // Front and back strips — full cabinet width, standing vertical.
+  // Cladding — facade panel, full cabinet width, front material.
+  if (hasCladding) {
+    out.push({
+      id: newItemId(), role: 'plinth-front-cladding', materialId: frontMaterial!.id,
+      length: cabinetW, width: panelH, thickness: tFront,
+      xFrom: 0, xTo: cabinetW, yFrom: claddingYFrom, yTo: claddingYTo, visible: true,
+    });
+  }
+
+  // Front and back strips — body material. The front sits behind the
+  // cladding when present, behind the recess gap when recessed.
   out.push({
     id: newItemId(), role: 'plinth-front', materialId: matId,
     length: cabinetW, width: panelH, thickness: t,
-    xFrom: 0, xTo: cabinetW, yFrom: 0, yTo: t, visible: true,
+    xFrom: 0, xTo: cabinetW, yFrom: frontYFrom, yTo: frontYTo, visible: true,
   });
   out.push({
     id: newItemId(), role: 'plinth-back', materialId: matId,
     length: cabinetW, width: panelH, thickness: t,
-    xFrom: 0, xTo: cabinetW, yFrom: cabinetD - t, yTo: cabinetD, visible: true,
+    xFrom: 0, xTo: cabinetW, yFrom: backYFrom, yTo: backYTo, visible: true,
   });
 
   // Gables — Panel A is the vertical wall (top-view: tBody wide × gableLength
   // deep). Panel B is the flat cap on top of A (top-view: panelH wide ×
-  // gableLength deep). Both panels' Y range is [t, cabinetD - t]. An override
-  // in `gableOverrides` (keyed by gable.id) replaces Panel A's default
-  // left-edge x; the direction still controls where Panel B extends.
+  // gableLength deep). Both panels' Y range is [frontYTo, backYFrom]. An
+  // override in `gableOverrides` (keyed by gable.id) replaces Panel A's
+  // default left-edge x; the direction still controls where Panel B extends.
   const gables = calcPlinthGables(cabinetW, boxes, t).map<PlinthGable>(g => {
     const override = gableOverrides?.get(g.id);
     return override !== undefined ? { ...g, userPositionX: override } : g;
   });
-  const gableYFrom = t;
-  const gableYTo = cabinetD - t;
   const panelBWidth = panelH; // the lying-flat Panel B is `panelH` wide in plan view
   for (const g of gables) {
     // Panel A's left edge — override wins, else direction's default.
@@ -643,12 +688,12 @@ export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] 
     out.push({
       id: newItemId(), role: 'plinth-gable-a', materialId: matId,
       length: gableLength, width: panelH, thickness: t,
-      xFrom: aFrom, xTo: aTo, yFrom: gableYFrom, yTo: gableYTo, visible: true,
+      xFrom: aFrom, xTo: aTo, yFrom: frontYTo, yTo: backYFrom, visible: true,
     });
     out.push({
       id: newItemId(), role: 'plinth-gable-b', materialId: matId,
       length: gableLength, width: panelH, thickness: t,
-      xFrom: bFrom, xTo: bTo, yFrom: gableYFrom, yTo: gableYTo, visible: true,
+      xFrom: bFrom, xTo: bTo, yFrom: frontYTo, yTo: backYFrom, visible: true,
     });
   }
 
@@ -678,6 +723,7 @@ const ROLE_NAME_HE: Record<BoardRole, string> = {
   'plinth-back': 'צוקל אחורי',
   'plinth-gable-a': 'גיבל צוקל א׳',
   'plinth-gable-b': 'גיבל צוקל ב׳',
+  'plinth-front-cladding': 'חיפוי צוקל',
 };
 
 const ROLE_GROUP: Record<BoardRole, CutGroup> = {
@@ -697,6 +743,7 @@ const ROLE_GROUP: Record<BoardRole, CutGroup> = {
   'plinth-back': 'plinth',
   'plinth-gable-a': 'plinth',
   'plinth-gable-b': 'plinth',
+  'plinth-front-cladding': 'plinth',
 };
 
 export function boardsToCutItems(boards: Board[], label: string): CutItem[] {

@@ -88,6 +88,20 @@
   cursor: not-allowed;
 }
 
+.recessToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.recessToggle input {
+  cursor: pointer;
+}
+
 .title {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
@@ -130,6 +144,14 @@
 /* Front + back strips */
 .boardStrip {
   fill: var(--color-wood);
+  stroke: var(--color-wood-dark);
+  stroke-width: 1;
+}
+
+/* Front cladding panel — front material, distinct visual so the carpenter
+   reads it as the visible facade vs the body-material plinth-front behind. */
+.boardCladding {
+  fill: var(--color-fronts);
   stroke: var(--color-wood-dark);
   stroke-width: 1;
 }
