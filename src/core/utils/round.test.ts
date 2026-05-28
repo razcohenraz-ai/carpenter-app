@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  round, roundInternal, roundOutput,
+  round, roundInternal, roundOutput, formatDim,
   INTERNAL_PRECISION_MM, OUTPUT_PRECISION_MM, INPUT_PRECISION_MM,
 } from "./round";
 
@@ -44,5 +44,37 @@ describe("round — גנרי", () => {
     expect(round(99.876, 0.5)).toBe(100);
     expect(round(99.749, 0.5)).toBe(99.5);
     expect(round(5.555, 0.01)).toBe(5.56);
+  });
+});
+
+describe("formatDim — תצוגה ב-2 ספרות בלי אפסים מיותרים", () => {
+  it("מנקה זנב floating-point", () => {
+    expect(formatDim(57.40000000000006)).toBe("57.4");
+  });
+
+  it("מספר שלם — בלי נקודה עשרונית", () => {
+    expect(formatDim(95)).toBe("95");
+    expect(formatDim(0)).toBe("0");
+  });
+
+  it("ספרה עשרונית אחת — שומרת על ספרה אחת", () => {
+    expect(formatDim(78.8)).toBe("78.8");
+  });
+
+  it("מעגל ל-2 ספרות עשרוניות", () => {
+    expect(formatDim(57.405)).toBe("57.41");
+    expect(formatDim(12.344)).toBe("12.34");
+    expect(formatDim(12.346)).toBe("12.35");
+  });
+
+  it("עובד גם על מספרים שליליים", () => {
+    expect(formatDim(-57.40000000000006)).toBe("-57.4");
+    expect(formatDim(-12.345)).toBe("-12.35");
+  });
+
+  it("אין שינוי במודל — הקלט נשאר עם הזנב, רק הפלט נקי", () => {
+    const raw = 60 - 0.5 - 0.3 - 1.8; // 57.400000000000006
+    expect(raw).not.toBe(57.4);          // הזנב קיים בערך הגולמי
+    expect(formatDim(raw)).toBe("57.4"); // הפלט בלבד מנוקה
   });
 });

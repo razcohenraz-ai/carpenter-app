@@ -31,3 +31,14 @@ export const roundInternal = (v: number): number => Math.round(v * 1000) / 1000;
  * לשימוש לפני כתיבה ל-CutItem.w/h, לדוחות, ולכל פלט חיצוני.
  */
 export const roundOutput = (v: number): number => Math.round(v * 10) / 10;
+
+/**
+ * Format a dimension value for **display only** — never feed the result back
+ * into calculations. Trims IEEE-754 noise (e.g. `57.40000000000006` from
+ * `60 − 0.5 − 0.3 − 1.8`) by rounding to 2 decimals, then drops trailing
+ * zeros so whole numbers read as integers (`"95"`), one-decimal values keep
+ * their decimal (`"78.8"`), and the hundredth digit appears only when it
+ * carries information (`"57.41"`). The carcass model keeps its full
+ * precision — this helper is purely cosmetic.
+ */
+export const formatDim = (v: number): string => parseFloat(v.toFixed(2)).toString();
