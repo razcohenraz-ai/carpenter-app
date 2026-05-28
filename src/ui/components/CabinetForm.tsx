@@ -69,6 +69,7 @@ export default function CabinetForm(): React.JSX.Element {
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
+    plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
   } = useCabinet();
 
   // Unified editor state: one editor open at a time. The body/door/plinth
@@ -88,6 +89,43 @@ export default function CabinetForm(): React.JSX.Element {
   function handleDrawerFrontClick(drawerId: string): void { setEditing({ type: 'drawer', drawerId }); }
   function handlePlinthClick(): void { setEditing({ type: 'plinth' }); }
   function closeEditor(): void { setEditing({ type: 'none' }); }
+
+  // Reuse the form's current values + the new plinth height to push a full
+  // recalculate. Lives here (not in useCabinet) so the form remains the
+  // single source of truth for `CabinetInput`.
+  function handlePlinthHeightChange(newPlinthCm: number): void {
+    setForm(p => ({ ...p, plinth: String(newPlinthCm) }));
+    const W = parseFloat(form.W);
+    const H = parseFloat(form.H);
+    const D = parseFloat(form.D);
+    if (!Number.isFinite(W) || !Number.isFinite(H) || !Number.isFinite(D)) return;
+    const doorsPerColumn: 'auto' | 1 | 2 | 3 =
+      form.doorsPerColumn === '1' ? 1 :
+      form.doorsPerColumn === '2' ? 2 :
+      form.doorsPerColumn === '3' ? 3 : 'auto';
+    const backThicknessMm = parseFloat(form.backThicknessMm);
+    const backThicknessCm = Number.isFinite(backThicknessMm) && backThicknessMm >= 0
+      ? backThicknessMm / 10 : 0.5;
+    const loDoor = parseFloat(form.lowerDoorH);
+    const midDoor = parseFloat(form.middleDoorH);
+    const needsLo = showLowerDoor(form.doorsPerColumn, form.H);
+    const needsMid = form.doorsPerColumn === '3';
+    calculate({
+      W, H, D,
+      backThickness: backThicknessCm,
+      hasShell: form.hasShell,
+      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
+      bodyMaterialId: form.bodyMaterialId,
+      frontMaterialId: form.frontMaterialId,
+      plinth: newPlinthCm,
+      doorCoversPlinth: form.doorCoversPlinth,
+      lowerDoorH: needsLo ? loDoor : undefined,
+      middleDoorH: needsMid ? midDoor : undefined,
+      doorsPerColumn,
+      doorGapMm: parseFloat(form.doorGap) || 0,
+      maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
+    });
+  }
 
   // Lookup of all DrawerItems by id (across body interiors and partitioned
   // cells), so the modal can read drawerHeight/frontThicknessOverride from
@@ -354,6 +392,10 @@ export default function CabinetForm(): React.JSX.Element {
           plinthHeight={parseFloat(form.plinth) || 0}
           boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
           bodyMaterial={getMaterial(form.bodyMaterialId)}
+          gableOverrides={plinthGableOverrides}
+          onSetGableOverride={setPlinthGableOverride}
+          onResetGables={resetPlinthGableOverrides}
+          onPlinthHeightChange={handlePlinthHeightChange}
           onBack={closeEditor}
         />
       </div>

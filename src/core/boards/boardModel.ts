@@ -400,6 +400,14 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
 //   - mid-body for any body whose width > 80 cm (extra support).
 
 export interface PlinthGable {
+  /** Stable identifier across cabinet rebuilds — used as the override-map
+   *  key in {@link BuildPlinthBoardModelArgs.gableOverrides}. Edge gables
+   *  are singletons; joint and mid-body gables index by emission order
+   *  within their kind: `joint:0`, `joint:1`, `mid-body:0`, etc. The ID
+   *  survives plinth-height changes and identical box decompositions; a
+   *  decomposition change that adds/removes gables shifts indices and
+   *  stale overrides drop silently. */
+  id: string;
   /** Cabinet-X position the gable is anchored on. Edge gables flush their
    *  Panel A against this side; internal gables center Panel A's thickness
    *  on this x. */
@@ -409,10 +417,103 @@ export interface PlinthGable {
    *  - 'left':  Panel B is at lower x than Panel A (right-edge mirror).
    *  - 'flush-left': Panel A at x=[0, tBody], Panel B to its right.
    *  - 'flush-right': Panel A at x=[cabinetW-tBody, cabinetW], Panel B to its left.
-   */
+   *  The direction stays fixed across drags — it only determines WHICH SIDE
+   *  Panel B extends. Panel A's actual x is `userPositionX ?? default(direction, xAnchor)`. */
   direction: 'right' | 'left' | 'flush-left' | 'flush-right';
   /** Diagnostic — origin of this gable, useful for tests and the editor. */
   kind: 'edge-left' | 'edge-right' | 'joint' | 'mid-body';
+  /** User override for Panel A's left-edge cabinet-X. When set, replaces
+   *  the default position computed from {@link kind} + {@link xAnchor} +
+   *  {@link direction}. Always in cm. Set by the editor's drag; cleared
+   *  by `resetPlinthGableOverrides()` (which clears every override at once).
+   *  Plumbed from the caller's `gableOverrides` map onto the returned
+   *  gable for convenience — `calcPlinthGables` itself ignores the map's
+   *  semantics; the caller injects the value. */
+  userPositionX?: number;
+}
+
+/** Width snap step (cm) for the editor's gable drag. Coarser than
+ *  `INPUT_PRECISION_MM` because positioning a plinth gable to a tenth of
+ *  a millimetre is meaningless — 0.5 cm matches what a carpenter eyeballs
+ *  on the floor. */
+export const PLINTH_GABLE_SNAP_CM = 0.5;
+
+/** Default Panel-A left-edge x for a gable, given its kind/direction/xAnchor.
+ *  Used as the fallback whenever `gableOverrides` doesn't carry an entry for
+ *  the gable. Pure function — does not consult any state. */
+export function defaultPlinthGableLeftX(gable: PlinthGable, tBody: number, cabinetW: number): number {
+  switch (gable.direction) {
+    case 'flush-left':  return 0;
+    case 'flush-right': return cabinetW - tBody;
+    case 'right':
+    case 'left':
+      return gable.xAnchor - tBody / 2;
+  }
+}
+
+/** Effective Panel-A left-edge x: override if present, else default. */
+export function effectivePlinthGableLeftX(
+  gable: PlinthGable,
+  tBody: number,
+  cabinetW: number,
+): number {
+  return gable.userPositionX ?? defaultPlinthGableLeftX(gable, tBody, cabinetW);
+}
+
+/** Snap a proposed drag x (cm) to the editor's grid. */
+export function snapPlinthGableX(x: number): number {
+  return Math.round(x / PLINTH_GABLE_SNAP_CM) * PLINTH_GABLE_SNAP_CM;
+}
+
+/** Clamp a proposed Panel-A left-edge x so the gable stays inside the
+ *  plinth and does not overlap any other gable. Other gables are treated
+ *  as their CURRENT effective positions (overrides included). Adjacent
+ *  gables enforce a minimum centre-to-centre distance of `tBody` —
+ *  Panel A intervals `[x, x+tBody]` may not overlap. Returns the closest
+ *  legal position to the proposed; if no legal slot exists at all (cabinet
+ *  too narrow for the remaining gables), returns the proposed x clamped to
+ *  the cabinet edges (caller decides whether to commit). */
+export function clampPlinthGableX(args: {
+  proposedX: number;
+  gableId: string;
+  allGables: readonly PlinthGable[];
+  cabinetW: number;
+  tBody: number;
+}): number {
+  const { proposedX, gableId, allGables, cabinetW, tBody } = args;
+  // Step 1: clamp to cabinet bounds.
+  const target = Math.max(0, Math.min(proposedX, cabinetW - tBody));
+  // Step 2: carve the cabinet into legal gap intervals by subtracting each
+  // other gable's forbidden zone `[ox - tBody, ox + tBody]` from the full
+  // [0, cabinetW - tBody] range. Then choose the gap point closest to target.
+  const others = allGables
+    .filter(g => g.id !== gableId)
+    .map(g => effectivePlinthGableLeftX(g, tBody, cabinetW))
+    .sort((a, b) => a - b);
+  let gaps: Array<[number, number]> = [[0, cabinetW - tBody]];
+  for (const ox of others) {
+    const forbidLo = ox - tBody;
+    const forbidHi = ox + tBody;
+    const next: Array<[number, number]> = [];
+    for (const [lo, hi] of gaps) {
+      if (hi <= forbidLo || lo >= forbidHi) {
+        next.push([lo, hi]);
+      } else {
+        if (lo < forbidLo) next.push([lo, forbidLo]);
+        if (forbidHi < hi) next.push([forbidHi, hi]);
+      }
+    }
+    gaps = next;
+  }
+  if (gaps.length === 0) return target;
+  let best = target;
+  let bestDist = Infinity;
+  for (const [lo, hi] of gaps) {
+    const x = Math.max(lo, Math.min(target, hi));
+    const dist = Math.abs(x - target);
+    if (dist < bestDist) { bestDist = dist; best = x; }
+  }
+  return best;
 }
 
 /** Threshold above which a single body gets an extra middle gable. */
@@ -425,31 +526,41 @@ export const PLINTH_GABLE_MID_BODY_THRESHOLD_CM = 80;
 export function calcPlinthGables(cabinetW: number, boxes: Box[], tBody: number): PlinthGable[] {
   const gables: PlinthGable[] = [];
 
-  // Left edge — Panel A flush at x=0.
-  gables.push({ xAnchor: 0, direction: 'flush-left', kind: 'edge-left' });
+  // Left edge — Panel A flush at x=0. Stable id 'edge-left' — singleton.
+  gables.push({ id: 'edge-left', xAnchor: 0, direction: 'flush-left', kind: 'edge-left' });
 
   // Internal joints + mid-body extras. Sort boxes by their left x in the row.
   const sorted = [...boxes].sort((a, b) => positionRank(a) - positionRank(b));
   let cumX = 0;
+  let midBodyIdx = 0;
+  let jointIdx = 0;
   for (let i = 0; i < sorted.length; i++) {
     const box = sorted[i]!;
     // Mid-body gable for wide bodies.
     if (box.W > PLINTH_GABLE_MID_BODY_THRESHOLD_CM) {
       gables.push({
+        id: `mid-body:${midBodyIdx}`,
         xAnchor: cumX + box.W / 2,
         direction: 'right',
         kind: 'mid-body',
       });
+      midBodyIdx++;
     }
     cumX += box.W;
     // Joint between this body and the next.
     if (i < sorted.length - 1) {
-      gables.push({ xAnchor: cumX, direction: 'right', kind: 'joint' });
+      gables.push({
+        id: `joint:${jointIdx}`,
+        xAnchor: cumX,
+        direction: 'right',
+        kind: 'joint',
+      });
+      jointIdx++;
     }
   }
 
-  // Right edge — Panel A flush at x=cabinetW.
-  gables.push({ xAnchor: cabinetW, direction: 'flush-right', kind: 'edge-right' });
+  // Right edge — Panel A flush at x=cabinetW. Stable id 'edge-right'.
+  gables.push({ id: 'edge-right', xAnchor: cabinetW, direction: 'flush-right', kind: 'edge-right' });
 
   // Don't suppress tBody — keep gables for unused boxes etc; the caller can
   // skip the call when plinth is absent.
@@ -474,6 +585,10 @@ export interface BuildPlinthBoardModelArgs {
   /** Bottom-row body boxes (caller filters out plinth boxes and other rows).
    *  Used to compute internal gable positions. */
   boxes: Box[];
+  /** Per-gable Panel-A left-edge x overrides keyed by `PlinthGable.id`.
+   *  A number replaces the default position; an absent key falls back to
+   *  the flush/centered default. The editor's free-form drag writes here. */
+  gableOverrides?: ReadonlyMap<string, number>;
 }
 
 /** Emits every board in the plinth (front, back, and each gable's Panel A +
@@ -481,7 +596,7 @@ export interface BuildPlinthBoardModelArgs {
  *  in TOP-VIEW coordinates (y = depth) per the dual semantic documented on
  *  `Board.yFrom`. */
 export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] {
-  const { cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes } = args;
+  const { cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes, gableOverrides } = args;
   if (plinthHeight <= 0) return [];
 
   const t = bodyMaterial.thickness / 10; // cm
@@ -507,43 +622,24 @@ export function buildPlinthBoardModel(args: BuildPlinthBoardModelArgs): Board[] 
   });
 
   // Gables — Panel A is the vertical wall (top-view: tBody wide × gableLength
-  // deep). Panel B is the flat cap on top of A (top-view: (plinthH-0.6) wide
-  // × gableLength deep). Both panels' Y range is [t, cabinetD - t].
-  const gables = calcPlinthGables(cabinetW, boxes, t);
+  // deep). Panel B is the flat cap on top of A (top-view: panelH wide ×
+  // gableLength deep). Both panels' Y range is [t, cabinetD - t]. An override
+  // in `gableOverrides` (keyed by gable.id) replaces Panel A's default
+  // left-edge x; the direction still controls where Panel B extends.
+  const gables = calcPlinthGables(cabinetW, boxes, t).map<PlinthGable>(g => {
+    const override = gableOverrides?.get(g.id);
+    return override !== undefined ? { ...g, userPositionX: override } : g;
+  });
   const gableYFrom = t;
   const gableYTo = cabinetD - t;
   const panelBWidth = panelH; // the lying-flat Panel B is `panelH` wide in plan view
   for (const g of gables) {
-    let aFrom: number;
-    let aTo: number;
-    let bFrom: number;
-    let bTo: number;
-    switch (g.direction) {
-      case 'flush-left':
-        aFrom = g.xAnchor;
-        aTo   = g.xAnchor + t;
-        bFrom = aTo;
-        bTo   = aTo + panelBWidth;
-        break;
-      case 'flush-right':
-        aTo   = g.xAnchor;
-        aFrom = g.xAnchor - t;
-        bTo   = aFrom;
-        bFrom = aFrom - panelBWidth;
-        break;
-      case 'right':
-        aFrom = g.xAnchor - t / 2;
-        aTo   = g.xAnchor + t / 2;
-        bFrom = aTo;
-        bTo   = aTo + panelBWidth;
-        break;
-      case 'left':
-        aFrom = g.xAnchor - t / 2;
-        aTo   = g.xAnchor + t / 2;
-        bTo   = aFrom;
-        bFrom = aFrom - panelBWidth;
-        break;
-    }
+    // Panel A's left edge — override wins, else direction's default.
+    const aFrom = g.userPositionX ?? defaultPlinthGableLeftX(g, t, cabinetW);
+    const aTo   = aFrom + t;
+    const panelBOnLeft = g.direction === 'left' || g.direction === 'flush-right';
+    const bFrom = panelBOnLeft ? aFrom - panelBWidth : aTo;
+    const bTo   = panelBOnLeft ? aFrom              : aTo + panelBWidth;
     out.push({
       id: newItemId(), role: 'plinth-gable-a', materialId: matId,
       length: gableLength, width: panelH, thickness: t,

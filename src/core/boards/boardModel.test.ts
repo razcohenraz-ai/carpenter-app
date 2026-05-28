@@ -3,13 +3,18 @@ import {
   buildBoardModel,
   buildPlinthBoardModel,
   calcPlinthGables,
+  clampPlinthGableX,
+  defaultPlinthGableLeftX,
+  effectivePlinthGableLeftX,
   resolveJointMethod,
   resolveCabinetJointMethod,
   deriveEnvelopeFlags,
   boardsToCutItems,
+  snapPlinthGableX,
   BACK_THICKNESS_CM,
   LEVELER_GAP_CM,
   PLINTH_GABLE_MID_BODY_THRESHOLD_CM,
+  PLINTH_GABLE_SNAP_CM,
   type Board,
   type PlinthGable,
 } from './boardModel';
@@ -503,6 +508,241 @@ describe('calcPlinthGables', () => {
     const joint = gables.find(g => g.kind === 'joint')!;
     // Body widths cumulative: 60 then 60+90=150. Joint at the first cumulative.
     expect(joint.xAnchor).toBe(60);
+  });
+
+  it('every gable carries a stable, unique id', () => {
+    const boxes: Box[] = [
+      box({ W: 100, H: 100, position: 'left',  level: 'bottom' }),
+      box({ W: 100, H: 100, position: 'right', level: 'bottom' }),
+    ];
+    const gables = calcPlinthGables(200, boxes, t);
+    // 5 gables (see test above): edge-left, mid-body:0, joint:0, mid-body:1, edge-right.
+    expect(gables.map(g => g.id)).toEqual([
+      'edge-left', 'mid-body:0', 'joint:0', 'mid-body:1', 'edge-right',
+    ]);
+    expect(new Set(gables.map(g => g.id)).size).toBe(gables.length);
+  });
+});
+
+// ── 10b. Plinth gable helpers (drag math) ────────────────────────────────────
+
+describe('snapPlinthGableX', () => {
+  it('rounds to the nearest PLINTH_GABLE_SNAP_CM step', () => {
+    expect(PLINTH_GABLE_SNAP_CM).toBe(0.5);
+    expect(snapPlinthGableX(0)).toBe(0);
+    expect(snapPlinthGableX(0.24)).toBe(0);
+    expect(snapPlinthGableX(0.25)).toBe(0.5);
+    expect(snapPlinthGableX(0.74)).toBe(0.5);
+    expect(snapPlinthGableX(0.75)).toBe(1);
+    expect(snapPlinthGableX(12.3)).toBe(12.5);
+    expect(snapPlinthGableX(12.2)).toBe(12);
+  });
+});
+
+describe('defaultPlinthGableLeftX', () => {
+  const baseGable = (over: Partial<PlinthGable>): PlinthGable => ({
+    id: 'x', xAnchor: 0, direction: 'right', kind: 'joint', ...over,
+  });
+  it('flush-left → 0', () => {
+    expect(defaultPlinthGableLeftX(baseGable({ direction: 'flush-left' }), 1.8, 100)).toBe(0);
+  });
+  it('flush-right → cabinetW − tBody', () => {
+    expect(defaultPlinthGableLeftX(baseGable({ direction: 'flush-right' }), 1.8, 100))
+      .toBeCloseTo(98.2);
+  });
+  it('right / left → xAnchor − tBody/2 (centred)', () => {
+    const g = baseGable({ direction: 'right', xAnchor: 60 });
+    expect(defaultPlinthGableLeftX(g, 1.8, 200)).toBeCloseTo(59.1);
+    expect(defaultPlinthGableLeftX({ ...g, direction: 'left' }, 1.8, 200)).toBeCloseTo(59.1);
+  });
+});
+
+describe('effectivePlinthGableLeftX', () => {
+  const g: PlinthGable = { id: 'g', xAnchor: 60, direction: 'right', kind: 'joint' };
+  it('without override → default', () => {
+    expect(effectivePlinthGableLeftX(g, 1.8, 200)).toBeCloseTo(59.1);
+  });
+  it('with override → override (default ignored)', () => {
+    expect(effectivePlinthGableLeftX({ ...g, userPositionX: 12 }, 1.8, 200)).toBe(12);
+  });
+});
+
+describe('clampPlinthGableX — bounds and overlap', () => {
+  const tBody = 1.8;
+  const cabinetW = 200;
+  // Three gables: flush-left, a centred joint at 100, flush-right.
+  const gables: PlinthGable[] = [
+    { id: 'edge-left',  xAnchor: 0,        direction: 'flush-left',  kind: 'edge-left' },
+    { id: 'joint:0',    xAnchor: 100,      direction: 'right',       kind: 'joint' },
+    { id: 'edge-right', xAnchor: cabinetW, direction: 'flush-right', kind: 'edge-right' },
+  ];
+
+  it('clamps below 0 to 0', () => {
+    expect(clampPlinthGableX({
+      proposedX: -5, gableId: 'joint:0', allGables: gables, cabinetW, tBody,
+    })).toBe(1.8); // pushed off edge-left at [0, t]
+  });
+
+  it('clamps above cabinetW − tBody to that cap', () => {
+    expect(clampPlinthGableX({
+      proposedX: 500, gableId: 'joint:0', allGables: gables, cabinetW, tBody,
+    })).toBeCloseTo(cabinetW - 2 * tBody); // pushed off edge-right at [cabinetW-t, cabinetW]
+  });
+
+  it('keeps the joint clear of an adjacent gable by ≥ tBody', () => {
+    // Dragging the joint toward edge-left: the joint cannot enter the
+    // interval [0, t] of edge-left, so the minimum is t (= edge-left.right).
+    const result = clampPlinthGableX({
+      proposedX: 0.5, gableId: 'joint:0', allGables: gables, cabinetW, tBody,
+    });
+    expect(result).toBeCloseTo(tBody);
+  });
+
+  it('clears the right neighbour by ≥ tBody when dragging right', () => {
+    const result = clampPlinthGableX({
+      proposedX: cabinetW - tBody, // would overlap edge-right
+      gableId: 'joint:0', allGables: gables, cabinetW, tBody,
+    });
+    expect(result).toBeCloseTo(cabinetW - 2 * tBody);
+  });
+
+  it('respects an override on a neighbour (uses effective position)', () => {
+    // Edge-left override at x=50 — Panel A occupies [50, 51.8]. The joint
+    // dragged INTO that interval at x=51 must hop to the nearest legal side
+    // (right of the override at 51.8), proving the override is consulted.
+    const withOverride: PlinthGable[] = gables.map(g =>
+      g.id === 'edge-left' ? { ...g, userPositionX: 50 } : g,
+    );
+    const result = clampPlinthGableX({
+      proposedX: 51, gableId: 'joint:0', allGables: withOverride, cabinetW, tBody,
+    });
+    expect(result).toBeCloseTo(50 + tBody);
+  });
+
+  it('valid gap left of an override → does NOT push past it', () => {
+    // The override at x=50 leaves a perfectly legal gap [0, 48.2] to its
+    // left; a proposed x=30 belongs there and must stay there.
+    const withOverride: PlinthGable[] = gables.map(g =>
+      g.id === 'edge-left' ? { ...g, userPositionX: 50 } : g,
+    );
+    const result = clampPlinthGableX({
+      proposedX: 30, gableId: 'joint:0', allGables: withOverride, cabinetW, tBody,
+    });
+    expect(result).toBe(30);
+  });
+
+  it('no legal slot → falls back to edge-clamped proposed', () => {
+    // 4-cm cabinet packed with two edge gables that consume all the space:
+    // edge-left [0, 1.8] and edge-right [2.2, 4]. The joint has zero room.
+    const narrow: PlinthGable[] = [
+      { id: 'edge-left',  xAnchor: 0,   direction: 'flush-left',  kind: 'edge-left' },
+      { id: 'joint:0',    xAnchor: 2,   direction: 'right',       kind: 'joint' },
+      { id: 'edge-right', xAnchor: 4,   direction: 'flush-right', kind: 'edge-right' },
+    ];
+    const result = clampPlinthGableX({
+      proposedX: 2, gableId: 'joint:0', allGables: narrow, cabinetW: 4, tBody: 1.8,
+    });
+    // No legal slot → the proposed value comes back unchanged (already
+    // inside cabinet bounds). The UI keeps the gable where the user dragged
+    // it without throwing; the user can resize the cabinet to recover.
+    expect(result).toBe(2);
+  });
+});
+
+// ── 10c. buildPlinthBoardModel — override semantics ─────────────────────────
+
+describe('buildPlinthBoardModel — gable overrides', () => {
+  const baseBoxes: Box[] = [
+    box({ W: 100, H: 100, position: 'left',  level: 'bottom' }),
+    box({ W: 100, H: 100, position: 'right', level: 'bottom' }),
+  ];
+
+  it('override on edge-left moves Panel A; default position is replaced', () => {
+    const overrides = new Map<string, number>([['edge-left', 30]]);
+    const boards = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      gableOverrides: overrides,
+    });
+    // edge-left is the FIRST gable emitted → its Panel A is the first
+    // 'plinth-gable-a' board.
+    const a = byRole(boards, 'plinth-gable-a')[0]!;
+    const b = byRole(boards, 'plinth-gable-b')[0]!;
+    expect(a.xFrom).toBe(30);
+    expect(a.xTo).toBeCloseTo(30 + t);
+    // Panel B is still to the right (flush-left direction).
+    const panelBWidth = 10 - LEVELER_GAP_CM;
+    expect(b.xFrom).toBeCloseTo(30 + t);
+    expect(b.xTo).toBeCloseTo(30 + t + panelBWidth);
+  });
+
+  it('override on flush-right keeps Panel B on the left side', () => {
+    // Default for edge-right (flush-right): Panel A at [W-t, W], Panel B at
+    // [W-t-panelH, W-t]. After moving Panel A to x=120, Panel B should be
+    // immediately to its LEFT (direction property unchanged).
+    const overrides = new Map<string, number>([['edge-right', 120]]);
+    const boards = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      gableOverrides: overrides,
+    });
+    const aList = byRole(boards, 'plinth-gable-a');
+    const bList = byRole(boards, 'plinth-gable-b');
+    const a = aList[aList.length - 1]!;
+    const b = bList[bList.length - 1]!;
+    const panelBWidth = 10 - LEVELER_GAP_CM;
+    expect(a.xFrom).toBe(120);
+    expect(a.xTo).toBeCloseTo(120 + t);
+    expect(b.xTo).toBeCloseTo(120);
+    expect(b.xFrom).toBeCloseTo(120 - panelBWidth);
+  });
+
+  it('override on a joint keeps Panel B on the right (direction=right)', () => {
+    const overrides = new Map<string, number>([['joint:0', 70]]);
+    const boards = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      gableOverrides: overrides,
+    });
+    // joint:0 is 3rd in emission (edge-left, mid-body:0, joint:0, ...).
+    const a = byRole(boards, 'plinth-gable-a')[2]!;
+    const b = byRole(boards, 'plinth-gable-b')[2]!;
+    expect(a.xFrom).toBe(70);
+    expect(a.xTo).toBeCloseTo(70 + t);
+    expect(b.xFrom).toBeCloseTo(70 + t);
+  });
+
+  it('absent override → default position (unchanged from override-less build)', () => {
+    const without = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+    });
+    const withEmpty = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      gableOverrides: new Map<string, number>(),
+    });
+    expect(withEmpty.map(b => ({ role: b.role, xFrom: b.xFrom, xTo: b.xTo })))
+      .toEqual(without.map(b => ({ role: b.role, xFrom: b.xFrom, xTo: b.xTo })));
+  });
+
+  it('snapshot — gable Panel A xFrom across a 200×50 cabinet with two overrides', () => {
+    // Locks the override flow end-to-end: stable ids + direction-respecting
+    // Panel B placement + untouched gables stay at their defaults.
+    const overrides = new Map<string, number>([
+      ['edge-left', 5],
+      ['joint:0',   105],
+    ]);
+    const boards = buildPlinthBoardModel({
+      cabinetW: 200, cabinetD: 50, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: baseBoxes,
+      gableOverrides: overrides,
+    });
+    const a = byRole(boards, 'plinth-gable-a').map(b => Number(b.xFrom.toFixed(3)));
+    // Emission order: edge-left, mid-body:0, joint:0, mid-body:1, edge-right.
+    // mid-body:0 default = 50 − t/2 = 49.1; mid-body:1 = 150 − t/2 = 149.1;
+    // edge-right default = 200 − t = 198.2.
+    expect(a).toEqual([5, 49.1, 105, 149.1, 198.2]);
   });
 });
 

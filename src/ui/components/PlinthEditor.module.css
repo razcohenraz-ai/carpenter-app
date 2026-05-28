@@ -33,9 +33,59 @@
   background: var(--color-border);
 }
 
-.headerSpacer {
-  /* Mirror the back button's approximate width so the title is centered. */
-  min-width: 5em;
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.heightField {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.heightLabel {
+  white-space: nowrap;
+}
+
+.heightInput {
+  width: 5rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+.heightInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.resetBtn {
+  background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.resetBtn:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.resetBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .title {
@@ -121,3 +171,21 @@
 
 .dimLabelWidth { fill: var(--color-width); }
 .dimLabelDepth { fill: var(--color-depth); }
+
+/* ── Drag hit areas ─────────────────────────────────────────────────────── */
+/* Transparent overlay on top of each gable's Panel A. Mouse events hit this
+   rather than the painted board so we can keep the visual untouched while
+   still picking up the drag. cursor ew-resize cues the user that the gable
+   is grabbable. */
+.gableHit {
+  fill: transparent;
+  cursor: ew-resize;
+}
+
+.gableHit:hover {
+  fill: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.gableHitDragging {
+  fill: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}

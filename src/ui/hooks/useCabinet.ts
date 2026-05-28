@@ -144,6 +144,15 @@ export function useCabinet(): {
   setDrawerHeight: (drawerId: string, drawerHeight: number) => void;
   setDrawerFrontThickness: (drawerId: string, materialId: string | undefined) => void;
   deleteDrawer: (drawerId: string) => void;
+  /** Per-gable Panel-A x override map (cm). Lives outside `result` because
+   *  it's a "soft" position change that does not invalidate the rest of
+   *  the calculation; the cuts list refreshes automatically as each setter
+   *  triggers re-render via `calculate(lastInputRef.current)`. */
+  plinthGableOverrides: ReadonlyMap<string, number>;
+  /** Set or clear (when `x === undefined`) a single gable's override. */
+  setPlinthGableOverride: (gableId: string, x: number | undefined) => void;
+  /** Drop every override at once. */
+  resetPlinthGableOverrides: () => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -154,6 +163,8 @@ export function useCabinet(): {
   const [partitionsById, setPartitionsById] = useState<Map<string, boolean>>(new Map());
   const [frontLayoutByRow, setFrontLayoutByRow] = useState<Map<BoxLevel, RowFrontLayout>>(new Map());
   const [drawerFrontsById, setDrawerFrontsByIdState] = useState<DrawerFrontById>({});
+  const [plinthGableOverrides, setPlinthGableOverridesState] = useState<ReadonlyMap<string, number>>(new Map());
+  const plinthGableOverridesRef = useRef<ReadonlyMap<string, number>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -484,6 +495,31 @@ export function useCabinet(): {
     }
   }
 
+  // ── Plinth gable overrides ────────────────────────────────────────────────
+  // The override map is "soft" state: it changes only the plinth board model's
+  // gable positions, nothing else. We re-run the full calculate so the cut
+  // list refreshes (gable boards carry the new xFrom/xTo).
+
+  function setPlinthGableOverride(gableId: string, x: number | undefined): void {
+    const next = new Map(plinthGableOverridesRef.current);
+    if (x === undefined) next.delete(gableId);
+    else next.set(gableId, x);
+    plinthGableOverridesRef.current = next;
+    setPlinthGableOverridesState(next);
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+    }
+  }
+
+  function resetPlinthGableOverrides(): void {
+    const empty: ReadonlyMap<string, number> = new Map();
+    plinthGableOverridesRef.current = empty;
+    setPlinthGableOverridesState(empty);
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+    }
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -775,6 +811,9 @@ export function useCabinet(): {
       plinthHeight: plinth,
       bodyMaterial,
       boxes: bottomRowBoxes,
+      ...(plinthGableOverridesRef.current.size > 0
+        ? { gableOverrides: plinthGableOverridesRef.current }
+        : {}),
     });
     boardCuts.push(...boardsToCutItems(plinthBoards, ''));
 
@@ -826,5 +865,6 @@ export function useCabinet(): {
     setDoorHingeSide, setDoorHingeCount, setHingeManual, resetHingeToAuto, setDoorHasDoor,
     setDoorThickness, setCoversSkirt,
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
+    plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
   };
 }

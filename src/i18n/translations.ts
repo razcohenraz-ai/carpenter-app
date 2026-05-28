@@ -174,6 +174,11 @@ export interface Translations {
     /** Title for the plinth top-view editor (opened by clicking the
      *  plinth rect in the main cabinet sketch). */
     plinthEditorTitle: string;
+    /** Label for the plinth-height input in the editor header. */
+    plinthHeightLabel: string;
+    /** Reset button — clears every gable override. */
+    plinthResetGables: string;
+    plinthResetGablesTooltip: string;
   };
 }
 
@@ -345,6 +350,9 @@ const he: Translations = {
     pairEnvelopeSides: 'מעטפת ימין / מעטפת שמאל',
     pairPlinthGables: 'גיבל צוקל',
     plinthEditorTitle: 'תצוגת על — צוקל',
+    plinthHeightLabel: 'גובה צוקל (ס"מ)',
+    plinthResetGables: 'אפס מיקומי גיבלים',
+    plinthResetGablesTooltip: 'החזר את הגיבלים למיקומים האוטומטיים (קצוות וחיבורי גופים)',
   },
 };
 
@@ -516,6 +524,9 @@ const en: Translations = {
     pairEnvelopeSides: 'Right / Left Envelope',
     pairPlinthGables: 'Plinth Gable',
     plinthEditorTitle: 'Top view — Plinth',
+    plinthHeightLabel: 'Plinth height (cm)',
+    plinthResetGables: 'Reset gable positions',
+    plinthResetGablesTooltip: 'Restore gables to their automatic positions (edges and body joints)',
   },
 };
 

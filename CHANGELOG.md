@@ -7,6 +7,18 @@
 
 ## [Unreleased]
 
+### נוסף — עורך צוקל: גובה ניתן לעריכה + גרירת גיבלים חופשית
+- **שדה גובה צוקל** ב-header של `PlinthEditor` — input מספרי בס"מ עם min 3, step 0.5, commit ב-blur/Enter. שינוי הערך מפעיל `calculate()` מלא דרך `CabinetForm.handlePlinthHeightChange`, כך שכל ה-board models והגב מתעדכנים live.
+- **גרירה חופשית של גיבלים** — `mousedown` על לוח א' של כל גיבל מתחיל drag (cursor `ew-resize`). `mousemove` מעדכן live עם snap 0.5 ס"מ ו-clamp ל-gaps תקפים (gap-analysis: חוסם חפיפה עם גיבל אחר במרחק `≥ tBody`). `mouseup` שומר את ה-override; `Esc` משחזר למיקום שלפני הגרירה.
+- **כפתור "אפס מיקומי גיבלים"** ב-header — מנקה את כל ה-overrides ומחזיר את הגיבלים ל-defaults (flush/centered/mid-body).
+- **`PlinthGable.id` + `userPositionX?`**: כל גיבל קיבל id יציב (`edge-left`, `joint:0`, `mid-body:1`, `edge-right`) שמשמש כמפתח במפת ה-overrides. ה-`direction` נשמר — כיוון לוח ב' לא משתנה בעקבות גרירה.
+- **`buildPlinthBoardModel` קיבל `gableOverrides?: ReadonlyMap<string, number>`** — דורס את ה-left edge של לוח א'. גיבל ללא override → ברירת המחדל הקיימת (flush/centered).
+- **`useCabinet` חושף**: `plinthGableOverrides`, `setPlinthGableOverride(id, x | undefined)`, `resetPlinthGableOverrides()`. כל שינוי מפעיל re-calculate כך שרשימת החיתוכים תקבל את לוחות הגיבל החדשים.
+- **helpers חדשים** ב-`boardModel.ts` (יוצאים לשימוש חיצוני): `defaultPlinthGableLeftX`, `effectivePlinthGableLeftX`, `snapPlinthGableX` (קבוע `PLINTH_GABLE_SNAP_CM = 0.5`), `clampPlinthGableX` (gap analysis עם bounds + overlap).
+- **תרגומים חדשים** ב-`cutsList`: `plinthHeightLabel`, `plinthResetGables`, `plinthResetGablesTooltip` (HE/EN).
+- **19 בדיקות חדשות** ב-`boardModel.test.ts`: `snapPlinthGableX` × 1, `defaultPlinthGableLeftX` × 3, `effectivePlinthGableLeftX` × 2, `clampPlinthGableX` × 6 (bounds, overlap, override, no-slot, valid gap left of override), `buildPlinthBoardModel — overrides` × 5 (edge-left, flush-right direction, joint, absent → identical, snapshot), stable-ids × 1, ועוד.
+- **`docs/DECISIONS_LOG.md` 2026-05-28** — "גיבלי צוקל: גרירה חופשית, כללי flush/centered = defaults" עם הסבר על מודל ה-ID והטריידאוף לעומת alternative IDs.
+
 ### נוסף — BoardModel לצוקל + עורך צוקל (PlinthEditor) ממבט על
 - **`buildPlinthBoardModel(args)`** חדש ב-`core/boards/boardModel.ts`. הצוקל מיוצר עכשיו ברמת הארון (לא per-body): קדמי, אחורי, וגיבלים דינמיים. נקרא מ-`useCabinet` עם רק גופי השורה התחתונה (`level === 'bottom' | 'single'`).
 - **גיבל = L-shape** (לוח א' עומד כקיר + לוח ב' שוכב כמכסה עליון). שני הלוחות באותו חיתוך: `(D − 2·tBody) × (plinthH − LEVELER_GAP_CM)`. בתצוגת על: footprint = `(tBody + plinthH − 0.6) × (D − 2·tBody)`.

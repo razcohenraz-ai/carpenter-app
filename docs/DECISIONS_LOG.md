@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-05-28 — גיבלי צוקל: גרירה חופשית, כללי flush/centered = defaults
+
+**ההחלטה**: בעורך הצוקל כל גיבל ניתן לגרירה ב-X לכל מיקום בתוך הצוקל. הכללים הקיימים (flush בקצוות, ממורכז על חיבור גופים, אמצע גוף כש-W > 80) הם **defaults בלבד** — נקודת המוצא של הגיבל כשאין override מהמשתמש. ה-`userPositionX` (אופציונלי, ב-`PlinthGable`) דורס את הברירה ומועבר ל-`buildPlinthBoardModel` דרך `gableOverrides: Map<id, x>`.
+
+**הנימוק**:
+- הנגר מכיר את הריצוף, צנרת, שקעים — מציאות שהאלגוריתם לא יכול לדעת עליה מראש. גרירה מלאה מאפשרת התאמה ידנית במקומות שצריך, בלי לחייב reset של הקבועים בקוד.
+- ה-defaults עדיין מספקים תוצאה נכונה למקרה הסטנדרטי (95% מהארונות) — המשתמש לא נדרש להזיז שום גיבל אלא אם הוא רוצה.
+- ID יציב לכל גיבל (`edge-left`, `joint:0`, `mid-body:1`, ...) שורד שינויים שלא מוסיפים/מסירים גיבלים מאותו סוג; overrides יתומים נופלים בשקט כשהדקומפוזיציה משתנה.
+
+**מודל המיקום**: `userPositionX` דורס את הקצה השמאלי של לוח א'. ה-`direction` נשאר קבוע — הוא קובע רק לאיזה צד לוח ב' נמשך. גיבל `flush-left` שנגרר למרכז עדיין מציב את לוח ב' מימינו; `flush-right` עדיין משמאל. זה משמר את הצורה הפיזית של ה-L וקושר את האסתטיקה ל-`kind` שנבחר בהתחלה.
+
+**ולידציה**: `clampPlinthGableX` עושה gap-analysis — חותך מ-`[0, cabinetW − tBody]` את ה"אזורים האסורים" `[ox − tBody, ox + tBody]` של כל גיבל אחר, ובוחר את המיקום הקרוב ביותר ל-proposed. נכשל בשקט (מחזיר את ה-clamped בלבד) רק אם אין מקום בכלל — תרחיש קצה של ארון צר מדי שצריך resize כדי לפתור.
+
+**טריידאוף**: ה-ID מבוסס על `kind + index` נמחק כשהדקומפוזיציה משתנה (למשל מעבר מ-2 ל-3 גופים זז את `joint:1`). הצענו ID מבוסס xAnchor — נדחה כי הוא משתנה עם רוחב הארון, מה שהיה גורם לאיבוד override גם בשינוי לא מבני. ה-trade-off הנוכחי: שינויים מבניים מאפסים את ה-overrides; שינויי גובה צוקל/חומר/עומק לא נוגעים בהם.
+
+**יישום**:
+- `boardModel.ts`: `PlinthGable` קיבל `id` ו-`userPositionX?`. הוספו `defaultPlinthGableLeftX`, `effectivePlinthGableLeftX`, `snapPlinthGableX` (0.5 ס"מ), `clampPlinthGableX` (gap analysis), קבוע `PLINTH_GABLE_SNAP_CM = 0.5`.
+- `buildPlinthBoardModel`: פרמטר חדש `gableOverrides?: ReadonlyMap<string, number>`. דורס את לוח-A's left edge; כיוון לוח B (`right` או `left`) נגזר מ-`direction` ושומר את צורת ה-L.
+- `useCabinet`: state חדש `plinthGableOverrides` + `setPlinthGableOverride(id, x | undefined)` + `resetPlinthGableOverrides()`. כל קריאה משייכת re-calculate כדי שרשימת החיתוכים תתרענן.
+- `PlinthEditor`: שדה גובה צוקל ב-header (min 3 ס"מ, commit ב-blur/Enter), כפתור "אפס מיקומי גיבלים", drag handlers על hit-areas שקופים מעל כל לוח A עם cursor `ew-resize`. ESC במהלך drag משחזר את ה-override המקורי.
+
+---
+
 ## 2026-05-27 — מבנה גיבל צוקל: L-shape ממורכז על חיבור גופים
 
 **ההחלטה**: גיבל בצוקל מיוצר מ-2 לוחות זהים במידות `(D − 2·tBody) × (plinthH − 0.6)` המוטמעים כ-L: לוח א' עומד אנכית כקיר, לוח ב' שוכב שטוח על גבו כמכסה עליון. גיבלים פנימיים (בין גופים סמוכים) ממורכזים **בדיוק על xJoint** — לא צמודים לאחד הגופים.
