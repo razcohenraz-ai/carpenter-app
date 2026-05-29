@@ -1,64 +1,100 @@
-import type { Dimensions, ShellConfig, PlinthConfig } from "./geometry";
-import type { InteriorByLevel } from "./interior";
-import type { MaterialId } from "./materials";
-import type { FurnitureType } from "./hardware";
+import type { CabinetInput } from './cabinet';
+import type { InteriorItem } from './interior';
+import type { MaterialId } from './materials';
 
-// ── Cabinet unit ──────────────────────────────────────────────────────────────
-// One piece of furniture in the project. A unit may decompose into
-// multiple physical boxes (see Box in geometry.ts).
+// ── Stable identifiers ────────────────────────────────────────────────────────
 
-export interface CabinetUnit {
-  id: string;
-  label: string;              // user-facing name, e.g. "ארון בגדים שמאלי"
-  type: FurnitureType;
+/** Stable identity of a body's logical "slot" in the cabinet, assigned at
+ *  the slot's FIRST appearance and preserved across `calculate()` rebuilds.
+ *  Opaque string — NOT derived from `box.level`/`position`/`unitIndex`, so a
+ *  future feature that changes the order or derivation of units cannot
+ *  mistakenly link an override (interior, partition, door choice) to a
+ *  different slot. Mirrors the role of `Board.stableId` for boards.
+ *  Maintained by `useCabinet` via a `boxStableKey → BoxSlotId` map. */
+export type BoxSlotId = string;
 
-  dimensions: Dimensions;     // cm
-  shell: ShellConfig;         // mm for thicknesses
-  plinth: PlinthConfig;       // cm for height
-  hasBack: boolean;
+/** `${BoxSlotId}:${frontIndex}` — identifies a single door panel within a
+ *  body. `frontIndex` is the same RTL-ordered index used by `Door`. */
+export type DoorSlotKey = string;
 
-  /** Material used for the main body and shell */
-  bodyMaterialId: MaterialId;
-  /** Material used for doors (may differ) */
-  doorMaterialId: MaterialId;
+// ── Saved per-door state ──────────────────────────────────────────────────────
 
-  /** Interior items per body level. */
-  interiorByLevel: InteriorByLevel;
-
-  /**
-   * Manual override for where a tall cabinet splits into upper/lower.
-   * Corresponds to the lowerH param in calcDoors / decomposeBoxes.
-   * undefined = use the automatic 45% rule.
-   */
-  lowerDoorH?: number;        // cm
+/** Saved subset of a hinge — only the fields the user controls. `id` is
+ *  not saved; deserialize regenerates ids via `newItemId()` since hinge
+ *  identity only matters within its parent door. */
+export interface SavedHinge {
+  positionFromBottom: number;
+  isManual: boolean;
 }
 
-// ── Pricing summary ───────────────────────────────────────────────────────────
-
-export interface PriceSummary {
-  sheets: number;
-  materialCost: number; // ₪
-  hardwareCost: number; // ₪
-  laborHours: number;
-  laborCost: number;    // ₪
-  total: number;        // ₪
+/** Saved subset of a door — only the fields the user controls. `height`,
+ *  `width`, `coversSkirt`, and `gapMm` are derived in `calculate()` from
+ *  `CabinetInput` + the box geometry, so they are not saved. */
+export interface SavedDoor {
+  hingeSide: 'right' | 'left';
+  hingeCount: number | 'auto';
+  hinges: SavedHinge[];
+  hasDoor: boolean;
+  thicknessOverride?: MaterialId;
 }
 
-// ── Project ───────────────────────────────────────────────────────────────────
+// ── Saved per-board override ──────────────────────────────────────────────────
 
+/** Persistent shape of `BoardOverrides` (from `core/boards/boardModel.ts`).
+ *  Duplicated here so `types/` stays free of `core/` dependencies; the
+ *  shapes are kept in sync deliberately. If `BoardOverrides` changes,
+ *  bump {@link Project.schemaVersion} and add a migration. */
+export interface SavedBoardOverride {
+  dimensions?: Partial<Record<'length' | 'width' | 'thickness', number>>;
+  materialId?: MaterialId;
+}
+
+// ── Saved cabinet state (user choices, keyed by stable ids) ───────────────────
+
+/** Everything the user has chosen that survives `calculate()` rebuilds.
+ *  Derived state (`result`, `displayNumbers`, `numFrontsPerBox`,
+ *  `frontLayoutByRow`, `drawerFrontsById`, all `*Ref` mirrors) is NOT
+ *  included — it is recomputed from {@link CabinetInput} + this state. */
+export interface SavedCabinetState {
+  /** Per-body interior items, keyed by {@link BoxSlotId}. */
+  interior: Record<BoxSlotId, InteriorItem[]>;
+  /** Per-partitioned-body cell interior, keyed by {@link BoxSlotId}.
+   *  Each value is a length-2 array `[leftCellItems, rightCellItems]`. */
+  cellInterior: Record<BoxSlotId, InteriorItem[][]>;
+  /** Partition presence per body, keyed by {@link BoxSlotId}. */
+  partitions: Record<BoxSlotId, boolean>;
+  /** Per-door user choices, keyed by {@link DoorSlotKey}. */
+  doors: Record<DoorSlotKey, SavedDoor>;
+  /** Plinth gable x overrides (cm), keyed by `PlinthGable.id`
+   *  (e.g. `edge-left`, `joint:0`). */
+  plinthGableOverrides: Record<string, number>;
+  /** Board dimension/material overrides, keyed by `Board.stableId`. */
+  boardOverrides: Record<string, SavedBoardOverride>;
+}
+
+// ── Cabinet content (input + saved state) ─────────────────────────────────────
+
+export interface Cabinet {
+  /** The 16 form values that drive `calculate()`. */
+  input: CabinetInput;
+  /** Persistent user-choice state, keyed by stable ids. */
+  state: SavedCabinetState;
+}
+
+// ── Project wrapper (cloud-save envelope) ─────────────────────────────────────
+
+/** The outermost envelope for a saved project. Designed so cloud save can
+ *  treat a project as a single document. `schemaVersion` enables the
+ *  migration framework in `core/project/migrations.ts`; `createdAt` and
+ *  `updatedAt` are maintained automatically by the serializer. */
 export interface Project {
-  id: string;
-  name: string;
-  clientName?: string;
-  createdAt: string;   // ISO 8601
-  updatedAt: string;   // ISO 8601
-  units: CabinetUnit[];
-
-  /** Global labor rate ₪/hour, overrides the app default */
-  laborRate?: number;
-
-  /** Global waste factor (1.10 = 10% waste), overrides the app default */
-  wasteFactor?: number;
+  schemaVersion: number;
+  projectName?: string;
+  /** ISO 8601 — assigned by the serializer on first save. */
+  createdAt?: string;
+  /** ISO 8601 — refreshed by the serializer on every save. */
+  updatedAt?: string;
+  cabinet: Cabinet;
 }
 
 // ── App-level constants ───────────────────────────────────────────────────────
