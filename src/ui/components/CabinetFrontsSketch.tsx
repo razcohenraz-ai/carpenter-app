@@ -163,7 +163,13 @@ export default function CabinetFrontsSketch({
               const panelH   = door.height * geo.scale;
               const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
               const panelY   = rect.y + rect.h - stackPx - panelH;
-              const toSvgY   = (fromBottom: number) => rect.y + rect.h - fromBottom * geo.scale;
+              // Hinge positions are in DOOR frame (0 = door's structural
+              // bottom). Anchor at the door panel's bottom edge — NOT the
+              // body's bottom — so a door above an external-drawer stack
+              // places its hinges at the right absolute SVG-Y. Identical to
+              // the body-frame conversion used by conflictAt.
+              const doorBottomSvgY = panelY + panelH;
+              const toSvgY   = (fromBottom: number) => doorBottomSvgY - fromBottom * geo.scale;
               const num      = displayNumbers.get(door.id) ?? '';
               // Per-cell drawer fronts only — body-wide are drawn once at the
               // end and must NOT be duplicated here.
@@ -210,8 +216,13 @@ export default function CabinetFrontsSketch({
                     />
                   )}
 
-                  {/* Hinges */}
+                  {/* Hinges — skip rendering for positions outside the door
+                      panel (defensive against legacy data; never expected for
+                      doors produced by the current calculate pipeline). */}
                   {door.hinges.map(hinge => {
+                    if (hinge.positionFromBottom < 0 || hinge.positionFromBottom > door.height) {
+                      return null;
+                    }
                     const cy = toSvgY(hinge.positionFromBottom);
                     const hasSpacingWarn = spacingWarns.has(hinge.id);
                     const hingeXPanel = door.hingeSide === 'right' ? panelX + panelW : panelX;

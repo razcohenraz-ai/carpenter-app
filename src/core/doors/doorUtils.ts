@@ -60,50 +60,64 @@ export function defaultHingeSide(
 
 const CLEARANCE = 1; // cm
 
-function conflictAt(pos: number, items: InteriorItem[]): boolean {
+// Hinge positions live in the DOOR frame (0 = door's structural bottom edge).
+// InteriorItem.heightFromFloor lives in the BODY frame (0 = body floor). When
+// the door sits above an external-drawer stack, the two frames are offset by
+// `calcExternalStackHeight(items, gapMm)`. Every comparison between a hinge
+// position and an item position must reconcile the two frames first; helpers
+// in this file convert the hinge pos to the body frame before comparing.
+
+function conflictAt(pos: number, items: InteriorItem[], gapMm: number): boolean {
+  const bodyPos = pos + calcExternalStackHeight(items, gapMm);
   return items.some(item => {
     if (item.type === 'drawer') {
-      // Strict inequalities: pos exactly CLEARANCE from drawer edge is safe.
-      return pos > item.heightFromFloor - CLEARANCE
-          && pos < item.heightFromFloor + item.drawerHeight + CLEARANCE;
+      // Strict inequalities: bodyPos exactly CLEARANCE from drawer edge is safe.
+      return bodyPos > item.heightFromFloor - CLEARANCE
+          && bodyPos < item.heightFromFloor + item.drawerHeight + CLEARANCE;
     }
-    return Math.abs(pos - item.heightFromFloor) < CLEARANCE;
+    return Math.abs(bodyPos - item.heightFromFloor) < CLEARANCE;
   });
 }
 
 // Move a single hinge away from conflict.
-// min/max define the valid range for this hinge (bounded by neighbours).
+// min/max define the valid range for this hinge in DOOR frame (bounded by
+// neighbours). Zone edges read from items in body frame and shifted back to
+// door frame by subtracting the external-stack offset.
 
 function adjustOneHinge(
   pos: number,
   items: InteriorItem[],
+  gapMm: number,
   min: number,
   max: number,
 ): { pos: number; warning: boolean } {
-  if (!conflictAt(pos, items)) return { pos, warning: false };
+  if (!conflictAt(pos, items, gapMm)) return { pos, warning: false };
 
-  // Compute extent of the conflicting zone
+  const offset  = calcExternalStackHeight(items, gapMm);
+  const bodyPos = pos + offset;
+
+  // Compute extent of the conflicting zone in DOOR frame
   let zoneLo = pos, zoneHi = pos;
   for (const item of items) {
     const overlaps =
       item.type === 'drawer'
-        ? pos > item.heightFromFloor - CLEARANCE && pos < item.heightFromFloor + item.drawerHeight + CLEARANCE
-        : Math.abs(pos - item.heightFromFloor) < CLEARANCE;
+        ? bodyPos > item.heightFromFloor - CLEARANCE && bodyPos < item.heightFromFloor + item.drawerHeight + CLEARANCE
+        : Math.abs(bodyPos - item.heightFromFloor) < CLEARANCE;
     if (!overlaps) continue;
     if (item.type === 'drawer') {
-      zoneLo = Math.min(zoneLo, item.heightFromFloor - CLEARANCE);
-      zoneHi = Math.max(zoneHi, item.heightFromFloor + item.drawerHeight + CLEARANCE);
+      zoneLo = Math.min(zoneLo, item.heightFromFloor - CLEARANCE - offset);
+      zoneHi = Math.max(zoneHi, item.heightFromFloor + item.drawerHeight + CLEARANCE - offset);
     } else {
-      zoneLo = Math.min(zoneLo, item.heightFromFloor - CLEARANCE);
-      zoneHi = Math.max(zoneHi, item.heightFromFloor + CLEARANCE);
+      zoneLo = Math.min(zoneLo, item.heightFromFloor - CLEARANCE - offset);
+      zoneHi = Math.max(zoneHi, item.heightFromFloor + CLEARANCE - offset);
     }
   }
 
   const upPos   = zoneHi;
   const downPos = zoneLo;
 
-  const upOk   = upPos   <= max && !conflictAt(upPos,   items);
-  const downOk = downPos >= min && !conflictAt(downPos, items);
+  const upOk   = upPos   <= max && !conflictAt(upPos,   items, gapMm);
+  const downOk = downPos >= min && !conflictAt(downPos, items, gapMm);
 
   if (!upOk && !downOk)    return { pos, warning: true };
   if (!upOk)               return { pos: downPos, warning: false };
@@ -117,10 +131,13 @@ function adjustOneHinge(
 // Returns adjusted hinges + warning message if any hinge couldn't be placed.
 // All non-manual hinges are adjusted (including top and bottom).
 // Per-hinge valid range is bounded by neighbouring hinges ± CLEARANCE.
+// `gapMm` is the door gap used by `calcExternalStackHeight` to compute the
+// door-bottom-from-floor offset.
 
 export function adjustHingesForInterior(
   hinges: Hinge[],
   items: InteriorItem[],
+  gapMm: number,
   doorH: number,
 ): { hinges: Hinge[]; warnings: string[] } {
   const warnings: string[] = [];
@@ -136,7 +153,7 @@ export function adjustHingesForInterior(
     const min = i > 0 ? sorted[i - 1]!.positionFromBottom + CLEARANCE : 0;
     const max = i < sorted.length - 1 ? sorted[i + 1]!.positionFromBottom - CLEARANCE : doorH;
 
-    const { pos, warning } = adjustOneHinge(hinge.positionFromBottom, items, min, max);
+    const { pos, warning } = adjustOneHinge(hinge.positionFromBottom, items, gapMm, min, max);
     if (warning) warnings.push('no_auto_pos');
     return { ...hinge, positionFromBottom: pos };
   });
@@ -146,10 +163,10 @@ export function adjustHingesForInterior(
 
 // ── Detect which hinges (including manual) are in conflict ────────────────────
 
-export function computeHingeWarnings(door: Door, items: InteriorItem[]): Set<string> {
+export function computeHingeWarnings(door: Door, items: InteriorItem[], gapMm: number): Set<string> {
   const result = new Set<string>();
   for (const hinge of door.hinges) {
-    if (conflictAt(hinge.positionFromBottom, items)) result.add(hinge.id);
+    if (conflictAt(hinge.positionFromBottom, items, gapMm)) result.add(hinge.id);
   }
   return result;
 }
@@ -196,6 +213,10 @@ export function getDoorVisualHeight(door: Door, plinthH: number): number {
 
 // ── Init doors from boxes ─────────────────────────────────────────────────────
 
+// NOTE: not called from production (useCabinet.calculate builds doors inline).
+// Kept for symmetry; gapMm=0 here is safe because no external-drawer stack
+// offset is known at this seed point and `calcExternalStackHeight` returns 0
+// when there are no externals in items.
 export function initDoorsFromBoxes(
   boxes: Box[],
   interiorById: InteriorById,
@@ -212,7 +233,7 @@ export function initDoorsFromBoxes(
       positionFromBottom: p,
       isManual: false,
     }));
-    const { hinges } = adjustHingesForInterior(rawHinges, items, box.H);
+    const { hinges } = adjustHingesForInterior(rawHinges, items, 0, box.H);
 
     result[box.id] = {
       id: box.id,
@@ -245,7 +266,7 @@ export function recomputeDoorHinges(door: Door, items: InteriorItem[], plinthH =
     if (existing?.isManual) return existing;
     return { id: existing?.id ?? newItemId(), positionFromBottom: defaults[idx]!, isManual: false };
   });
-  const { hinges } = adjustHingesForInterior(reset, items, door.height);
+  const { hinges } = adjustHingesForInterior(reset, items, door.gapMm ?? 0, door.height);
   return { ...door, hinges };
 }
 

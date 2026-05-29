@@ -34,7 +34,7 @@ export default function DoorEditor({
   onHingeSide, onHingeCount, onHingeManual, onResetAuto, onHasDoor, onThickness, onBack,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
-  const interiorWarnings  = computeHingeWarnings(door, interiorItems);
+  const interiorWarnings  = computeHingeWarnings(door, interiorItems, door.gapMm ?? 0);
   const spacingWarnings   = computeHingeSpacingWarnings(door);
   const warnings          = new Set([...interiorWarnings, ...spacingWarnings]);
   const isSmallDoor       = door.hasDoor && door.height < 25;

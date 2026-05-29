@@ -13,6 +13,7 @@ import {
   getDoorVisualHeight,
   getDoorStructuralHeight,
   getDoorHeight,
+  calcExternalStackHeight,
 } from './doorUtils';
 import type { Box } from '../../types/geometry';
 import type { Door, Hinge } from '../../types/doors';
@@ -264,7 +265,7 @@ describe('adjustHingesForInterior', () => {
 
   it('no items → hinges unchanged', () => {
     const hinges = computeDefaultHingePositions(170).map(p => h(p));
-    const { hinges: out, warnings } = adjustHingesForInterior(hinges, [], 170);
+    const { hinges: out, warnings } = adjustHingesForInterior(hinges, [], 0, 170);
     expect(warnings).toHaveLength(0);
     out.forEach((o, i) => expect(o.positionFromBottom).toBeCloseTo(hinges[i]!.positionFromBottom));
   });
@@ -275,7 +276,7 @@ describe('adjustHingesForInterior', () => {
     const midPos = (doorH * 2) / 3; // ≈113.3
     const hinges = computeDefaultHingePositions(doorH).map(p => h(p));
     const items: InteriorItem[] = [{ type: 'shelf', id: 's1', heightFromFloor: midPos }];
-    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, 0, doorH);
     expect(warnings).toHaveLength(0);
     // Middle hinge (index 1) moved ≥1cm away from shelf
     const moved = out[1]!;
@@ -288,7 +289,7 @@ describe('adjustHingesForInterior', () => {
     hinges[1] = { ...hinges[1]!, isManual: true }; // mark middle as manual
     const shelfAt = hinges[1]!.positionFromBottom;
     const items: InteriorItem[] = [{ type: 'shelf', id: 's1', heightFromFloor: shelfAt }];
-    const { hinges: out } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out } = adjustHingesForInterior(hinges, items, 0, doorH);
     expect(out[1]!.positionFromBottom).toBeCloseTo(shelfAt); // unchanged
   });
 
@@ -296,7 +297,7 @@ describe('adjustHingesForInterior', () => {
     const doorH = 100;
     const hinges = computeDefaultHingePositions(doorH).map(p => h(p));
     const items: InteriorItem[] = [{ type: 'shelf', id: 's1', heightFromFloor: 50 }];
-    const { hinges: out } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out } = adjustHingesForInterior(hinges, items, 0, doorH);
     // 2 hinges at 10 and 90, shelf at 50 (gap > 1cm from both)
     expect(out[0]!.positionFromBottom).toBeCloseTo(10);
     expect(out[1]!.positionFromBottom).toBeCloseTo(90);
@@ -308,7 +309,7 @@ describe('adjustHingesForInterior', () => {
     const [bottom, top] = computeDefaultHingePositions(doorH).map(p => h(p));
     // shelf at 9.5 → |10-9.5|=0.5 < 1 → conflict
     const items: InteriorItem[] = [{ type: 'shelf', id: 's1', heightFromFloor: 9.5 }];
-    const { hinges: out, warnings } = adjustHingesForInterior([bottom!, top!], items, doorH);
+    const { hinges: out, warnings } = adjustHingesForInterior([bottom!, top!], items, 0, doorH);
     expect(warnings).toHaveLength(0);
     // zoneHi=10.5 (dist 0.5 up), zoneLo=8.5 (dist 1.5 down) → prefer up
     expect(out[0]!.positionFromBottom).toBeCloseTo(10.5);
@@ -320,7 +321,7 @@ describe('adjustHingesForInterior', () => {
     const [bottom, top] = computeDefaultHingePositions(doorH).map(p => h(p));
     // shelf at 90.5 → |90-90.5|=0.5 < 1 → conflict
     const items: InteriorItem[] = [{ type: 'shelf', id: 's1', heightFromFloor: 90.5 }];
-    const { hinges: out, warnings } = adjustHingesForInterior([bottom!, top!], items, doorH);
+    const { hinges: out, warnings } = adjustHingesForInterior([bottom!, top!], items, 0, doorH);
     expect(warnings).toHaveLength(0);
     // zoneHi=91.5 (dist 1.5 up), zoneLo=89.5 (dist 0.5 down) → prefer down
     expect(out[1]!.positionFromBottom).toBeCloseTo(89.5);
@@ -333,7 +334,7 @@ describe('adjustHingesForInterior', () => {
     const doorH = 200;
     const hinges = [h(10), h(113.3), h(190)];
     const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
-    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, 0, doorH);
     expect(warnings).toHaveLength(0);
     // upPos = 100+20+1 = 121, downPos = 100-1 = 99
     // upDist = 121-113.3 = 7.7, downDist = 113.3-99 = 14.3 → prefer up
@@ -344,7 +345,7 @@ describe('adjustHingesForInterior', () => {
     const doorH = 200;
     const hinges = [h(10), h(105), h(190)];
     const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
-    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out, warnings } = adjustHingesForInterior(hinges, items, 0, doorH);
     expect(warnings).toHaveLength(0);
     // upPos = 121, downPos = 99
     // upDist = 121-105 = 16, downDist = 105-99 = 6 → prefer down
@@ -359,7 +360,7 @@ describe('adjustHingesForInterior', () => {
 
     for (const startPos of [95, 99.5, 110, 120.5, 125]) {
       const hinges = [h(10), h(startPos), h(190)];
-      const { hinges: out, warnings } = adjustHingesForInterior(hinges, [drawer], doorH);
+      const { hinges: out, warnings } = adjustHingesForInterior(hinges, [drawer], 0, doorH);
       const finalPos = out[1]!.positionFromBottom;
       if (warnings.length === 0) {
         // Must be ≥1cm from both drawer edges
@@ -376,8 +377,102 @@ describe('adjustHingesForInterior', () => {
     const hinges = [h(10), h(130), h(190)];
     const items: InteriorItem[] = [{ type: 'drawer', id: 'd1', heightFromFloor: 100, drawerHeight: 20, mount: 'internal' }];
     // hinge at 130 is 10cm above drawer top (120) — outside conflict zone
-    const { hinges: out } = adjustHingesForInterior(hinges, items, doorH);
+    const { hinges: out } = adjustHingesForInterior(hinges, items, 0, doorH);
     expect(out[1]!.positionFromBottom).toBeCloseTo(130);
+  });
+
+  // ── External-drawer below door: frame-mismatch regression ────────────────
+  // Scenario: cabinet 60×100×60, front 1.8, gap 3mm. One external drawer
+  // 29.5cm at bottom. Main door panel = ~69.6cm, structural bottom at body
+  // 29.8cm (=29.5 + 0.3 gap). Default hinges at door-frame [10, 59.6] sit at
+  // body 39.8 and 89.4 — clear of the drawer at body [0, 29.5]. Before the
+  // frame fix, the bottom hinge was wrongly pushed up to 21 (door-frame)
+  // because the comparison treated door-frame as body-frame.
+
+  it('external drawer below door — default hinges NOT shifted (door↔body frame fix)', () => {
+    const doorH   = 69.6;
+    const gapMm   = 3;
+    const drawer: InteriorItem = {
+      type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 29.5, mount: 'external',
+    };
+    const defaults = computeDefaultHingePositions(doorH); // [10, 59.6]
+    const hinges = defaults.map(p => h(p));
+    const { hinges: out, warnings } = adjustHingesForInterior(hinges, [drawer], gapMm, doorH);
+    expect(warnings).toHaveLength(0);
+    expect(out[0]!.positionFromBottom).toBeCloseTo(10);
+    expect(out[1]!.positionFromBottom).toBeCloseTo(59.6);
+  });
+
+  it('external drawer below door — body-frame hinge positions clear the drawer', () => {
+    const doorH  = 69.6;
+    const gapMm  = 3;
+    const offset = 29.5 + 0.3;     // calcExternalStackHeight: 29.8
+    const drawer: InteriorItem = {
+      type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 29.5, mount: 'external',
+    };
+    const { hinges: out } = adjustHingesForInterior(
+      [h(10), h(59.6)], [drawer], gapMm, doorH,
+    );
+    // Bottom hinge: door 10 → body 39.8, well above drawer top at 29.5.
+    expect(out[0]!.positionFromBottom + offset).toBeCloseTo(39.8);
+    // Top hinge: door 59.6 → body 89.4, well above drawer.
+    expect(out[1]!.positionFromBottom + offset).toBeCloseTo(89.4);
+  });
+
+  // ── Renderer formula: door-frame → body-frame ────────────────────────────
+  // Locks in the formula used by `CabinetFrontsSketch` to place hinges in
+  // body coordinates: `yFromFloor = calcExternalStackHeight(items, gapMm)
+  // + hinge.positionFromBottom`. Before the fix the renderer treated the
+  // hinge position as if it were already body-frame, putting the bottom
+  // hinge inside the external-drawer panel.
+
+  it('renderer formula: hinge door-frame → body-frame Y (external drawer below)', () => {
+    const drawer: InteriorItem = {
+      type: 'drawer', id: 'd', heightFromFloor: 0, drawerHeight: 29.5, mount: 'external',
+    };
+    const gapMm  = 3;
+    const offset = calcExternalStackHeight([drawer], gapMm);
+    expect(offset).toBeCloseTo(29.8); // 29.5 + 0.3
+
+    // Bottom hinge at door-frame 10 lands at body 39.8cm — well clear of the
+    // drawer at body [0, 29.5]. Before the renderer fix this drew at body
+    // 10cm (inside the drawer).
+    expect(offset + 10).toBeCloseTo(39.8);
+
+    // Top hinge at door-frame 59.6 lands at body 89.4cm — near the top of
+    // the door (which extends to body 99.4). Before the renderer fix this
+    // drew at body 59.6cm (in the middle of the door area).
+    expect(offset + 59.6).toBeCloseTo(89.4);
+  });
+
+  it('renderer formula: no externals → door-frame === body-frame', () => {
+    const offset = calcExternalStackHeight([], 3);
+    expect(offset).toBe(0);
+    expect(offset + 10).toBe(10);
+    expect(offset + 59.6).toBe(59.6);
+  });
+
+  it('external drawer + internal shelf truly conflicting → only shelf moves hinge', () => {
+    // Same cabinet as above, but add a shelf at body-Y=40 (inside door area —
+    // door bottom is at body 29.8, so 40 is 10.2cm above the door bottom).
+    // The bottom hinge at door-frame 10 → body 39.8, very close to shelf at 40
+    // → should move.
+    const doorH  = 69.6;
+    const gapMm  = 3;
+    const drawer: InteriorItem = {
+      type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 29.5, mount: 'external',
+    };
+    const shelf: InteriorItem = { type: 'shelf', id: 's1', heightFromFloor: 40 };
+    const { hinges: out, warnings } = adjustHingesForInterior(
+      [h(10), h(59.6)], [drawer, shelf], gapMm, doorH,
+    );
+    expect(warnings).toHaveLength(0);
+    // Bottom hinge in body frame must be ≥1cm from shelf at body 40.
+    const offset = 29.5 + 0.3;
+    const bottomBody = out[0]!.positionFromBottom + offset;
+    expect(Math.abs(bottomBody - 40)).toBeGreaterThanOrEqual(1);
+    // Top hinge stays clear (door 59.6 → body 89.4).
+    expect(out[1]!.positionFromBottom).toBeCloseTo(59.6);
   });
 });
 
@@ -395,26 +490,26 @@ describe('computeHingeWarnings', () => {
   it('non-manual hinge in conflict → warning', () => {
     const w = computeHingeWarnings(doorWithHinge(50, false), [
       { type: 'shelf', id: 's1', heightFromFloor: 50 },
-    ]);
+    ], 0);
     expect(w.has('h0')).toBe(true);
   });
 
   it('manual hinge in conflict → warning shown (not moved but flagged)', () => {
     const w = computeHingeWarnings(doorWithHinge(50, true), [
       { type: 'shelf', id: 's1', heightFromFloor: 50 },
-    ]);
+    ], 0);
     expect(w.has('h0')).toBe(true);
   });
 
   it('hinge exactly 1cm from shelf → no warning', () => {
     const w = computeHingeWarnings(doorWithHinge(51, false), [
       { type: 'shelf', id: 's1', heightFromFloor: 50 },
-    ]);
+    ], 0);
     expect(w.has('h0')).toBe(false);
   });
 
   it('no items → no warnings', () => {
-    expect(computeHingeWarnings(doorWithHinge(50, false), []).size).toBe(0);
+    expect(computeHingeWarnings(doorWithHinge(50, false), [], 0).size).toBe(0);
   });
 });
 

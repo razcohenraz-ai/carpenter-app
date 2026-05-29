@@ -340,7 +340,7 @@ export function useCabinet(): {
       return { id: existing?.id ?? newItemId(), positionFromBottom: defaults[i]!, isManual: false };
     });
     const items = interiorRef.current[door.boxId] ?? [];
-    const { hinges } = adjustHingesForInterior(reset, items, door.height);
+    const { hinges } = adjustHingesForInterior(reset, items, door.gapMm ?? 0, door.height);
     _mutateDoor(doorId, { ...door, hingeSide: side, hinges });
   }
 
@@ -355,7 +355,7 @@ export function useCabinet(): {
       isManual: false,
     }));
     const items = interiorRef.current[door.boxId] ?? [];
-    const { hinges: adjusted } = adjustHingesForInterior(hinges, items, door.height);
+    const { hinges: adjusted } = adjustHingesForInterior(hinges, items, door.gapMm ?? 0, door.height);
     _mutateDoor(doorId, { ...door, hingeCount: count, hinges: adjusted });
   }
 
@@ -381,7 +381,7 @@ export function useCabinet(): {
         : h,
     );
     const items = interiorRef.current[door.boxId] ?? [];
-    const { hinges } = adjustHingesForInterior(reset, items, door.height);
+    const { hinges } = adjustHingesForInterior(reset, items, door.gapMm ?? 0, door.height);
     _mutateDoor(doorId, { ...door, hinges });
   }
 
@@ -743,7 +743,7 @@ export function useCabinet(): {
         if (!oldDoor) {
           const defaults = computeDefaultHingePositions(panelH);
           const rawHinges: Hinge[] = defaults.map(p => ({ id: newItemId(), positionFromBottom: p, isManual: false }));
-          const { hinges } = adjustHingesForInterior(rawHinges, itemsForFront, panelH);
+          const { hinges } = adjustHingesForInterior(rawHinges, itemsForFront, doorGapMm, panelH);
           newDoors[doorId] = {
             id: doorId, boxId: box.id, frontIndex: fi,
             height: panelH, width: frontW,
