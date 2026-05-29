@@ -20,7 +20,8 @@ src/
 │   ├── cuts.ts         CutItem, CutGroup, SheetUsage
 │   ├── materials.ts    Material, MaterialId
 │   ├── hardware.ts     HardwareSpec, HardwareLineItem, FurnitureType
-│   ├── project.ts      Project, CabinetUnit (לעתיד)
+│   ├── cabinet.ts      CabinetInput (16 form values שמזינים את calculate)
+│   ├── project.ts      Project, Cabinet, SavedCabinetState, SavedDoor, SavedHinge, SavedBoardOverride, BoxSlotId, DoorSlotKey, APP_DEFAULTS
 │   └── index.ts        re-exports מרכזי
 │
 ├── core/               לוגיקה טהורה — ללא React, ניתנת לבדיקה
@@ -41,6 +42,10 @@ src/
 │   │   └── interiorUtils.ts      init/preserve/validate; redistributeShelves; addShelfRedistributed
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן שעות עבודה (לא מחובר לUI עדיין)
+│   ├── project/
+│   │   ├── migrations.ts         CURRENT_SCHEMA_VERSION, migrate(), Migration registry
+│   │   ├── serialize.ts          serializeProject + deserializeProject + validation
+│   │   └── serialize.test.ts     round-trip + migration + validation tests
 │   └── index.ts                  re-exports מ-core
 │
 ├── catalog/            נתוני חומרים ופרזולים (JSON-driven)
@@ -203,6 +208,78 @@ defaultRodPlacement(bodyH, existingItems)
 - מייצר `CutItem` אחד לכל external drawer, בקבוצה `'front'`, עם `note` עובי ב-mm.
 - המגירה הנמוכה ביותר מקבלת קיצור חזית עם `coversSkirt` (אם הדלת המקורית הייתה skirt-cover).
 - נצרך ב-`useCabinet.calculate()` (2.1) ומצרף את ה-cuts לפלט.
+
+## Project schema & migrations
+
+תשתית `cloud-readiness` — שמירה/טעינה של ארון שלם כ-JSON עם schema גרסאי. עדיין לא מחוברת ל-UI; מוכנה לפיצ'ר "שמירה בענן" עתידי.
+
+### מבנה Project
+
+```typescript
+interface Project {
+  schemaVersion: number;     // הגרסה שכותב הקוד הנוכחי = CURRENT_SCHEMA_VERSION (1)
+  projectName?: string;
+  createdAt?: string;        // ISO 8601 — נקבע ב-serialize הראשון
+  updatedAt?: string;        // ISO 8601 — מתעדכן בכל serialize
+  cabinet: Cabinet;
+}
+
+interface Cabinet {
+  input: CabinetInput;          // 16 ערכי הטופס שמזינים את calculate
+  state: SavedCabinetState;     // בחירות משתמש לאחסון יציב
+}
+
+interface SavedCabinetState {
+  interior:               Record<BoxSlotId, InteriorItem[]>;
+  cellInterior:           Record<BoxSlotId, InteriorItem[][]>;
+  partitions:             Record<BoxSlotId, boolean>;
+  doors:                  Record<DoorSlotKey, SavedDoor>;
+  plinthGableOverrides:   Record<string, number>;          // by PlinthGable.id
+  boardOverrides:         Record<string, SavedBoardOverride>; // by Board.stableId
+}
+```
+
+`SavedDoor` כוללת רק את מה שהמשתמש בחר (`hingeSide`, `hingeCount`, `hinges[]`, `hasDoor`, `thicknessOverride?`). שדות נגזרים (`height`, `width`, `coversSkirt`, `gapMm`) משוחזרים ב-`calculate()`. `SavedHinge` שומרת רק `positionFromBottom` ו-`isManual` — ה-`id` מיוצר מחדש ע"י `newItemId()` ב-deserialize (זהות hinge פנימית לדלת בלבד).
+
+### Serialize / Deserialize
+
+```typescript
+serializeProject(project: Project): string
+  → JSON.stringify(project עם updatedAt=now, createdAt=now אם חסר)
+
+deserializeProject(json: string): Project
+  → JSON.parse → migrate → validateProject → Project
+```
+
+שניהם **טהורים**, ללא תלות ב-React/UI. `serializeProject` לא mutate את ה-input.
+
+### ולידציה ב-deserialize
+
+`validateProject` בודק:
+- `schemaVersion` שווה ל-`CURRENT_SCHEMA_VERSION` אחרי migrate.
+- `cabinet` הוא object.
+- כל מפתחות `REQUIRED_INPUT_KEYS` קיימים ב-`cabinet.input` עם types נכונים (numbers, booleans, strings; `doorsPerColumn ∈ {'auto',1,2,3}`).
+- `lowerDoorH` / `middleDoorH` — אם קיימים, חייבים להיות numbers (excluded מ-`REQUIRED_INPUT_KEYS` כי `JSON.stringify` מפיל `undefined` ו-`number | undefined` הוא הטיפוס).
+- כל שש המפות ב-`cabinet.state` קיימות וכל אחת היא plain object (לא array, לא null).
+
+ולידציה רדודה מודעת — תוכן `InteriorItem`/`SavedDoor` לא נבדק בעומק; פגמים פנימיים ייתפסו מאוחר יותר ב-`calculate()`. בהמשך schemaVersion bumps אפשר להחמיר.
+
+### Migration framework
+
+`core/project/migrations.ts`:
+- `CURRENT_SCHEMA_VERSION = 1` — גרסת הקוד הנוכחית.
+- `migrations: Record<number, Migration>` — registry של מעברי גרסה (כרגע ריק).
+- `migrate(data: unknown): Project` — מריץ migrations ב-order מ-`data.schemaVersion` עד `CURRENT_SCHEMA_VERSION`. זורק:
+  - `non-null object` נדרש.
+  - `schemaVersion` חייב להיות `Integer ≥ 1`.
+  - גרסה גדולה מ-`CURRENT` (קוד ישן מנסה לפתוח קובץ חדש) → שגיאה ברורה.
+  - שלב חסר ב-registry → שגיאה.
+
+הוספת גרסה חדשה: bump `CURRENT_SCHEMA_VERSION`, הוסף entry ב-`migrations[oldVersion]` שמחזיר את האובייקט במבנה החדש.
+
+### Boundary-free design
+
+`serialize.ts` מתעסק רק ב-`Project ↔ JSON`. הוא **לא** מטפל בהמרת Map↔Object של state ה-runtime ב-`useCabinet` (שיש בו `partitionsById`, `plinthGableOverrides`, `boardOverridesByStableId` כ-Maps). ה-bridge הזה ייבנה בנפרד כשנחבר לפיצ'ר שמירה אמיתי — ראה DECISIONS_LOG 2026-05-29.
 
 ## עקרונות ארכיטקטוניים
 

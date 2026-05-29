@@ -183,6 +183,49 @@ toggle מחיצות פנימיות לגוף. מעדכן cuts מיד.
 
 ---
 
+## Project / שמירה (Cloud-readiness infrastructure)
+
+### Project
+העטיפה החיצונית של ארון שמור — `{ schemaVersion, projectName?, createdAt?, updatedAt?, cabinet }`. כל שמירה/טעינה עוברת דרך `serializeProject` / `deserializeProject`. הוא ה-יחידה הניתנת לשליחה לענן או לאחסון מקומי.
+
+### schemaVersion
+מספר שלם חיובי שמתעד את גרסת המבנה של ה-`Project`. נקבע ל-`CURRENT_SCHEMA_VERSION` (כרגע 1) ע"י `serializeProject`. כאשר מבנה Project משתנה ב-incompatible way, יש לקדם את הקבוע ולהוסיף migration ב-`migrations.ts`.
+
+### serializeProject
+פונקציה ב-`core/project/serialize.ts` שמקבלת `Project` ומחזירה `string` (JSON). מעדכנת `updatedAt` ל-`now`, ומוסיפה `createdAt` אם חסר (שמירה ראשונה). טהורה — לא mutate את ה-input.
+
+### deserializeProject
+פונקציה ב-`core/project/serialize.ts` שמקבלת `string` ומחזירה `Project`. הזרימה: `JSON.parse` → `migrate(parsed)` → `validateProject` → החזרה. זורקת שגיאה ברורה ב-JSON פגום, schema חסר/לא תקין, או שדה נדרש חסר/type שגוי.
+
+### migration
+פונקציה `(data: unknown) => unknown` שממירה `Project` מגרסה `n` לגרסה `n+1`. נרשמת ב-`migrations[n]`. `migrate()` מריץ אותן ב-order מ-`data.schemaVersion` עד `CURRENT_SCHEMA_VERSION`. כרגע ה-registry ריק (גרסה 1 היא ה-baseline).
+
+### CabinetInput
+ה-16 ערכי הטופס שמזינים את `calculate()` — `W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth`. מוגדר ב-`types/cabinet.ts`. Single source of truth להגדרה החיצונית של הארון.
+
+### SavedCabinetState
+מבנה ה-state השמור של הארון — שש מפות מ-`Record<string, ...>` לבחירות המשתמש שצריכות לשרוד `calculate()` rebuilds: `interior`, `cellInterior`, `partitions`, `doors`, `plinthGableOverrides`, `boardOverrides`. כל אחת ממופתחת לפי identifier יציב.
+
+### BoxSlotId
+טיפוס יציב לזיהוי "slot" של גוף בארון — מפתח שורד `calculate()` rebuilds, ולא ייקשר ליחידה הלא נכונה כש-decomposition משתנה. כרגע alias של `string` (placeholder); ריפקטור ל-id יציב הוא משימה נפרדת בהמשך — ראה DECISIONS_LOG 2026-05-29.
+
+### DoorSlotKey
+מפתח לדלת בודדת ב-`SavedCabinetState.doors` — בפורמט `${BoxSlotId}:${frontIndex}`. ה-`frontIndex` הוא ה-RTL-ordered index של החזית בגוף (זהה ל-`Door.frontIndex`).
+
+### SavedDoor
+מבנה דלת שמור — `{ hingeSide, hingeCount, hinges: SavedHinge[], hasDoor, thicknessOverride? }`. רק הבחירות של המשתמש. `height`, `width`, `coversSkirt`, `gapMm` נגזרים ב-`calculate()` ולא נשמרים.
+
+### SavedHinge
+מבנה ציר שמור — `{ positionFromBottom, isManual }`. ה-`id` של `Hinge` ה-runtime לא נשמר; deserialize מקצה ids חדשים דרך `newItemId()` כי זהות ציר רלוונטית רק בתוך הדלת שלו.
+
+### SavedBoardOverride
+מבנה override שמור ללוח — `{ dimensions?: { length?, width?, thickness? }, materialId? }`. מקביל מבנית ל-`BoardOverrides` ב-`core/boards/boardModel.ts` (מוכפל כדי לשמור על `types/` ללא תלות ב-`core/`). אם `BoardOverrides` משתנה — bump ל-`schemaVersion` ו-migration.
+
+### CURRENT_SCHEMA_VERSION
+קבוע מספרי ב-`core/project/migrations.ts`. כרגע `1`. מתעד את הגרסה ש-`serializeProject` כותב, וש-`deserializeProject` מצפה לאחרי migration. bump ל-incompatible changes בלבד.
+
+---
+
 ## מונחים נגריים כלליים
 
 | מונח | הסבר |

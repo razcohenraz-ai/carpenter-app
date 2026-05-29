@@ -7,6 +7,19 @@
 
 ## [Unreleased]
 
+### נוסף — Project wrapper לתשתית cloud-readiness (schemaVersion + migrations + serialize)
+- **`Project`** חדש (`types/project.ts`) — עטיפת ארון שמור עם `schemaVersion`, `projectName?`, `createdAt?`, `updatedAt?`, ו-`cabinet: Cabinet`. מיועד ל-cloud save עתידי; אין UI חדש בשלב הזה.
+- **`Cabinet = { input: CabinetInput, state: SavedCabinetState }`** — `CabinetInput` הוצא ל-`types/cabinet.ts` (היה ב-`ui/hooks/useCabinet.ts`) כדי שטיפוסים יהיו ב-`types/` בלבד. `useCabinet.ts` עדיין מייצא אותו לתאימות לאחור.
+- **`SavedCabinetState`** — שש מפות `Record<string, ...>` לבחירות משתמש: `interior`, `cellInterior`, `partitions`, `doors`, `plinthGableOverrides`, `boardOverrides`. כולן ממופתחות לפי stable identifier (`BoxSlotId` או `Board.stableId`).
+- **`SavedDoor` / `SavedHinge` / `SavedBoardOverride`** — תת-קבוצות של הטיפוסים ה-runtime, שומרות רק שדות בחירת משתמש. שדות נגזרים (`height`, `width`, `coversSkirt`, `gapMm`, `id` של hinge) משוחזרים ב-`calculate()`. `Hinge.id` ב-runtime יוקצה מחדש בעת deserialize דרך `newItemId()`.
+- **`BoxSlotId` / `DoorSlotKey`** — type aliases חדשים. `BoxSlotId` הוא `string` ב-placeholder; ריפקטור ל-id יציב הוא משימה עתידית — ראה `DECISIONS_LOG.md` 2026-05-29.
+- **`core/project/migrations.ts`** — `CURRENT_SCHEMA_VERSION = 1`, `Migration` type, registry ריק `migrations`, ופונקציית `migrate(data): Project`. זורקת על non-object, schemaVersion חסר/לא תקין, גרסה עתידית, או שלב migration חסר.
+- **`core/project/serialize.ts`** — `serializeProject(project): string` (`updatedAt` תמיד נקבע ל-now, `createdAt` נקבע אם חסר) ו-`deserializeProject(json): Project` (`JSON.parse → migrate → validateProject`). ולידציה רדודה: schemaVersion, `cabinet` object, כל מפתחות `REQUIRED_INPUT_KEYS` ב-`input` עם types נכונים, `doorsPerColumn ∈ {'auto',1,2,3}`, כל ששת השדות ב-`state` כ-plain objects. `lowerDoorH`/`middleDoorH` excluded מ-`REQUIRED_INPUT_KEYS` כי `JSON.stringify` מפיל `undefined` (טיפוס `number | undefined`).
+- **`APP_DEFAULTS`** נשמר (עדיין בשימוש ב-`sheetCalculator.ts` ו-`doorCalc.ts`). `CabinetUnit` ו-`PriceSummary` הוסרו כקוד מת — לא היו בשימוש בשום מקום והם דמיינו עולם רב-ארונות שלא קיים.
+- **30 טסטים חדשים** ב-`src/core/project/serialize.test.ts`: 8 round-trip לארונות מייצגים (בסיסי, צוקל, נסוג+מעטפת, dim override, material override, גיבלים נגררים, W>80, שילוב הכל), 1 round-trip מפורש ל-`lowerDoorH=undefined`, 4 timestamps (updatedAt/createdAt/immutability), 6 migration (גרסה נוכחית/עתידית/חסרה/0/string/non-object), 11 validation (JSON פגום, cabinet/input/state חסרים, שדה חסר, type שגוי, doorsPerColumn מחוץ לטווח, boolean שגוי, interior כ-array, state חסר שדה, round-trip מלא). סה"כ 563/563 עוברים.
+- **Boundary-free design**: `serialize.ts` לא מטפל בהמרת Map↔Object של state ה-runtime ב-`useCabinet` (`partitionsById`, `plinthGableOverrides`, `boardOverridesByStableId` הם Maps). ה-bridge ייבנה במשימה נפרדת כשנחבר לפיצ'ר שמירה אמיתי — ראה `DECISIONS_LOG.md` 2026-05-29.
+- **תיעוד**: `ARCHITECTURE.md` קיבל סעיף "Project schema & migrations"; `DECISIONS_LOG.md` קיבל שתי החלטות (boundary-free + BoxSlotId זמני); `GLOSSARY.md` קיבל סעיף "Project / שמירה" עם 11 מונחים חדשים.
+
 ### שונה — BoardModel כמקור-אמת יחיד למידות לוחות + שכבת override פר-לוח
 - **`Board.stableId: string`** חדש (חובה). יציב בין `calculate()` rebuilds; מפתח לאחסון overrides. `Board.id` ה-ad-hoc נשמר אך משמש רק כ-React key.
 - **שכבת override**: `useCabinet` חושף `boardOverridesByStableId: Map<stableId, { dimensions?, materialId? }>` + 5 setters (`setBoardDimensionOverride`/`reset`, `setBoardMaterialOverride`/`reset`, `resetAllBoardOverrides`). דפוס זהה ל-`userPositionX` של גיבלי הצוקל: `override ?? derived`.

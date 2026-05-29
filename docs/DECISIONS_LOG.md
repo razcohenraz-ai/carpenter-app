@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-05-29 — serialize.ts הוא boundary-free (Option B)
+
+**ההחלטה**: `core/project/serialize.ts` עובד אך ורק עם `Project` (כל ה-maps כ-`Record<string, ...>`). הוא **לא** מטפל בהמרת Map↔Object של state ה-runtime ב-`useCabinet` (`partitionsById`, `plinthGableOverrides`, `boardOverridesByStableId` שהם `Map`-ים). ה-bridge בין השכבות ייבנה בקובץ נפרד כשנגיע לחבר את `useCabinet` לפיצ'ר שמירה אמיתי.
+
+**הנימוק**:
+- **טוהר ארכיטקטוני**: `serialize.ts` הוא `Project ↔ JSON` בלבד — אין לו תלות בצורת ה-runtime של `useCabinet`. ניתן לטסט אותו עם `Project` סינתטי בלי לבנות `useCabinet` שלם.
+- **הפרדת אחריות**: ההחלטה איך לבנות `Project` מ-state חי (איזה Map ממיר מתי, איך לטפל ב-Box.id המתחלף) שייכת ל-`useCabinet`, לא ל-serialize. הרבה היגיון runtime-תלוי שצריך לקחת בחשבון בהמרה.
+- **שלב סינכרון**: הפיצ'ר הזה (cloud-readiness) הוא תשתית. ה-bridge ייבנה רק כשיהיה צד שכנגד (ענן או localStorage UI). אין צורך לבנות גשר ש-no caller ישתמש בו בינתיים.
+
+**טריידאוף**:
+- ההוראה המקורית של המשתמש דרשה שה-serialize יכלול את ההמרה. נדחתה לאחר דיון — `serializeProject(project: Project)` נקי יותר מאשר `serializeProject(useCabinetState)`. החלטה מקובלת בהתכתבות ב-2026-05-29.
+- חוב מתעד: בעת בניית ה-bridge, חשוב לזכור שה-key-mapping מ-`boxId` ad-hoc ל-`BoxSlotId` יציב הוא לא טריוויאלי (דורש מפת `boxStableKey → BoxSlotId` חיה ב-`useCabinet`).
+
+**אלטרנטיבה שנדחתה — Option A**: הוספת helpers `projectFromUseCabinet`/`applyProjectToUseCabinet` ל-`serialize.ts` שיעשו Map↔Record. נדחה כי `serialize.ts` היה מאבד את הנייטרליות שלו לטובת התאמה ל-shape ספציפי של `useCabinet`, ועדכון עתידי ל-`useCabinet` היה דורש עדכון מקביל ל-`serialize.ts`.
+
+**יישום**:
+- `Project.cabinet.state` משתמש ב-`Record<string, ...>` בכל המפות.
+- `serializeProject(project)` ו-`deserializeProject(json)` עובדים על הצורה הזו בלבד.
+- כל הטסטים ב-`serialize.test.ts` מייצרים `Project` סינתטי דרך `mkProject()` — לא דרך `useCabinet`.
+
+---
+
+## 2026-05-29 — BoxSlotId כ-alias של string (זמני)
+
+**ההחלטה**: `BoxSlotId` כרגע מוגדר כ-`type BoxSlotId = string`. הכוונה: בעתיד יוחלף ב-id יציב מבוסס-הגדרה, שמוקצה ליחידה בעת יצירתה הראשונה ושורד שינויי decomposition (כמו `Board.stableId` ללוחות). הריפקטור הזה הוא **משימה נפרדת** שתבוצע לפני השקה לציבור — לא חלק מהפיצ'ר הנוכחי.
+
+**הנימוק**:
+- **הפרדת scope**: cloud-readiness עוסק במבנה המסמך השמור (`schemaVersion`, migrations, serialize/deserialize). שינוי מודל הזהות של גופי הארון הוא ריפקטור צולב-מערכת שדורש שינוי ב-`useCabinet`, `boxStableKey`, וכל ה-`*ById` המפות. עירוב המשימות היה מסכן את שתיהן.
+- **תאימות עתידית מובטחת**: כל המפות שמושפעות (`interior`, `cellInterior`, `partitions`, `doors`) כבר משתמשות בטיפוס `BoxSlotId` בחתימה. החלפת ה-alias ל-branded type / nominal type בעתיד תשפיע על call sites בלי לדרוש שינוי ב-schema.
+- **migration path ברור**: כשיוחלף ל-id יציב, ה-`schemaVersion` יקודם ל-2 וה-migration 1→2 ימפה `boxStableKey`-based keys ל-stable id-based keys. ההכנה הזו כבר נמצאת ב-`migrations.ts`.
+
+**טריידאוף**:
+- כרגע, מפתחות `interior[BoxSlotId]` הם בפועל `boxStableKey` ("level:position") כשה-bridge ב-`useCabinet` ייכתב. שינוי decomposition עתידי (למשל פיצול גוף ל-3 יחידות) **יאבד** את הוֹ-overrides השייכים לאותו "slot" — אותו דפוס כמו `boxStableKey` היום. ה-id היציב יפתור את זה אבל זה מחיר ידוע עד אז.
+
+**אלטרנטיבה שנדחתה — ריפקטור מלא עכשיו**: לבצע את שינוי ה-id היציב בו-זמנית עם cloud-readiness. נדחה כי scope גדל פי 3 והסיכון לרגרסיה ב-`useCabinet` היה מצמיח את הפיצ'ר.
+
+**יישום**:
+- `BoxSlotId = string` ב-`types/project.ts` עם JSDoc שמתאר את הכוונה.
+- כל ה-Records ב-`SavedCabinetState` שמשתמשים ב-`BoxSlotId` יישארו אותם משפטים אחרי הריפקטור — רק ההגדרה תשתנה.
+- ראה רשימת משימות עתידיות (לא ב-DECISIONS_LOG; משימה פתוחה).
+
+---
+
 ## 2026-05-29 — שכבת override ללוחות + stableId יציב
 
 **ההחלטה**: כל לוח שמיוצר ע"י `buildBoardModel` או `buildPlinthBoardModel` מקבל `stableId` יציב הבנוי כ-`{role}@{containerStableKey}` (או `{role}` ל-cabinet-level singletons). `useCabinet` מחזיק מפת overrides נפרדת `boardOverridesByStableId: Map<stableId, { dimensions?, materialId? }>` שדורסת ערכים נגזרים בקריאה דרך `getDimension(board, key, overrides)` ו-`getMaterial(board, overrides)`. הערכים הנגזרים נשארים פנימית ב-build functions ולא משתנים — ה-override שכבה מעליהם.
