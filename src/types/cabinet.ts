@@ -1,9 +1,11 @@
+import type { Edging } from './edging';
 import type { MaterialId } from './materials';
 
-/** The 16 form values that drive `calculate()`. Single source of truth for
- *  the cabinet's external definition — everything else (boxes, boards,
- *  doors, the carcass depth) is derived from this + the persistent
- *  user-choice state in {@link SavedCabinetState}. */
+/** The 16 form values that drive `calculate()` + an optional cabinet-wide
+ *  edging default. Single source of truth for the cabinet's external
+ *  definition — everything else (boxes, boards, doors, the carcass depth)
+ *  is derived from this + the persistent user-choice state in
+ *  {@link SavedCabinetState}. */
 export interface CabinetInput {
   W: number;
   H: number;
@@ -26,4 +28,8 @@ export interface CabinetInput {
   doorsPerColumn: 'auto' | 1 | 2 | 3;
   doorGapMm: number;
   maxDoorWidth: number;
+  /** Cabinet-wide edging default. Optional — absent values fall back to
+   *  {@link DEFAULT_EDGING}. Kept optional so projects saved before edging
+   *  was introduced still deserialize cleanly without a schema bump. */
+  edging?: Edging;
 }

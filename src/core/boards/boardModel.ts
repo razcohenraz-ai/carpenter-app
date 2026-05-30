@@ -2,6 +2,8 @@ import type { Box } from '../../types/geometry';
 import type { Material, MaterialId } from '../../types/materials';
 import type { InteriorItem, ShelfItem } from '../../types/interior';
 import type { CutItem, CutGroup } from '../../types/cuts';
+import type { Edging } from '../../types/edging';
+import type { BoxSlotId } from '../../types/project';
 import { newItemId, boxStableKey } from '../interior/interiorUtils';
 
 // ── BoardModel ────────────────────────────────────────────────────────────────
@@ -105,10 +107,13 @@ export type BoardDimensionKey = 'length' | 'width' | 'thickness';
 
 /** Sparse per-board override. A partial `dimensions` only carries the keys
  *  the user changed; unchanged keys fall through to the derived value. The
- *  same for `materialId`. */
+ *  same for `materialId`. `edging` is the highest-precedence layer of the
+ *  edging override chain (see {@link resolveEdging}) — also sparse, present
+ *  only when the user has chosen a per-board band. */
 export interface BoardOverrides {
   dimensions?: Partial<Record<BoardDimensionKey, number>>;
   materialId?: MaterialId;
+  edging?: Edging;
 }
 
 /** Effective dimension value = override ?? derived. Same pattern as
@@ -129,6 +134,122 @@ export function getMaterial(
   overrides: ReadonlyMap<string, BoardOverrides>,
 ): MaterialId {
   return overrides.get(board.stableId)?.materialId ?? board.materialId;
+}
+
+// ── Edging — visibility patterns, deductions, override chain ───────────────
+// Edge banding is a thin strip applied to a panel's visible cut edge(s).
+// The carpentry rule has two facets:
+//
+//   1. WHICH edges get a band — determined by the board's role, not the
+//      user's choice. Body panels with a visible front cut get the band on
+//      that single edge (`'front'`). Doors and external-drawer fronts are
+//      facade pieces with all four edges exposed — perimeter band
+//      (`'perimeter'`). Hidden surfaces (back panel, every plinth-* role)
+//      get nothing (`'none'`).
+//
+//   2. WHAT band — three override layers, resolved most-specific first:
+//        per-board (`BoardOverrides.edging`)
+//        per-body  (`bodyEdgingOverrides[boxSlotId]`)
+//        cabinet-wide default (`CabinetInput.edging ?? DEFAULT_EDGING`).
+//      A finishMaterialId of `undefined` after resolution means "auto" —
+//      the band's color matches the board's effective material, computed
+//      by `getEdgingFinishMaterial`.
+
+export type EdgingPattern = 'none' | 'front' | 'perimeter';
+
+/** Maps a `BoardRole` to its edging pattern. `'perimeter'` is reserved for
+ *  doors / external-drawer fronts (emitted by `cuttingList`, not by
+ *  `buildBoardModel`) — no board role here returns it. The plinth family is
+ *  excluded from edging on purpose: the cladding/front strips sit under the
+ *  door line and aren't worth banding in our defaults. */
+export function getEdgingPattern(role: BoardRole): Exclude<EdgingPattern, 'perimeter'> {
+  switch (role) {
+    case 'back':
+    case 'plinth-front':
+    case 'plinth-back':
+    case 'plinth-gable-a':
+    case 'plinth-gable-b':
+    case 'plinth-front-cladding':
+      return 'none';
+    case 'side-left':
+    case 'side-right':
+    case 'top':
+    case 'bottom':
+    case 'shelf':
+    case 'fixed-shelf':
+    case 'internal-shelf':
+    case 'partition':
+    case 'envelope-left':
+    case 'envelope-right':
+    case 'envelope-top':
+      return 'front';
+  }
+}
+
+/** Edge-band deduction in cm on a single dimension.
+ *  - `'none'`: always 0.
+ *  - `'front'`: 1× thickness/10 on `width` (the depth axis of body panels),
+ *    0 on `length`. `'thickness'` is never deducted — the band wraps the
+ *    face, not the panel's thickness.
+ *  - `'perimeter'`: 2× thickness/10 on BOTH `length` and `width` (band on
+ *    every side of the same axis).
+ *
+ *  Convention: a body board's visible front edge runs along its depth
+ *  (stored as `width`). So `length` deductions only appear for perimeter
+ *  pieces, which is why door/drawer-front cuts have to opt into
+ *  `'perimeter'` explicitly when they call this. */
+export function getDeductionFor(
+  pattern: EdgingPattern,
+  dimensionKey: BoardDimensionKey,
+  edging: Edging,
+): number {
+  if (pattern === 'none' || dimensionKey === 'thickness') return 0;
+  const tCm = edging.thickness / 10;
+  if (pattern === 'perimeter') return 2 * tCm;
+  return dimensionKey === 'width' ? tCm : 0;
+}
+
+/** Override-chain context for {@link resolveEdging}. The maps are the live
+ *  state held by `useCabinet`; the cabinet default is typically
+ *  `input.edging ?? DEFAULT_EDGING`. */
+export interface EdgingContext {
+  cabinetDefault: Edging;
+  bodyOverrides: ReadonlyMap<BoxSlotId, Edging>;
+  /** Same map used for dimension/material overrides — the `edging` field
+   *  is the per-board edging override. */
+  boardOverrides: ReadonlyMap<string, BoardOverrides>;
+}
+
+/** Walks the override chain (per-board → per-body → cabinet default) and
+ *  returns the effective edging for `board`. `boxSlotId` is the slot the
+ *  board belongs to; pass `undefined` for cabinet-level singletons (the
+ *  plinth family) so the body layer is skipped — those boards normally
+ *  resolve to pattern `'none'` anyway, but the resolver stays well-defined. */
+export function resolveEdging(
+  board: Board,
+  boxSlotId: BoxSlotId | undefined,
+  ctx: EdgingContext,
+): Edging {
+  const boardOv = ctx.boardOverrides.get(board.stableId)?.edging;
+  if (boardOv !== undefined) return boardOv;
+  if (boxSlotId !== undefined) {
+    const bodyOv = ctx.bodyOverrides.get(boxSlotId);
+    if (bodyOv !== undefined) return bodyOv;
+  }
+  return ctx.cabinetDefault;
+}
+
+/** Resolves the band's actual finish material. When the edging carries an
+ *  explicit `finishMaterialId`, returns it as-is. When `undefined` ("auto"),
+ *  returns the board's effective material via {@link getMaterial} — so the
+ *  band's color follows whichever sheet the panel ends up cut from,
+ *  including a per-board material override. */
+export function getEdgingFinishMaterial(
+  board: Board,
+  edging: Edging,
+  boardOverrides: ReadonlyMap<string, BoardOverrides>,
+): MaterialId {
+  return edging.finishMaterialId ?? getMaterial(board, boardOverrides);
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────

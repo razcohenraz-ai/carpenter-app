@@ -147,6 +147,9 @@ function validateInput(input: CabinetInput): void {
   if (input.middleDoorH !== undefined && typeof input.middleDoorH !== 'number') {
     throw new Error('deserializeProject: cabinet.input.middleDoorH must be number or undefined');
   }
+  if (input.edging !== undefined) {
+    validateEdging(input.edging, 'cabinet.input.edging');
+  }
 }
 
 function validateState(state: SavedCabinetState): void {
@@ -161,5 +164,48 @@ function validateState(state: SavedCabinetState): void {
         `deserializeProject: cabinet.state.${String(key)} must be a plain object (Record)`,
       );
     }
+  }
+  // Optional edging-override maps. When present they must be plain objects
+  // whose values are valid Edging shapes; absence falls back to "no overrides".
+  if (state.bodyEdgingOverrides !== undefined) {
+    if (
+      state.bodyEdgingOverrides === null ||
+      typeof state.bodyEdgingOverrides !== 'object' ||
+      Array.isArray(state.bodyEdgingOverrides)
+    ) {
+      throw new Error('deserializeProject: cabinet.state.bodyEdgingOverrides must be a plain object (Record)');
+    }
+    for (const [k, v] of Object.entries(state.bodyEdgingOverrides)) {
+      validateEdging(v, `cabinet.state.bodyEdgingOverrides[${k}]`);
+    }
+  }
+  if (state.doorEdgingOverrides !== undefined) {
+    if (
+      state.doorEdgingOverrides === null ||
+      typeof state.doorEdgingOverrides !== 'object' ||
+      Array.isArray(state.doorEdgingOverrides)
+    ) {
+      throw new Error('deserializeProject: cabinet.state.doorEdgingOverrides must be a plain object (Record)');
+    }
+    for (const [k, v] of Object.entries(state.doorEdgingOverrides)) {
+      validateEdging(v, `cabinet.state.doorEdgingOverrides[${k}]`);
+    }
+  }
+}
+
+/** Validates an {@link Edging} value carried by an optional field. Used for
+ *  the cabinet-wide default, per-body, per-door, and (via boardOverrides
+ *  iteration in a future stage) per-board entries. */
+function validateEdging(value: unknown, path: string): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`deserializeProject: ${path} must be a plain object`);
+  }
+  const thickness = (value as { thickness?: unknown }).thickness;
+  if (thickness !== 0.6 && thickness !== 1.3) {
+    throw new Error(`deserializeProject: ${path}.thickness must be 0.6 or 1.3, got ${String(thickness)}`);
+  }
+  const finish = (value as { finishMaterialId?: unknown }).finishMaterialId;
+  if (finish !== undefined && typeof finish !== 'string') {
+    throw new Error(`deserializeProject: ${path}.finishMaterialId must be a string or undefined`);
   }
 }

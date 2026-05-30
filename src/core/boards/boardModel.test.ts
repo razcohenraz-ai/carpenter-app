@@ -16,6 +16,10 @@ import {
   getMaterial as getBoardMaterial,
   computeCarcassDepth,
   computeInnerWidth,
+  getEdgingPattern,
+  getDeductionFor,
+  resolveEdging,
+  getEdgingFinishMaterial,
   BACK_THICKNESS_CM,
   LEVELER_GAP_CM,
   PLINTH_GABLE_MID_BODY_THRESHOLD_CM,
@@ -23,8 +27,13 @@ import {
   type Board,
   type BoardDimensionKey,
   type BoardOverrides,
+  type BoardRole,
+  type EdgingContext,
+  type EdgingPattern,
   type PlinthGable,
 } from './boardModel';
+import type { Edging } from '../../types/edging';
+import type { MaterialId } from '../../types/materials';
 import { getMaterial } from '../../catalog';
 import type { Box } from '../../types/geometry';
 import type { InteriorItem, ShelfItem, DrawerItem } from '../../types/interior';
@@ -1525,3 +1534,180 @@ describe('consistency: stableId matches across boards, CutItems, and getDimensio
     expect(allKeys.length).toBe(3);
   });
 });
+
+// ── Edging — visibility patterns + deductions + override chain ─────────────
+
+describe('getEdgingPattern', () => {
+  it('returns "none" for the back panel', () => {
+    expect(getEdgingPattern('back')).toBe('none');
+  });
+
+  it('returns "none" for every plinth-* role (plinth has no edging by rule)', () => {
+    const plinthRoles: BoardRole[] = [
+      'plinth-front', 'plinth-back', 'plinth-gable-a', 'plinth-gable-b', 'plinth-front-cladding',
+    ];
+    for (const role of plinthRoles) {
+      expect(getEdgingPattern(role), `${role} should be "none"`).toBe('none');
+    }
+  });
+
+  it('returns "front" for sides, top, bottom, and partition', () => {
+    const frontRoles: BoardRole[] = ['side-left', 'side-right', 'top', 'bottom', 'partition'];
+    for (const role of frontRoles) {
+      expect(getEdgingPattern(role), `${role} should be "front"`).toBe('front');
+    }
+  });
+
+  it('returns "front" for every shelf variant (visible front cut → edging)', () => {
+    const shelfRoles: BoardRole[] = ['shelf', 'fixed-shelf', 'internal-shelf'];
+    for (const role of shelfRoles) {
+      expect(getEdgingPattern(role), `${role} should be "front"`).toBe('front');
+    }
+  });
+
+  it('returns "front" for every envelope role', () => {
+    const envelopeRoles: BoardRole[] = ['envelope-left', 'envelope-right', 'envelope-top'];
+    for (const role of envelopeRoles) {
+      expect(getEdgingPattern(role), `${role} should be "front"`).toBe('front');
+    }
+  });
+});
+
+describe('getDeductionFor', () => {
+  const e06: Edging = { thickness: 0.6 };
+  const e13: Edging = { thickness: 1.3 };
+
+  it('"none" pattern → 0 on every dimension', () => {
+    expect(getDeductionFor('none', 'length',    e06)).toBe(0);
+    expect(getDeductionFor('none', 'width',     e06)).toBe(0);
+    expect(getDeductionFor('none', 'thickness', e06)).toBe(0);
+  });
+
+  it('"thickness" key → 0 under any pattern (band wraps the face, not the thickness)', () => {
+    expect(getDeductionFor('front',     'thickness', e06)).toBe(0);
+    expect(getDeductionFor('perimeter', 'thickness', e13)).toBe(0);
+  });
+
+  it('"front" pattern → t/10 on width only, zero on length', () => {
+    expect(getDeductionFor('front', 'width',  e06)).toBeCloseTo(0.06);
+    expect(getDeductionFor('front', 'length', e06)).toBe(0);
+    expect(getDeductionFor('front', 'width',  e13)).toBeCloseTo(0.13);
+    expect(getDeductionFor('front', 'length', e13)).toBe(0);
+  });
+
+  it('"perimeter" pattern → 2·t/10 on BOTH length and width', () => {
+    expect(getDeductionFor('perimeter', 'length', e06)).toBeCloseTo(0.12);
+    expect(getDeductionFor('perimeter', 'width',  e06)).toBeCloseTo(0.12);
+    expect(getDeductionFor('perimeter', 'length', e13)).toBeCloseTo(0.26);
+    expect(getDeductionFor('perimeter', 'width',  e13)).toBeCloseTo(0.26);
+  });
+});
+
+describe('resolveEdging — override chain', () => {
+  function makeBoard(stableId: string, materialId: MaterialId = 'mdf18'): Board {
+    return {
+      id: 'b_test', stableId, role: 'side-left', materialId,
+      length: 100, width: 60, thickness: 1.8,
+      xFrom: 0, xTo: 1.8, yFrom: 0, yTo: 100, visible: true,
+    };
+  }
+
+  it('returns cabinet default when no overrides apply', () => {
+    const board = makeBoard('side-left@bottom:left');
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map(),
+      boardOverrides: new Map(),
+    };
+    expect(resolveEdging(board, 'bottom:left', ctx)).toEqual({ thickness: 0.6 });
+  });
+
+  it('per-body override wins over cabinet default', () => {
+    const board = makeBoard('side-left@bottom:left');
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([['bottom:left', { thickness: 1.3 }]]),
+      boardOverrides: new Map(),
+    };
+    expect(resolveEdging(board, 'bottom:left', ctx)).toEqual({ thickness: 1.3 });
+  });
+
+  it('per-board override wins over body and cabinet', () => {
+    const board = makeBoard('top@bottom:left');
+    const perBoard: Edging = { thickness: 0.6, finishMaterialId: 'oak18' };
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([['bottom:left', { thickness: 1.3 }]]),
+      boardOverrides: new Map([['top@bottom:left', { edging: perBoard }]]),
+    };
+    expect(resolveEdging(board, 'bottom:left', ctx)).toEqual(perBoard);
+  });
+
+  it('boxSlotId=undefined skips the body layer (cabinet-level singletons)', () => {
+    const board = makeBoard('plinth-front');
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([['bottom:left', { thickness: 1.3 }]]),
+      boardOverrides: new Map(),
+    };
+    expect(resolveEdging(board, undefined, ctx)).toEqual({ thickness: 0.6 });
+  });
+
+  it('per-body entry for a DIFFERENT slot does not leak — falls through to cabinet', () => {
+    const board = makeBoard('side-left@bottom:left');
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 1.3 },
+      bodyOverrides: new Map([['top:right', { thickness: 0.6 }]]),
+      boardOverrides: new Map(),
+    };
+    expect(resolveEdging(board, 'bottom:left', ctx)).toEqual({ thickness: 1.3 });
+  });
+
+  it('boardOverrides entry without an edging field does NOT count as a per-board override', () => {
+    const board = makeBoard('top@bottom:left');
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([['bottom:left', { thickness: 1.3 }]]),
+      // Material override only — edging stays undefined → body layer wins.
+      boardOverrides: new Map([['top@bottom:left', { materialId: 'oak18' }]]),
+    };
+    expect(resolveEdging(board, 'bottom:left', ctx)).toEqual({ thickness: 1.3 });
+  });
+});
+
+describe('getEdgingFinishMaterial — auto resolution', () => {
+  function makeBoard(materialId: MaterialId): Board {
+    return {
+      id: 'b', stableId: 'top@bottom:left', role: 'top', materialId,
+      length: 80, width: 60, thickness: 1.8,
+      xFrom: 0, xTo: 80, yFrom: 0, yTo: 1.8, visible: true,
+    };
+  }
+
+  it('returns the explicit finishMaterialId when set', () => {
+    const board = makeBoard('mdf18');
+    const edging: Edging = { thickness: 0.6, finishMaterialId: 'oak18' };
+    expect(getEdgingFinishMaterial(board, edging, new Map())).toBe('oak18');
+  });
+
+  it('auto: returns the board materialId when finishMaterialId is undefined', () => {
+    const board = makeBoard('mdf18');
+    expect(getEdgingFinishMaterial(board, { thickness: 0.6 }, new Map())).toBe('mdf18');
+  });
+
+  it('auto: follows a per-board material override (band tracks the panel\'s sheet)', () => {
+    const board = makeBoard('mdf18');
+    const overrides = new Map<string, BoardOverrides>([
+      ['top@bottom:left', { materialId: 'oak18' }],
+    ]);
+    expect(getEdgingFinishMaterial(board, { thickness: 0.6 }, overrides)).toBe('oak18');
+  });
+});
+
+describe('EdgingPattern — discriminated union', () => {
+  it('lists every EdgingPattern so the test catches new ones at compile time', () => {
+    const allPatterns: EdgingPattern[] = ['none', 'front', 'perimeter'];
+    expect(allPatterns).toHaveLength(3);
+  });
+});
+

@@ -1,4 +1,5 @@
 import type { CabinetInput } from './cabinet';
+import type { Edging } from './edging';
 import type { InteriorItem } from './interior';
 import type { MaterialId } from './materials';
 
@@ -47,6 +48,9 @@ export interface SavedDoor {
 export interface SavedBoardOverride {
   dimensions?: Partial<Record<'length' | 'width' | 'thickness', number>>;
   materialId?: MaterialId;
+  /** Per-board edging override — wins over the per-body and cabinet-wide
+   *  layers. Infrastructure only at this stage; no UI surfaces it yet. */
+  edging?: Edging;
 }
 
 // ── Saved cabinet state (user choices, keyed by stable ids) ───────────────────
@@ -68,8 +72,16 @@ export interface SavedCabinetState {
   /** Plinth gable x overrides (cm), keyed by `PlinthGable.id`
    *  (e.g. `edge-left`, `joint:0`). */
   plinthGableOverrides: Record<string, number>;
-  /** Board dimension/material overrides, keyed by `Board.stableId`. */
+  /** Board dimension/material/edging overrides, keyed by `Board.stableId`. */
   boardOverrides: Record<string, SavedBoardOverride>;
+  /** Per-body edging override, keyed by {@link BoxSlotId}. Wins over the
+   *  cabinet-wide default; loses to a per-board override. Optional — absent
+   *  in projects saved before edging was introduced. */
+  bodyEdgingOverrides?: Record<BoxSlotId, Edging>;
+  /** Per-door edging override, keyed by {@link DoorSlotKey}. Same precedence
+   *  as `bodyEdgingOverrides` but applied to door/drawer-front panels in
+   *  the door cut-emission path. Optional. */
+  doorEdgingOverrides?: Record<DoorSlotKey, Edging>;
 }
 
 // ── Cabinet content (input + saved state) ─────────────────────────────────────
