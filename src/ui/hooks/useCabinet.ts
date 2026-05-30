@@ -37,14 +37,17 @@ import {
   HINGE_GAP_CM,
   type BoardDimensionKey,
   type BoardOverrides,
+  type EdgingContext,
 } from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { CabinetInput } from '../../types/cabinet';
+import { DEFAULT_EDGING, type Edging } from '../../types/edging';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 import type { Door, DoorById, DrawerFrontById, Hinge } from '../../types/doors';
+import type { BoxSlotId } from '../../types/project';
 
 export type { CabinetInput };
 
@@ -616,10 +619,21 @@ export function useCabinet(): {
 
     const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
     const boxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    // Cabinet-wide edging default — drives per-board front bands and the
+    // perimeter band applied to door / drawer-front cuts. Body and per-board
+    // override layers exist on the type surface (stage 2) but no setters
+    // wire them yet; an empty bodyOverrides Map still resolves correctly
+    // through `resolveEdging`.
+    const cabinetEdging: Edging = input.edging ?? DEFAULT_EDGING;
+    const edgingCtx: EdgingContext = {
+      cabinetDefault: cabinetEdging,
+      bodyOverrides: new Map<BoxSlotId, Edging>(),
+      boardOverrides: boardOverridesRef.current,
+    };
     // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
     // plinth / back / shelves all come from the BoardModel loop below.
     // The drawer-box also sits inside the carcass, so it uses carcassD too.
-    const cuts  = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth);
+    const cuts  = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging);
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
 
     // ── Stable maps from previous state ────────────────────────────────────
@@ -782,6 +796,7 @@ export function useCabinet(): {
           externalDrawerCuts.push(
             ...calcExternalDrawerFrontCuts(
               itemsForCell, cellW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+              undefined, cabinetEdging,
             ),
           );
         }
@@ -798,6 +813,7 @@ export function useCabinet(): {
         externalDrawerCuts.push(
           ...calcExternalDrawerFrontCuts(
             bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+            undefined, cabinetEdging,
           ),
         );
       }
@@ -873,7 +889,13 @@ export function useCabinet(): {
         cabinetTotalH: H,
         joint: cabinetJoint,
       }).filter(b => b.role !== 'partition'); // partition emitted separately
-      boardCuts.push(...boardsToCutItems(boards, buildBoxLabel(box), boardOverridesRef.current));
+      // BoxSlotId placeholder: the eventual stable per-slot id is deferred
+      // (DECISIONS_LOG 2026-05-29). Using boxStableKey here keeps the body
+      // override layer plumbing alive — bodyOverrides is empty for now, but
+      // the chain resolves correctly the moment a UI surfaces setters.
+      boardCuts.push(...boardsToCutItems(
+        boards, buildBoxLabel(box), boardOverridesRef.current, edgingCtx, boxStableKey(box),
+      ));
     }
 
     // ── Plinth board model ─────────────────────────────────────────────────
@@ -901,7 +923,9 @@ export function useCabinet(): {
         : {}),
       ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
     });
-    boardCuts.push(...boardsToCutItems(plinthBoards, '', boardOverridesRef.current));
+    // Plinth boards live at the cabinet level (no slot) — every plinth-*
+    // role resolves to pattern 'none' in any case so the deduction is 0.
+    boardCuts.push(...boardsToCutItems(plinthBoards, '', boardOverridesRef.current, edgingCtx));
 
     // Enrich every non-board cut with a materialId so the cut-list view can
     // group by material. boardsToCutItems already sets materialId from

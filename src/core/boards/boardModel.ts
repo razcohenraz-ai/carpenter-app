@@ -991,11 +991,19 @@ const ROLE_GROUP: Record<BoardRole, CutGroup> = {
 /** Translates boards → CutItems. Reads EFFECTIVE values via
  *  {@link getDimension} / {@link getMaterial} so any per-board override
  *  (length/width/thickness/material) wins over the derived carpentry-rule
- *  value. Default empty Map → derived values only, for back-compat. */
+ *  value. When `edgingCtx` is provided, also deducts the edge-banding from
+ *  the relevant dimension(s) per role — see {@link getEdgingPattern} and
+ *  {@link getDeductionFor}. Omitting `edgingCtx` skips the deduction
+ *  entirely (legacy callers / unit tests that don't simulate banding).
+ *  `boxSlotId` identifies the slot these boards belong to and is forwarded
+ *  to {@link resolveEdging}; omit for cabinet-level singletons (the plinth
+ *  family — they all resolve to pattern `'none'` anyway). */
 export function boardsToCutItems(
   boards: Board[],
   label: string,
   overrides: ReadonlyMap<string, BoardOverrides> = new Map(),
+  edgingCtx?: EdgingContext,
+  boxSlotId?: BoxSlotId,
 ): CutItem[] {
   const tag = label ? ` — ${label}` : '';
   return boards.map(b => {
@@ -1003,6 +1011,11 @@ export function boardsToCutItems(
     const width     = getDimension(b, 'width',     overrides);
     const thickness = getDimension(b, 'thickness', overrides);
     const materialId = getMaterial(b, overrides);
+    // Edge-banding deduction: zero unless an edging context was passed in.
+    const pattern   = getEdgingPattern(b.role);
+    const edging    = edgingCtx ? resolveEdging(b, boxSlotId, edgingCtx) : undefined;
+    const dLen      = edging ? getDeductionFor(pattern, 'length', edging) : 0;
+    const dWid      = edging ? getDeductionFor(pattern, 'width',  edging) : 0;
     const noteMm = `${Math.round(thickness * 10)}mm`;
     // Back panels and plinth boards are anonymous to the saw operator —
     // they are not per-body pieces and only their dimensions matter.
@@ -1013,8 +1026,8 @@ export function boardsToCutItems(
     return {
       name: `${ROLE_NAME_HE[b.role]}${nameTag}`,
       qty: 1,
-      w: Math.round(length * 10),
-      h: Math.round(width * 10),
+      w: Math.round((length - dLen) * 10),
+      h: Math.round((width  - dWid) * 10),
       group: ROLE_GROUP[b.role],
       note: noteMm,
       materialId,

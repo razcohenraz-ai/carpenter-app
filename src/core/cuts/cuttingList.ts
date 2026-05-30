@@ -1,4 +1,5 @@
 import type { CutItem, FurnitureType } from "../../types";
+import type { Edging } from "../../types/edging";
 import { calcDoors } from "../doors/doorCalc";
 import { getDoorHeight } from "../doors/doorUtils";
 import { computeRowFrontLayout } from "../geometry/frontGeometry";
@@ -76,8 +77,19 @@ export function calcCuts(
   hasEnvelopeTop = false,
   tFront = 1.8,
   maxDoorWidth = 60,
+  /** Cabinet-wide edging applied as a perimeter band to every door panel
+   *  (and to internal-drawer fronts emitted for non-cabinet furniture
+   *  types). Optional — when omitted the cut dimensions are emitted at the
+   *  raw door size, matching pre-edging behavior. Per-door overrides are
+   *  not threaded here yet: the door cuts in this path are anonymous
+   *  (`qty=frontsPerRow`), so a per-door override would need a different
+   *  emission strategy. */
+  edging?: Edging,
 ): CutItem[] {
   const cuts: CutItem[] = [];
+  // Perimeter band deduction in mm: 2× thickness (the band wraps both sides
+  // of every dimension). Zero when no edging is provided.
+  const perimMm = edging ? 2 * edging.thickness : 0;
 
   if (type === "cabinet") {
     const d = calcDoors(W, H, plinth, doorCoversPlinth, lowerH, hasShell, tShell);
@@ -124,8 +136,8 @@ export function calcCuts(
     cuts.push({
       name: doorName,
       qty: frontsPerRow,
-      w: frontW_mm,
-      h: cm(getDoorHeight(lowerBoxH, doorGapMm, lowerHasBottomGap, lowerHasTopGap)),
+      w: frontW_mm - perimMm,
+      h: cm(getDoorHeight(lowerBoxH, doorGapMm, lowerHasBottomGap, lowerHasTopGap)) - perimMm,
       group: "door",
     });
     if (d.rows >= 2 && d.upperH !== null) {
@@ -135,8 +147,8 @@ export function calcCuts(
       cuts.push({
         name: d.rows === 3 ? "דלת אמצעית" : "דלת עליונה",
         qty: frontsPerRow,
-        w: frontW_mm,
-        h: cm(getDoorHeight(upperBoxH, doorGapMm, true, upperHasTopGap)),
+        w: frontW_mm - perimMm,
+        h: cm(getDoorHeight(upperBoxH, doorGapMm, true, upperHasTopGap)) - perimMm,
         group: "door",
       });
     }
@@ -145,8 +157,8 @@ export function calcCuts(
       cuts.push({
         name: "דלת עליונה",
         qty: frontsPerRow,
-        w: frontW_mm,
-        h: cm(getDoorHeight(topBoxH, doorGapMm)),
+        w: frontW_mm - perimMm,
+        h: cm(getDoorHeight(topBoxH, doorGapMm)) - perimMm,
         group: "door",
       });
     }

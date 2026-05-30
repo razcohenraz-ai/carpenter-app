@@ -36,7 +36,10 @@ import type { Edging } from '../../types/edging';
 import type { MaterialId } from '../../types/materials';
 import { getMaterial } from '../../catalog';
 import type { Box } from '../../types/geometry';
+import type { CutItem } from '../../types/cuts';
 import type { InteriorItem, ShelfItem, DrawerItem } from '../../types/interior';
+import { calcCuts } from '../cuts/cuttingList';
+import { calcExternalDrawerFrontCuts } from '../cuts/externalDrawerCuts';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -1409,10 +1412,18 @@ interface Scenario {
   name: string;
   boards: Board[];
   overrides: ReadonlyMap<string, BoardOverrides>;
+  /** Optional edging context. When provided, the CutItem dimensions are
+   *  expected to reflect the deduction from {@link getDeductionFor}, using
+   *  the same formula as {@link boardsToCutItems}. Omit to assert
+   *  pre-edging behavior (no deduction). */
+  edgingCtx?: EdgingContext;
+  /** Slot the boards belong to — forwarded to {@link resolveEdging}. Omit
+   *  for cabinet-level singletons (the plinth family). */
+  boxSlotId?: string;
 }
 
-function assertConsistency({ name, boards, overrides }: Scenario): void {
-  const cuts = boardsToCutItems(boards, 'גוף', overrides);
+function assertConsistency({ name, boards, overrides, edgingCtx, boxSlotId }: Scenario): void {
+  const cuts = boardsToCutItems(boards, 'גוף', overrides, edgingCtx, boxSlotId);
   expect(cuts.length, `${name}: cut count != board count`).toBe(boards.length);
   // Every board must have a non-empty stableId.
   for (const b of boards) {
@@ -1425,12 +1436,20 @@ function assertConsistency({ name, boards, overrides }: Scenario): void {
     const width  = getDimension(b, 'width',  overrides);
     const thick  = getDimension(b, 'thickness', overrides);
     const mat    = getBoardMaterial(b, overrides);
+    // Same deduction formula as `boardsToCutItems`. With no `edgingCtx`,
+    // both values are 0 so the assertions collapse to the pre-edging shape.
+    const pattern = getEdgingPattern(b.role);
+    const edging  = edgingCtx ? resolveEdging(b, boxSlotId, edgingCtx) : undefined;
+    const dLen    = edging ? getDeductionFor(pattern, 'length', edging) : 0;
+    const dWid    = edging ? getDeductionFor(pattern, 'width',  edging) : 0;
+    const expectedW = Math.round((length - dLen) * 10);
+    const expectedH = Math.round((width  - dWid) * 10);
     expect(
-      cut.w, `${name}: ${b.stableId} (${b.role}) — CutItem.w (${cut.w}) != Math.round(getDimension('length')*10) (${Math.round(length * 10)})`,
-    ).toBe(Math.round(length * 10));
+      cut.w, `${name}: ${b.stableId} (${b.role}) — CutItem.w (${cut.w}) != expected ${expectedW}`,
+    ).toBe(expectedW);
     expect(
-      cut.h, `${name}: ${b.stableId} (${b.role}) — CutItem.h (${cut.h}) != Math.round(getDimension('width')*10) (${Math.round(width * 10)})`,
-    ).toBe(Math.round(width * 10));
+      cut.h, `${name}: ${b.stableId} (${b.role}) — CutItem.h (${cut.h}) != expected ${expectedH}`,
+    ).toBe(expectedH);
     expect(
       cut.note, `${name}: ${b.stableId} (${b.role}) — note (${cut.note}) != ${Math.round(thick * 10)}mm`,
     ).toBe(`${Math.round(thick * 10)}mm`);
@@ -1711,3 +1730,213 @@ describe('EdgingPattern — discriminated union', () => {
   });
 });
 
+// ── Edging — end-to-end deduction in CutItem dimensions ────────────────────
+// These scenarios drive the actual production formula: `boardsToCutItems`
+// (body panels), `calcCuts` (door panels), and `calcExternalDrawerFrontCuts`
+// (external-drawer fronts). Each test pins both the deducted CutItem values
+// and the regression invariants the user called out (back / plinth never
+// shrink; finishMaterialId auto-resolves to the board's material).
+
+const noOverrides: ReadonlyMap<string, BoardOverrides> = new Map();
+
+describe('Edging — boardsToCutItems deduction', () => {
+  it('cabinet default 0.6 mm: every body board loses 0.6 mm (= 0.06 cm) from width, 0 from length', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map(),
+      boardOverrides: noOverrides,
+    };
+    const slotId = 'bottom:left';
+    const cuts = boardsToCutItems(boards, 'גוף', noOverrides, ctx, slotId);
+    boards.forEach((board, i) => {
+      const cut    = cuts[i]!;
+      const pattern = getEdgingPattern(board.role);
+      // 0.6 mm band → 0.06 cm deduction on `width` for the 'front' pattern.
+      // Same formula production uses; rounded ×10 mm at the end.
+      const dWidCm = pattern === 'front' ? 0.06 : 0;
+      expect(cut.w, `${board.role}: length unchanged`).toBe(Math.round(board.length * 10));
+      expect(cut.h, `${board.role}: width − 0.06 cm`).toBe(
+        Math.round((board.width - dWidCm) * 10),
+      );
+    });
+    // The dedicated consistency helper agrees end-to-end.
+    assertConsistency({
+      name: 'cabinet default 0.6 on body',
+      boards, overrides: noOverrides, edgingCtx: ctx, boxSlotId: slotId,
+    });
+  });
+
+  it('per-body override 1.3 mm + oak18 finish: every body board takes the body band (= 0.13 cm)', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const slotId = 'bottom:left';
+    const bodyEdging: Edging = { thickness: 1.3, finishMaterialId: 'oak18' };
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([[slotId, bodyEdging]]),
+      boardOverrides: noOverrides,
+    };
+    const cuts = boardsToCutItems(boards, 'גוף', noOverrides, ctx, slotId);
+    boards.forEach((board, i) => {
+      const cut    = cuts[i]!;
+      const pattern = getEdgingPattern(board.role);
+      // 1.3 mm = 0.13 cm; only 'front' pattern is affected.
+      const dWidCm = pattern === 'front' ? 0.13 : 0;
+      expect(cut.h, board.role).toBe(Math.round((board.width - dWidCm) * 10));
+    });
+    assertConsistency({
+      name: 'per-body 1.3 oak18 on body',
+      boards, overrides: noOverrides, edgingCtx: ctx, boxSlotId: slotId,
+    });
+  });
+
+  it('per-board override on top: only the top board takes 1.3 mm, rest stay at cabinet 0.6 mm', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const slotId = 'bottom:left';
+    const topBoard = boards.find(bd => bd.role === 'top')!;
+    const overrides = new Map<string, BoardOverrides>([
+      [topBoard.stableId, { edging: { thickness: 1.3 } }],
+    ]);
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map(),
+      boardOverrides: overrides,
+    };
+    const cuts = boardsToCutItems(boards, 'גוף', overrides, ctx, slotId);
+    boards.forEach((board, i) => {
+      const cut       = cuts[i]!;
+      const pattern   = getEdgingPattern(board.role);
+      // Top board → 0.13 cm; every other 'front' board → 0.06 cm; 'none' → 0.
+      const dWidCm = pattern === 'front'
+        ? (board.stableId === topBoard.stableId ? 0.13 : 0.06)
+        : 0;
+      expect(cut.h, `${board.role} (${board.stableId})`).toBe(
+        Math.round((board.width - dWidCm) * 10),
+      );
+    });
+    assertConsistency({
+      name: 'per-board override on top',
+      boards, overrides, edgingCtx: ctx, boxSlotId: slotId,
+    });
+  });
+
+  it('back + plinth regression: dimensions unchanged with edgingCtx (pattern = none)', () => {
+    const b = box({ W: 80, H: 200, level: 'bottom' });
+    const bodyBoards   = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const plinthBoards = buildPlinthBoardModel({
+      cabinetW: 80, cabinetD: 57.4, plinthHeight: 10,
+      bodyMaterial: bodyMat, boxes: [b],
+    });
+    const ctx: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map(),
+      boardOverrides: noOverrides,
+    };
+
+    const backBoard  = bodyBoards.find(bd => bd.role === 'back')!;
+    const backCut    = boardsToCutItems(bodyBoards, '', noOverrides, ctx, 'bottom:left')
+      .find(c => c.role === 'back')!;
+    // No deduction whatsoever — back keeps the raw W × H derivation.
+    expect(backCut.w).toBe(Math.round(backBoard.length * 10));
+    expect(backCut.h).toBe(Math.round(backBoard.width  * 10));
+
+    const plinthCuts = boardsToCutItems(plinthBoards, '', noOverrides, ctx);
+    plinthBoards.forEach((board, i) => {
+      const cut = plinthCuts[i]!;
+      expect(cut.w, `${board.role}: plinth length unchanged`).toBe(Math.round(board.length * 10));
+      expect(cut.h, `${board.role}: plinth width  unchanged`).toBe(Math.round(board.width  * 10));
+    });
+  });
+
+  it('finishMaterialId=undefined: getEdgingFinishMaterial auto-resolves to board material', () => {
+    // The CutItem itself doesn't carry the finish color (no edgingDescription
+    // by stage-1 decision), so this test exercises the helper directly with
+    // a board whose effective material is the body default.
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    const topBoard = boards.find(bd => bd.role === 'top')!;
+    const autoEdging: Edging = { thickness: 0.6 }; // finish undefined
+    expect(getEdgingFinishMaterial(topBoard, autoEdging, noOverrides)).toBe(topBoard.materialId);
+
+    // And if the board carries a material override, auto follows it.
+    const overrides = new Map<string, BoardOverrides>([
+      [topBoard.stableId, { materialId: 'oak18' }],
+    ]);
+    expect(getEdgingFinishMaterial(topBoard, autoEdging, overrides)).toBe('oak18');
+  });
+});
+
+describe('Edging — calcCuts door perimeter deduction', () => {
+  it('door cuts shrink by 2×t/10 cm on both axes when edging is supplied', () => {
+    // Baseline (no edging): record the raw w/h of each door cut.
+    const args = (edging?: Edging): CutItem[] => calcCuts(
+      'cabinet',
+      80,    // W
+      200,   // H
+      60,    // D
+      0,     // shelves
+      0,     // drawers
+      true,  // hasBack
+      0,     // plinth
+      false, // doorCoversPlinth
+      undefined, // lowerH
+      false, // hasShell
+      1.8,   // tShell
+      1.8,   // tBody
+      3,     // doorGapMm
+      false, // hasEnvelopeTop
+      1.8,   // tFront
+      60,    // maxDoorWidth
+      edging,
+    );
+    const baseline = args(undefined).filter(c => c.group === 'door');
+    const banded06 = args({ thickness: 0.6 }).filter(c => c.group === 'door');
+    const banded13 = args({ thickness: 1.3 }).filter(c => c.group === 'door');
+
+    expect(banded06).toHaveLength(baseline.length);
+    expect(banded13).toHaveLength(baseline.length);
+
+    baseline.forEach((base, i) => {
+      // 0.6 mm × 2 sides = 1.2 mm per axis.
+      expect(banded06[i]!.w, '0.6 mm width').toBe(base.w - 1.2);
+      expect(banded06[i]!.h, '0.6 mm height').toBe(base.h - 1.2);
+      // 1.3 mm × 2 sides = 2.6 mm per axis.
+      expect(banded13[i]!.w, '1.3 mm width').toBe(base.w - 2.6);
+      expect(banded13[i]!.h, '1.3 mm height').toBe(base.h - 2.6);
+    });
+  });
+});
+
+describe('Edging — calcExternalDrawerFrontCuts perimeter deduction', () => {
+  it('drawer-front cut shrinks by 2×t/10 cm on both axes when edging is supplied', () => {
+    const items: InteriorItem[] = [{
+      type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 20, mount: 'external',
+    }];
+    const baseline = calcExternalDrawerFrontCuts(
+      items, 40, 3, 0, false, 18,
+    );
+    const banded06 = calcExternalDrawerFrontCuts(
+      items, 40, 3, 0, false, 18, undefined, { thickness: 0.6 },
+    );
+    const banded13 = calcExternalDrawerFrontCuts(
+      items, 40, 3, 0, false, 18, undefined, { thickness: 1.3 },
+    );
+
+    expect(baseline).toHaveLength(1);
+    expect(banded06).toHaveLength(1);
+    expect(banded13).toHaveLength(1);
+
+    // Baseline: 40 cm × 10 = 400 mm wide; 20 cm × 10 = 200 mm tall.
+    expect(baseline[0]!.w).toBe(400);
+    expect(baseline[0]!.h).toBe(200);
+    // 0.6 mm band: deduct 1.2 mm on each axis.
+    expect(banded06[0]!.w).toBe(400 - 1.2);
+    expect(banded06[0]!.h).toBe(200 - 1.2);
+    // 1.3 mm band: deduct 2.6 mm on each axis.
+    expect(banded13[0]!.w).toBe(400 - 2.6);
+    expect(banded13[0]!.h).toBe(200 - 2.6);
+  });
+});

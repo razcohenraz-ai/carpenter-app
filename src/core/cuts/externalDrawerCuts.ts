@@ -1,4 +1,5 @@
 import type { CutItem } from '../../types/cuts';
+import type { Edging } from '../../types/edging';
 import type { InteriorItem } from '../../types/interior';
 import { getExternalDrawers, getSkirtCoveringDrawer } from '../doors/doorUtils';
 
@@ -27,12 +28,17 @@ export function calcExternalDrawerFrontCuts(
   mainDoorCoversSkirt: boolean,
   frontThicknessMm: number,
   perDrawerThicknessMm?: Map<string, number>,
+  /** Cabinet-wide edging applied as a perimeter band to every drawer-front
+   *  panel. Optional — when omitted the panel ships at its raw size. */
+  edging?: Edging,
 ): CutItem[] {
   const externals = getExternalDrawers(items);
   if (externals.length === 0) return [];
 
   const gapCm = gapMm / 10;
   const skirtDrawer = getSkirtCoveringDrawer(items, mainDoorCoversSkirt);
+  // Perimeter band deduction in mm: 2× thickness on each dimension.
+  const perimMm = edging ? 2 * edging.thickness : 0;
 
   const cuts: CutItem[] = [];
   for (const drawer of externals) {
@@ -44,8 +50,8 @@ export function calcExternalDrawerFrontCuts(
     cuts.push({
       name: 'חזית מגירה חיצונית',
       qty: 1,
-      w: cm(frontWidthCm),
-      h: cm(panelHcm),
+      w: cm(frontWidthCm) - perimMm,
+      h: cm(panelHcm) - perimMm,
       group: 'front',
       note: `${Math.round(thicknessMm)}mm`,
     });
