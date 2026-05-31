@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-05-31 — Edging: רק cabinet default + per-body override; אין per-door
+
+**ההחלטה**: שכבת ה-edging חושפת ב-UI שתי רמות בלבד — ברירת מחדל ארון (ב-`CabinetForm`) ו-override פר-גוף (radio "כמו ארון / מותאם" ב-`BoxInteriorEditor`). **אין UI ל-override פר-דלת**, ו-`calcCuts` לא מקבל overrides פר-דלת. השדה `SavedCabinetState.doorEdgingOverrides?` ו-ה-validation שלו ב-`serialize.ts` נשמרים כתשתית טהורה — תמיד `Map` ריק, ללא תקורה, ללא setter בשום מקום.
+
+**הנימוק**:
+- **תרחיש נדיר**: דלת בודדת בקנט שונה משאר הארון היא בקשת נישה מאוד בעבודת הנגרות הסטנדרטית. בדרך כלל הקנט הוא החלטת-ארון או לכל היותר החלטת-גוף (כשמעטפת מפרידה גופים מבחומרים שונים).
+- **עלות מימוש גבוהה**: ב-`calcCuts` הדלתות נפלטות מצטברות כ-`{ name: "דלת", qty: frontsPerRow }` ולא per-door. תמיכה ב-per-door override דורשת ריפקטור: pivot ל-emission door-by-door, התאמה ב-`mergeCutItems` (שיפעיל merge חוזר), ושינוי ב-grouping של "דלת תחתונה / עליונה / אמצעית". scope גדול מעבר לתועלת.
+- **עקרון "אין tech debt על תכונה לא מומשת"**: לא מתעדים "פיצ'ר שלא נבנה". פה רושמים את ההכרעה כדי שלא נחזור ונשאל "למה ה-radio הזה לא קיים ב-`DoorEditor`?".
+
+**טריידאוף**:
+- אם בעתיד יתעורר צורך — נצטרך לשנות את `calcCuts` ל-emission door-by-door (`qty=1` פר CutItem), להוסיף setter ב-`useCabinet` (`setDoorEdgingOverride(doorSlotKey, edging)`), ולחבר UI ב-`DoorEditor`. ה-types וה-validation כבר במקום, אז ההרחבה אינה דורשת bump של schemaVersion.
+- ה-`SavedCabinetState.doorEdgingOverrides?` הוא "dead weight" קטן ב-types — עלות מינימלית, רווח עתידי ברור (חוזה עתידי כתוב כבר עכשיו).
+
+**אלטרנטיבה שנדחתה — לדחות גם את התשתית**: להסיר `doorEdgingOverrides?` מ-`SavedCabinetState` ומ-`serialize.ts`. נדחה כי השדה האופציונלי לא משפיע על שום JSON שמור בפועל (תמיד `undefined`), והשארתו עוקפת עתידי `schemaVersion` bump כשנחבר את הפיצ'ר.
+
+**יישום**:
+- `CabinetForm.tsx` — שני `<select>` חדשים (thickness 0.6/1.3, finish אוטומטי/חומר) אחרי `frontMaterial`; `buildCabinetEdging(form)` מועבר ל-`calculate({ ..., edging })`.
+- `BoxInteriorEditor.tsx` — סעיף עליון "קנט: ( ) כמו ארון ( ) מותאם" עם 2 dropdowns מותנים. setter דרך prop, שמופנה ל-`setBodyEdgingOverride(boxStableKey(box), edging | undefined)` ב-`CabinetForm`.
+- `useCabinet.ts` — `bodyEdgingOverrides: ReadonlyMap<BoxSlotId, Edging>` (state + ref) + `setBodyEdgingOverride`; מועבר ל-`edgingCtx.bodyOverrides` ב-`calculate()`.
+- `translations.ts` — slice חדש `edging.*` (9 keys, HE + EN).
+- `DoorEditor.tsx` — **ללא שינוי**.
+
+---
+
 ## 2026-05-29 — serialize.ts הוא boundary-free (Option B)
 
 **ההחלטה**: `core/project/serialize.ts` עובד אך ורק עם `Project` (כל ה-maps כ-`Record<string, ...>`). הוא **לא** מטפל בהמרת Map↔Object של state ה-runtime ב-`useCabinet` (`partitionsById`, `plinthGableOverrides`, `boardOverridesByStableId` שהם `Map`-ים). ה-bridge בין השכבות ייבנה בקובץ נפרד כשנגיע לחבר את `useCabinet` לפיצ'ר שמירה אמיתי.

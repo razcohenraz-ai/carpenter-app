@@ -167,6 +167,13 @@ export function useCabinet(): {
   resetBoardMaterialOverride: (stableId: string) => void;
   /** Drop every board-level override (dimensions and materials) at once. */
   resetAllBoardOverrides: () => void;
+  /** Per-body edging override layer keyed by `boxStableKey(box)` (the
+   *  current `BoxSlotId` placeholder). When absent for a body, the cabinet
+   *  default from `CabinetInput.edging` applies. */
+  bodyEdgingOverrides: ReadonlyMap<BoxSlotId, Edging>;
+  /** Set the per-body edging override. Pass `undefined` to revert to the
+   *  cabinet default. */
+  setBodyEdgingOverride: (boxSlotId: BoxSlotId, edging: Edging | undefined) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -181,6 +188,12 @@ export function useCabinet(): {
   const plinthGableOverridesRef = useRef<ReadonlyMap<string, number>>(new Map());
   const [boardOverridesByStableId, setBoardOverridesState] = useState<ReadonlyMap<string, BoardOverrides>>(new Map());
   const boardOverridesRef = useRef<ReadonlyMap<string, BoardOverrides>>(new Map());
+  // Per-body edging overrides keyed by `boxStableKey(box)` (the current
+  // `BoxSlotId` placeholder). State+ref pattern matches the other override
+  // layers; setter triggers a full re-calculate so the CutItem dimensions
+  // update through `boardsToCutItems` → `resolveEdging`.
+  const [bodyEdgingOverrides, setBodyEdgingOverridesState] = useState<ReadonlyMap<BoxSlotId, Edging>>(new Map());
+  const bodyEdgingOverridesRef = useRef<ReadonlyMap<BoxSlotId, Edging>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -599,6 +612,15 @@ export function useCabinet(): {
     _commitBoardOverrides(new Map());
   }
 
+  function setBodyEdgingOverride(boxSlotId: BoxSlotId, edging: Edging | undefined): void {
+    const next = new Map(bodyEdgingOverridesRef.current);
+    if (edging === undefined) next.delete(boxSlotId);
+    else next.set(boxSlotId, edging);
+    bodyEdgingOverridesRef.current = next;
+    setBodyEdgingOverridesState(next);
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -627,7 +649,7 @@ export function useCabinet(): {
     const cabinetEdging: Edging = input.edging ?? DEFAULT_EDGING;
     const edgingCtx: EdgingContext = {
       cabinetDefault: cabinetEdging,
-      bodyOverrides: new Map<BoxSlotId, Edging>(),
+      bodyOverrides: bodyEdgingOverridesRef.current,
       boardOverrides: boardOverridesRef.current,
     };
     // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
@@ -980,5 +1002,6 @@ export function useCabinet(): {
     setBoardDimensionOverride, resetBoardDimensionOverride,
     setBoardMaterialOverride, resetBoardMaterialOverride,
     resetAllBoardOverrides,
+    bodyEdgingOverrides, setBodyEdgingOverride,
   };
 }

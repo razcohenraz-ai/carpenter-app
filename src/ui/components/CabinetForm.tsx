@@ -3,7 +3,9 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS, getMaterial } from '../../catalog';
 import { computeInnerWidth } from '../../core/boards/boardModel';
+import { boxStableKey } from '../../core/interior/interiorUtils';
 import type { MaterialId } from '../../types';
+import type { Edging } from '../../types/edging';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
@@ -40,6 +42,13 @@ interface FormState {
   doorGap: string;
   doorGapManuallySet: boolean;
   maxDoorWidth: string;
+  /** Cabinet-wide edging band thickness. Two stocked options; the form
+   *  stores the value as a string for the `<select>`. Maps to
+   *  `Edging.thickness` (0.6 | 1.3) at submit time. */
+  edgingThicknessMm: '0.6' | '1.3';
+  /** Cabinet-wide edging finish material. `''` = auto (matches the panel
+   *  the band is on); any other value is a catalog `MaterialId`. */
+  edgingFinishMaterialId: '' | MaterialId;
 }
 
 interface FormErrors {
@@ -76,6 +85,7 @@ export default function CabinetForm(): React.JSX.Element {
     setDrawerHeight, setDrawerFrontThickness, deleteDrawer,
     plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
     boardOverridesByStableId,
+    bodyEdgingOverrides, setBodyEdgingOverride,
   } = useCabinet();
 
   // Unified editor state: one editor open at a time. The body/door/plinth
@@ -101,6 +111,18 @@ export default function CabinetForm(): React.JSX.Element {
   // values that aren't passed fall back to the current form state. Keeps
   // the CabinetInput-building logic in one place — mirrors handleSubmit
   // for everything except the field the user just changed.
+  /** Builds an {@link Edging} value from the current form state. Pure —
+   *  no side effects; used to feed `calculate()` and to seed the body
+   *  editor's "מותאם" override with the cabinet defaults. */
+  function buildCabinetEdging(state: FormState): Edging {
+    const base: Edging = {
+      thickness: state.edgingThicknessMm === '1.3' ? 1.3 : 0.6,
+    };
+    return state.edgingFinishMaterialId
+      ? { ...base, finishMaterialId: state.edgingFinishMaterialId }
+      : base;
+  }
+
   function applyPlinthUpdate(patch: { plinth?: number; plinthRecess?: number }): void {
     setForm(p => ({
       ...p,
@@ -140,6 +162,7 @@ export default function CabinetForm(): React.JSX.Element {
       doorsPerColumn,
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
+      edging: buildCabinetEdging(form),
     });
   }
 
@@ -179,6 +202,7 @@ export default function CabinetForm(): React.JSX.Element {
     bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
     doorGap: '2', doorGapManuallySet: false,
     maxDoorWidth: '60',
+    edgingThicknessMm: '0.6', edgingFinishMaterialId: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
@@ -277,6 +301,7 @@ export default function CabinetForm(): React.JSX.Element {
       doorsPerColumn,
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
+      edging: buildCabinetEdging(form),
     });
   }
 
@@ -387,6 +412,12 @@ export default function CabinetForm(): React.JSX.Element {
   if (editing.type === 'box') {
     const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
     if (editingBox) {
+      // `boxStableKey` is the current `BoxSlotId` placeholder used by the
+      // per-body edging map (DECISIONS_LOG 2026-05-29 — BoxSlotId refactor
+      // is a separate task). Lookup + setter wiring stay here so the editor
+      // is unaware of slot identity.
+      const editingBoxSlotId = boxStableKey(editingBox);
+      const cabinetEdging = buildCabinetEdging(form);
       return (
         <div className={styles.form}>
           <BoxInteriorEditor
@@ -406,6 +437,9 @@ export default function CabinetForm(): React.JSX.Element {
             frontMaterialId={form.frontMaterialId}
             hasOuterShell={form.hasShell}
             hasEnvelopeTop={form.hasEnvelopeTop}
+            cabinetEdging={cabinetEdging}
+            bodyEdgingOverride={bodyEdgingOverrides.get(editingBoxSlotId)}
+            onSetBodyEdging={e => setBodyEdgingOverride(editingBoxSlotId, e)}
           />
         </div>
       );
@@ -551,6 +585,45 @@ export default function CabinetForm(): React.JSX.Element {
                   setForm(p => ({ ...p, frontMaterialId: e.target.value as MaterialId }))
                 }
               >
+                {materialsArray.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* קנט — עובי + גמר. ברירת מחדל ארון: 0.6 mm + אוטומטי. ה-Edging
+                שנבנה כאן יוזרם אל calculate() ויהיה ה-cabinetDefault של
+                edgingCtx; per-body override נשלט בעורך הגוף. */}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-edging-thickness">
+                {t.edging.thickness}
+              </label>
+              <select
+                id="input-edging-thickness"
+                className={styles.select}
+                value={form.edgingThicknessMm}
+                onChange={e =>
+                  setForm(p => ({ ...p, edgingThicknessMm: e.target.value as '0.6' | '1.3' }))
+                }
+              >
+                <option value="0.6">0.6</option>
+                <option value="1.3">1.3</option>
+              </select>
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.fieldLabel} htmlFor="input-edging-finish">
+                {t.edging.finish}
+              </label>
+              <select
+                id="input-edging-finish"
+                className={styles.select}
+                value={form.edgingFinishMaterialId}
+                onChange={e =>
+                  setForm(p => ({ ...p, edgingFinishMaterialId: e.target.value as '' | MaterialId }))
+                }
+              >
+                <option value="">{t.edging.finishAuto}</option>
                 {materialsArray.map(m => (
                   <option key={m.id} value={m.id}>{m.name}</option>
                 ))}

@@ -183,6 +183,26 @@ export interface Translations {
     plinthRecessedLabel: string;
     plinthRecessLabel: string;
   };
+
+  edging: {
+    /** Cabinet-form: thickness select label ("Edging Thickness (mm)"). */
+    thickness: string;
+    /** Cabinet-form: finish (band color) select label. */
+    finish: string;
+    /** Cabinet-form: first option of `finish` — `undefined` finishMaterialId
+     *  resolves to the panel's own material at cut time. */
+    finishAuto: string;
+    /** Body-editor override section header. */
+    overrideLabel: string;
+    /** Body-editor radio: inherit the cabinet-wide edging (delete override). */
+    inherit: string;
+    /** Body-editor radio: use a per-body edging override. */
+    custom: string;
+    /** Body-editor: short form of `thickness` (header already says "קנט"). */
+    thicknessShort: string;
+    /** Body-editor: short form of `finish`. */
+    finishShort: string;
+  };
 }
 
 const he: Translations = {
@@ -359,6 +379,17 @@ const he: Translations = {
     plinthRecessedLabel: 'צוקל נסוג',
     plinthRecessLabel: 'נסיגה (ס"מ)',
   },
+
+  edging: {
+    thickness: 'עובי קנט (מ"מ)',
+    finish: 'גמר קנט',
+    finishAuto: '— אוטומטי (כמו הלוח) —',
+    overrideLabel: 'קנט',
+    inherit: 'כמו ארון',
+    custom: 'מותאם',
+    thicknessShort: 'עובי (מ"מ)',
+    finishShort: 'גמר',
+  },
 };
 
 const en: Translations = {
@@ -534,6 +565,17 @@ const en: Translations = {
     plinthResetGablesTooltip: 'Restore gables to their automatic positions (edges and body joints)',
     plinthRecessedLabel: 'Recessed plinth',
     plinthRecessLabel: 'Recess (cm)',
+  },
+
+  edging: {
+    thickness: 'Edging Thickness (mm)',
+    finish: 'Edging Finish',
+    finishAuto: '— Auto (matches panel) —',
+    overrideLabel: 'Edging',
+    inherit: 'Like cabinet',
+    custom: 'Custom',
+    thicknessShort: 'Thickness (mm)',
+    finishShort: 'Finish',
   },
 };
 

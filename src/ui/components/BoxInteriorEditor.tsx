@@ -9,9 +9,12 @@ import {
   defaultRodPlacement,
   validateInterior,
 } from '../../core/interior/interiorUtils';
+import { MATERIALS } from '../../catalog';
 import styles from './BoxInteriorEditor.module.css';
 import type { InteriorItem, DrawerItem, DrawerMount, InteriorWarning, ShelfWarning } from '../../types/interior';
 import type { Box, BoxPosition } from '../../types/geometry';
+import type { Edging } from '../../types/edging';
+import type { MaterialId } from '../../types/materials';
 import type { Translations } from '../../i18n/translations';
 
 function shelfWarningText(w: ShelfWarning, t: Translations): string {
@@ -45,6 +48,16 @@ interface Props {
   frontMaterialId: import('../../types/materials').MaterialId;
   hasOuterShell: boolean;
   hasEnvelopeTop: boolean;
+  /** Cabinet-wide edging — shown as the "inherit" target in the override
+   *  section. Used to seed `bodyEdgingOverride` when the user toggles
+   *  "מותאם" for the first time. */
+  cabinetEdging: Edging;
+  /** Current per-body edging override, if any. `undefined` ↔ inheriting
+   *  cabinet edging. */
+  bodyEdgingOverride: Edging | undefined;
+  /** Setter: pass `undefined` to revert to cabinet edging, an `Edging` value
+   *  to apply / update the per-body band. */
+  onSetBodyEdging: (edging: Edging | undefined) => void;
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -59,6 +72,7 @@ export default function BoxInteriorEditor({
   onAddPartition, onRemovePartition,
   cellItems, onCellItemsChange, tBody, doorGapMm,
   bodyMaterialId, frontMaterialId, hasOuterShell, hasEnvelopeTop,
+  cabinetEdging, bodyEdgingOverride, onSetBodyEdging,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -530,6 +544,77 @@ export default function BoxInteriorEditor({
           {t.interior.editBody} — {boxLabel}
           <span className={styles.bodyHint}> ({bodyH} ס"מ)</span>
         </h2>
+      </div>
+
+      {/* Per-body edging override.
+          - "כמו ארון" (default) → no override entry; cabinet edging applies.
+          - "מותאם" → an entry seeded from `cabinetEdging`, then edited
+            in-place via the two dropdowns. Switching back to "כמו ארון"
+            deletes the entry (setter receives `undefined`).
+          Section sits above both layout branches so the carpenter sees the
+          same control in partitioned and single-body modes. */}
+      <div className={styles.edgingSection}>
+        <span className={styles.edgingLabel}>{t.edging.overrideLabel}:</span>
+        <label className={styles.edgingRadioLabel}>
+          <input
+            type="radio"
+            name={`edging-${box.id}`}
+            checked={bodyEdgingOverride === undefined}
+            onChange={() => onSetBodyEdging(undefined)}
+          />
+          {t.edging.inherit}
+        </label>
+        <label className={styles.edgingRadioLabel}>
+          <input
+            type="radio"
+            name={`edging-${box.id}`}
+            checked={bodyEdgingOverride !== undefined}
+            onChange={() => onSetBodyEdging({ ...cabinetEdging })}
+          />
+          {t.edging.custom}
+        </label>
+
+        {bodyEdgingOverride !== undefined && (
+          <>
+            <label className={styles.edgingField}>
+              <span className={styles.edgingFieldLabel}>{t.edging.thicknessShort}</span>
+              <select
+                className={styles.edgingSelect}
+                value={String(bodyEdgingOverride.thickness)}
+                onChange={e => onSetBodyEdging({
+                  ...bodyEdgingOverride,
+                  thickness: e.target.value === '1.3' ? 1.3 : 0.6,
+                })}
+              >
+                <option value="0.6">0.6</option>
+                <option value="1.3">1.3</option>
+              </select>
+            </label>
+
+            <label className={styles.edgingField}>
+              <span className={styles.edgingFieldLabel}>{t.edging.finishShort}</span>
+              <select
+                className={styles.edgingSelect}
+                value={bodyEdgingOverride.finishMaterialId ?? ''}
+                onChange={e => {
+                  const v = e.target.value as '' | MaterialId;
+                  // '' = auto → drop the key so the band tracks the panel
+                  // material. Any other value pins the band's color.
+                  if (v === '') {
+                    onSetBodyEdging({ thickness: bodyEdgingOverride.thickness });
+                  } else {
+                    onSetBodyEdging({ ...bodyEdgingOverride, finishMaterialId: v });
+                  }
+                }}
+              >
+                <option value="">{t.edging.finishAuto}</option>
+                {Object.values(MATERIALS).map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
       </div>
 
       {hasPartitions ? (
