@@ -10,6 +10,15 @@ interface CutsListProps {
   cuts: CutItem[];
 }
 
+/** Display-only formatter: always 2 decimals, round-half-up for positive
+ *  values (`Math.round` rounds toward +∞ on `.5`, which is the carpenter
+ *  intuition — `29.925 → "29.93"`, NOT banker's `"29.92"`). The intermediate
+ *  `× 100 / 100` collapses float noise from the `mm → cm` conversion
+ *  (`c.w / 10`) before `toFixed` locks in the trailing zero. */
+function format2(v: number): string {
+  return (Math.round(v * 100) / 100).toFixed(2);
+}
+
 interface MaterialGroup {
   /** materialId, or null when the cut is not bound to a catalog material
    *  (drawer-box parts at fixed 12mm/6mm). */
@@ -109,9 +118,9 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
                           {c.note && <span className={styles.note}> ({c.note})</span>}
                         </td>
                         <td className={styles.colDims}>
-                          <span className={styles.dimW}>{lengthCm.toFixed(1)}</span>
+                          <span className={styles.dimW}>{format2(lengthCm)}</span>
                           {' × '}
-                          <span className={styles.dimH}>{widthCm.toFixed(1)}</span>
+                          <span className={styles.dimH}>{format2(widthCm)}</span>
                         </td>
                         <td className={styles.colQty}>{c.qty}</td>
                         <td className={styles.colArea}>{Math.round(areaCm2).toLocaleString()}</td>

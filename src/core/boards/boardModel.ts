@@ -1026,8 +1026,13 @@ export function boardsToCutItems(
     return {
       name: `${ROLE_NAME_HE[b.role]}${nameTag}`,
       qty: 1,
-      w: Math.round((length - dLen) * 10),
-      h: Math.round((width  - dWid) * 10),
+      // 0.01 mm precision: Math.round(...*1000)/100 avoids the integer-mm
+      // rounding that would hide a 0.7 mm edging-deduction difference (the
+      // gap between 0.6 mm and 1.3 mm bands). CutsList's format2 handles
+      // display rounding; mergeCutItems uses template-string keys so float
+      // equality is exact for boards sharing the same edging. :contentReference[oaicite:0]{index=0}
+      w: Math.round((length - dLen) * 1000) / 100,
+      h: Math.round((width  - dWid) * 1000) / 100,
       group: ROLE_GROUP[b.role],
       note: noteMm,
       materialId,

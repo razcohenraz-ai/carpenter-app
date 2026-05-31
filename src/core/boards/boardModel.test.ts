@@ -1442,8 +1442,8 @@ function assertConsistency({ name, boards, overrides, edgingCtx, boxSlotId }: Sc
     const edging  = edgingCtx ? resolveEdging(b, boxSlotId, edgingCtx) : undefined;
     const dLen    = edging ? getDeductionFor(pattern, 'length', edging) : 0;
     const dWid    = edging ? getDeductionFor(pattern, 'width',  edging) : 0;
-    const expectedW = Math.round((length - dLen) * 10);
-    const expectedH = Math.round((width  - dWid) * 10);
+    const expectedW = Math.round((length - dLen) * 1000) / 100;
+    const expectedH = Math.round((width  - dWid) * 1000) / 100;
     expect(
       cut.w, `${name}: ${b.stableId} (${b.role}) — CutItem.w (${cut.w}) != expected ${expectedW}`,
     ).toBe(expectedW);
@@ -1756,9 +1756,9 @@ describe('Edging — boardsToCutItems deduction', () => {
       // 0.6 mm band → 0.06 cm deduction on `width` for the 'front' pattern.
       // Same formula production uses; rounded ×10 mm at the end.
       const dWidCm = pattern === 'front' ? 0.06 : 0;
-      expect(cut.w, `${board.role}: length unchanged`).toBe(Math.round(board.length * 10));
+      expect(cut.w, `${board.role}: length unchanged`).toBe(Math.round(board.length * 1000) / 100);
       expect(cut.h, `${board.role}: width − 0.06 cm`).toBe(
-        Math.round((board.width - dWidCm) * 10),
+        Math.round((board.width - dWidCm) * 1000) / 100,
       );
     });
     // The dedicated consistency helper agrees end-to-end.
@@ -1784,7 +1784,7 @@ describe('Edging — boardsToCutItems deduction', () => {
       const pattern = getEdgingPattern(board.role);
       // 1.3 mm = 0.13 cm; only 'front' pattern is affected.
       const dWidCm = pattern === 'front' ? 0.13 : 0;
-      expect(cut.h, board.role).toBe(Math.round((board.width - dWidCm) * 10));
+      expect(cut.h, board.role).toBe(Math.round((board.width - dWidCm) * 1000) / 100);
     });
     assertConsistency({
       name: 'per-body 1.3 oak18 on body',
@@ -1814,7 +1814,7 @@ describe('Edging — boardsToCutItems deduction', () => {
         ? (board.stableId === topBoard.stableId ? 0.13 : 0.06)
         : 0;
       expect(cut.h, `${board.role} (${board.stableId})`).toBe(
-        Math.round((board.width - dWidCm) * 10),
+        Math.round((board.width - dWidCm) * 1000) / 100,
       );
     });
     assertConsistency({
@@ -1849,6 +1849,48 @@ describe('Edging — boardsToCutItems deduction', () => {
       expect(cut.w, `${board.role}: plinth length unchanged`).toBe(Math.round(board.length * 10));
       expect(cut.h, `${board.role}: plinth width  unchanged`).toBe(Math.round(board.width  * 10));
     });
+  });
+
+  it('regression — per-body override 0.6→1.3mm produces distinct h values (0.7mm not masked by rounding)', () => {
+    // Bug: with Math.round(...*10) (integer mm) the 0.7mm gap between 0.6 mm
+    // and 1.3 mm edging on the depth axis rounded to 0, making the per-body
+    // override invisible in the cut list. With 0.01 mm precision the two h
+    // values are distinct.
+    // D=60 cm chosen so both roundings land on the same integer mm:
+    //   (60 - 0.06) × 10 = 599.4 → 599   (old, BUG)
+    //   (60 - 0.13) × 10 = 598.7 → 599   (old, BUG — same!)
+    // With the fixed formula (×1000/100):
+    //   (60 - 0.06) × 1000/100 = 599.4   (new, distinct ✓)
+    //   (60 - 0.13) × 1000/100 = 598.7   (new, distinct ✓)
+    const b = box({ W: 80, H: 200, D: 60 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: true });
+    const slotId = 'single:single';
+
+    const ctxDefault: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map(),
+      boardOverrides: noOverrides,
+    };
+    const ctxOverride: EdgingContext = {
+      cabinetDefault: { thickness: 0.6 },
+      bodyOverrides: new Map([[slotId, { thickness: 1.3 }]]),
+      boardOverrides: noOverrides,
+    };
+
+    const cutsDefault  = boardsToCutItems(boards, '', noOverrides, ctxDefault,  slotId);
+    const cutsOverride = boardsToCutItems(boards, '', noOverrides, ctxOverride, slotId);
+
+    // Pick any 'front'-pattern board (e.g. side-left) and confirm h differs.
+    const sideDefault  = cutsDefault .find(c => c.role === 'side-left')!;
+    const sideOverride = cutsOverride.find(c => c.role === 'side-left')!;
+    expect(sideDefault.h).toBe(599.4);   // (60 - 0.06) × 1000/100
+    expect(sideOverride.h).toBe(598.7);  // (60 - 0.13) × 1000/100
+    expect(sideDefault.h).not.toBe(sideOverride.h);
+
+    // 'none'-pattern boards (back) must be unaffected by edging.
+    const backDefault  = cutsDefault .find(c => c.role === 'back')!;
+    const backOverride = cutsOverride.find(c => c.role === 'back')!;
+    expect(backDefault.h).toBe(backOverride.h);
   });
 
   it('finishMaterialId=undefined: getEdgingFinishMaterial auto-resolves to board material', () => {
