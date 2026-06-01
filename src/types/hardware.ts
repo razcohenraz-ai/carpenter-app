@@ -68,6 +68,7 @@ export interface HardwareRule {
   byDoor?: number;         // multiplied by door count
   byDrawer?: number;       // multiplied by drawer count
   byShelf?: number;        // multiplied by shelf count
+  byRod?: number;          // multiplied by hanging-rod count
 }
 
 export type FurnitureType = "cabinet" | "shelf" | "table" | "drawer_unit" | "custom";

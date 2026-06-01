@@ -13,17 +13,17 @@ describe("buildHW — cabinet", () => {
     expect(byId(hw, "slide-telescopic")).toBeUndefined(); // 0 מגירות → מסונן
   });
 
-  it("0 דלתות, 3 מגירות — 6 מסילות, ללא צירים, עם ידיות למגירות", () => {
+  it("0 דלתות, 3 מגירות — 3 מסילות, ללא צירים, עם ידיות למגירות", () => {
     const hw = buildHW("cabinet", 0, 3, 0);
-    expect(byId(hw, "slide-telescopic")!.qty).toBe(6); // 3 × 2
+    expect(byId(hw, "slide-telescopic")!.qty).toBe(3); // 3 × 1
     expect(byId(hw, "hinge-35mm")).toBeUndefined();
     expect(byId(hw, "handle")!.qty).toBe(3);           // byDrawer: 3 × 1
   });
 
-  it("פריטים fixed (גב, פלטות, ברגים) תמיד קיימים", () => {
+  it("פריטים fixed (ברגים) תמיד קיימים; גב ופלטות אינם ברשימת הפרזולים", () => {
     const hw = buildHW("cabinet", 0, 0, 0);
-    expect(byId(hw, "back-panel-6mm")!.qty).toBe(1);
-    expect(byId(hw, "cam-lock")!.qty).toBe(1);
+    expect(byId(hw, "back-panel-6mm")).toBeUndefined(); // הוסר מהפרזולים — מופיע ברשימת החיתוכים
+    expect(byId(hw, "cam-lock")).toBeUndefined();       // הוסר מהפרזולים
     expect(byId(hw, "screw-4x40")!.qty).toBe(2);
   });
 
@@ -80,9 +80,23 @@ describe("buildHW — תיקון ISSUE-004: else if + ידיות לדלתות ו
   });
 
   it("else if: כל כלל נבחר לפי מכפיל יחיד — byDoor ו-byDrawer לא מצטברים בתוך כלל אחד", () => {
-    // מסילות: byDrawer=2 בלבד. עם 4 דלתות ו-3 מגירות — 6 מסילות, לא 8+6
+    // מסילות: byDrawer=1 בלבד. עם 4 דלתות ו-3 מגירות — 3 מסילות, לא 4+3
     const hw = buildHW("cabinet", 4, 3, 0);
-    expect(byId(hw, "slide-telescopic")!.qty).toBe(6); // 3×2 בלבד
+    expect(byId(hw, "slide-telescopic")!.qty).toBe(3); // 3×1 בלבד
+  });
+});
+
+describe("buildHW — מוטות תליה", () => {
+  it("2 מוטות → 2 מוטות + 4 סוגרים", () => {
+    const hw = buildHW("cabinet", 0, 0, 0, 2);
+    expect(byId(hw, "rod-hanging")!.qty).toBe(2);
+    expect(byId(hw, "rod-bracket")!.qty).toBe(4); // 2 × 2
+  });
+
+  it("ללא מוטות → מוט וסוגר מסוננים", () => {
+    const hw = buildHW("cabinet", 0, 0, 0, 0);
+    expect(byId(hw, "rod-hanging")).toBeUndefined();
+    expect(byId(hw, "rod-bracket")).toBeUndefined();
   });
 });
 

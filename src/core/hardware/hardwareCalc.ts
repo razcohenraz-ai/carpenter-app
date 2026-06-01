@@ -18,6 +18,7 @@ export function buildHW(
   numDoors: number,
   drawers: number,
   shelves: number,
+  rods: number = 0,
 ): HardwareLineItem[] {
   // noUncheckedIndexedAccess returns HardwareRule[] | undefined even for FurnitureType keys.
   const rules: HardwareRule[] = HW_PRESETS[type] ?? HW_PRESETS.custom;
@@ -28,6 +29,7 @@ export function buildHW(
       if      (rule.byDoor   !== undefined) qty = numDoors * rule.byDoor;
       else if (rule.byDrawer !== undefined) qty = drawers  * rule.byDrawer;
       else if (rule.byShelf  !== undefined) qty = shelves  * rule.byShelf;
+      else if (rule.byRod    !== undefined) qty = rods     * rule.byRod;
 
       return {
         specId:    rule.specId,

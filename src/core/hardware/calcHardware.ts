@@ -6,7 +6,7 @@ import type { InteriorById, CellInteriorById } from '../../types/interior';
 function countItemsOfType(
   interiorById: InteriorById,
   cellInteriorById: CellInteriorById,
-  type: 'shelf' | 'drawer',
+  type: 'shelf' | 'drawer' | 'rod',
 ): number {
   let count = 0;
   for (const items of Object.values(interiorById)) {
@@ -32,5 +32,6 @@ export function calcHardware(
   const numDoors = Object.values(doorsById).filter(d => d.hasDoor).length;
   const drawers  = countItemsOfType(interiorById, cellInteriorById, 'drawer');
   const shelves  = countItemsOfType(interiorById, cellInteriorById, 'shelf');
-  return buildHW('cabinet', numDoors, drawers, shelves);
+  const rods     = countItemsOfType(interiorById, cellInteriorById, 'rod');
+  return buildHW('cabinet', numDoors, drawers, shelves, rods);
 }

@@ -1,11 +1,11 @@
 {
   "cabinet": [
     { "specId": "hinge-35mm",      "name": "ציר כוס 35mm",   "unit": "יח'",   "unitPrice": 4,  "byDoor": 2   },
-    { "specId": "handle",          "name": "ידית",            "unit": "יח'",   "unitPrice": 18, "byDoor": 1   },
-    { "specId": "handle",          "name": "ידית",            "unit": "יח'",   "unitPrice": 18, "byDrawer": 1 },
-    { "specId": "slide-telescopic","name": "מסילה טלסקופית", "unit": "זוג",   "unitPrice": 35, "byDrawer": 2 },
-    { "specId": "back-panel-6mm",  "name": "גב 6mm",          "unit": "לוח",   "unitPrice": 60, "fixed": 1    },
-    { "specId": "cam-lock",        "name": "פלטות הרכבה",     "unit": "קופסה", "unitPrice": 22, "fixed": 1    },
+    { "specId": "handle",          "name": "ידית דלת",        "unit": "יח'",   "unitPrice": 18, "byDoor": 1   },
+    { "specId": "handle",          "name": "ידית מגירה",      "unit": "יח'",   "unitPrice": 18, "byDrawer": 1 },
+    { "specId": "slide-telescopic","name": "מסילה טלסקופית",  "unit": "זוג",   "unitPrice": 35, "byDrawer": 1 },
+    { "specId": "rod-hanging",     "name": "מוט תליה",        "unit": "יח'",   "unitPrice": 25, "byRod": 1    },
+    { "specId": "rod-bracket",     "name": "סוגר מוט תליה",   "unit": "יח'",   "unitPrice": 8,  "byRod": 2    },
     { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 2    }
   ],
   "shelf": [
