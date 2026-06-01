@@ -49,7 +49,7 @@ import type { CabinetInput } from '../../types/cabinet';
 import { DEFAULT_EDGING, type Edging } from '../../types/edging';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 import type { Door, DoorById, DrawerFrontById, Hinge } from '../../types/doors';
-import type { BoxSlotId } from '../../types/project';
+import type { BoxSlotId, SavedCabinetState, SavedDoor } from '../../types/project';
 
 export type { CabinetInput };
 
@@ -195,6 +195,14 @@ export function useCabinet(): {
   setBoxDimension: (boxSlotId: BoxSlotId, axis: 'W' | 'H' | 'D', value: number | undefined) => void;
   /** Drop all dimension overrides for a body at once. */
   resetBoxDimensions: (boxSlotId: BoxSlotId) => void;
+  /** Snapshot of all current user choices as a serialisable {@link SavedCabinetState}.
+   *  Called synchronously — safe to call immediately after `calculate()`. */
+  getSnapshot: () => SavedCabinetState;
+  /** Restore a previously-saved state. Resets all override refs then
+   *  re-runs `calculate()` so boxes and boards reflect the restored values.
+   *  Requires `lastInputRef` to be set (i.e. `calculate` was called at least
+   *  once with the matching `CabinetInput`). */
+  restoreState: (state: SavedCabinetState) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -217,6 +225,9 @@ export function useCabinet(): {
   const bodyEdgingOverridesRef = useRef<ReadonlyMap<BoxSlotId, Edging>>(new Map());
   const [boxDimensionOverrides, setBoxDimensionOverridesState] = useState<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
   const boxDimensionOverridesRef = useRef<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
+  /** Pending state to restore on the next `calculate()` call (first-run only).
+   *  Set by `restoreState()`; consumed and cleared inside `calculate()`. */
+  const pendingRestoreRef = useRef<SavedCabinetState | null>(null);
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -671,6 +682,93 @@ export function useCabinet(): {
     if (lastInputRef.current) calculate(lastInputRef.current);
   }
 
+  // ── Snapshot / Restore ────────────────────────────────────────────────────
+
+  function getSnapshot(): SavedCabinetState {
+    const boxes = prevBoxesRef.current ?? [];
+    const nfMap = numFrontsRef.current;
+
+    const interior: SavedCabinetState['interior'] = {};
+    const cellInterior: SavedCabinetState['cellInterior'] = {};
+    const partitions: SavedCabinetState['partitions'] = {};
+    const doors: SavedCabinetState['doors'] = {};
+
+    for (const box of boxes) {
+      if (box.level === 'plinth') continue;
+      const slotKey = boxStableKey(box);
+
+      const items = interiorRef.current[box.id] ?? [];
+      if (items.length > 0) interior[slotKey] = items;
+
+      const cells = cellInteriorRef.current[box.id];
+      if (cells) cellInterior[slotKey] = cells;
+
+      if (partitionsRef.current.get(box.id)) partitions[slotKey] = true;
+
+      const nf = nfMap.get(box.id) ?? 1;
+      for (let fi = 0; fi < nf; fi++) {
+        const doorId = makeDoorId(box.id, fi);
+        const door = doorsRef.current[doorId];
+        if (door) {
+          const savedDoor: SavedDoor = {
+            hingeSide: door.hingeSide,
+            hingeCount: door.hingeCount,
+            hinges: door.hinges.map(h => ({ positionFromBottom: h.positionFromBottom, isManual: h.isManual })),
+            hasDoor: door.hasDoor,
+            ...(door.thicknessOverride ? { thicknessOverride: door.thicknessOverride as MaterialId } : {}),
+          };
+          doors[`${slotKey}:${fi}`] = savedDoor;
+        }
+      }
+    }
+
+    const snap: SavedCabinetState = {
+      interior,
+      cellInterior,
+      partitions,
+      doors,
+      plinthGableOverrides: Object.fromEntries(plinthGableOverridesRef.current),
+      boardOverrides: Object.fromEntries(boardOverridesRef.current),
+    };
+    if (bodyEdgingOverridesRef.current.size > 0)
+      snap.bodyEdgingOverrides = Object.fromEntries(bodyEdgingOverridesRef.current);
+    if (boxDimensionOverridesRef.current.size > 0)
+      snap.boxDimensionOverrides = Object.fromEntries(boxDimensionOverridesRef.current);
+    return snap;
+  }
+
+  function restoreState(state: SavedCabinetState): void {
+    // Restore overrides that don't need rekeying immediately
+    const plinthGables = new Map(Object.entries(state.plinthGableOverrides));
+    plinthGableOverridesRef.current = plinthGables;
+    setPlinthGableOverridesState(plinthGables);
+
+    const boardOvr = new Map(Object.entries(state.boardOverrides)) as Map<string, import('../../core/boards/boardModel').BoardOverrides>;
+    boardOverridesRef.current = boardOvr;
+    setBoardOverridesState(boardOvr);
+
+    if (state.bodyEdgingOverrides) {
+      const beo = new Map(Object.entries(state.bodyEdgingOverrides));
+      bodyEdgingOverridesRef.current = beo;
+      setBodyEdgingOverridesState(beo);
+    }
+
+    if (state.boxDimensionOverrides) {
+      const bdo = new Map(Object.entries(state.boxDimensionOverrides));
+      boxDimensionOverridesRef.current = bdo;
+      setBoxDimensionOverridesState(bdo);
+    }
+
+    // Interior / doors / partitions are keyed by boxStableKey — restored
+    // in calculate() on the next run via pendingRestoreRef
+    pendingRestoreRef.current = state;
+
+    // Reset previous boxes so calculate() treats this as a fresh start
+    prevBoxesRef.current = null;
+
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -748,6 +846,56 @@ export function useCabinet(): {
         for (let fi = 0; fi < nf; fi++) {
           const d = currentDoors[makeDoorId(box.id, fi)];
           if (d) stableDoorMap.set(`${key}:${fi}`, d);
+        }
+      }
+    }
+
+    // ── Restore from saved state (product load) ────────────────────────────
+    // When restoreState() was called, pendingRestoreRef is populated and
+    // prevBoxes was reset to null so we reach this path. Populate the stable
+    // maps directly from the serialised state so the preservation loop below
+    // picks them up exactly as if the user had built this state interactively.
+    const pendingRestore = pendingRestoreRef.current;
+    if (pendingRestore) {
+      pendingRestoreRef.current = null;
+      for (const box of boxes.filter(b => b.level !== 'plinth')) {
+        const slotKey = boxStableKey(box);
+        const savedItems = pendingRestore.interior[slotKey];
+        if (savedItems) stableInteriorMap.set(slotKey, { items: savedItems, H: box.H });
+        const savedCells = pendingRestore.cellInterior[slotKey];
+        if (savedCells) stableCellMap.set(slotKey, savedCells);
+        if (pendingRestore.partitions[slotKey]) stablePartitionsMap.set(slotKey, true);
+        const nf = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+        for (let fi = 0; fi < nf; fi++) {
+          const dsk = `${slotKey}:${fi}`;
+          const sd = pendingRestore.doors[dsk];
+          if (sd) {
+            // Reconstruct a Door from SavedDoor — derived fields (height,
+            // width, coversSkirt, gapMm) are filled in during the door loop
+            // below; we only need the user-controlled fields here.
+            const hinges: Hinge[] = sd.hinges.map(h => ({
+              id: newItemId(),
+              positionFromBottom: h.positionFromBottom,
+              isManual: h.isManual,
+            }));
+            // Temporarily store as a partial Door keyed by DoorSlotKey so the
+            // door loop (which uses stableDoorMap keyed by `${key}:${fi}`) can
+            // find it and fill in the derived fields via recomputeDoorHinges.
+            stableDoorMap.set(dsk, {
+              id: dsk, // placeholder — overwritten in the door loop
+              boxId: box.id,
+              frontIndex: fi,
+              height: 0,   // derived
+              width: 0,    // derived
+              hingeSide: sd.hingeSide,
+              hingeCount: sd.hingeCount,
+              hinges,
+              hasDoor: sd.hasDoor,
+              coversSkirt: false, // derived
+              gapMm: doorGapMm,
+              ...(sd.thicknessOverride ? { thicknessOverride: sd.thicknessOverride } : {}),
+            });
+          }
         }
       }
     }
@@ -1076,5 +1224,6 @@ export function useCabinet(): {
     resetAllBoardOverrides,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
+    getSnapshot, restoreState,
   };
 }

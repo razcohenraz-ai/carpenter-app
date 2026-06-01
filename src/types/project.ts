@@ -82,6 +82,9 @@ export interface SavedCabinetState {
    *  as `bodyEdgingOverrides` but applied to door/drawer-front panels in
    *  the door cut-emission path. Optional. */
   doorEdgingOverrides?: Record<DoorSlotKey, Edging>;
+  /** Per-body W/H/D dimension overrides, keyed by {@link BoxSlotId}.
+   *  Only axes explicitly set by the user are present. Optional. */
+  boxDimensionOverrides?: Record<BoxSlotId, { W?: number; H?: number; D?: number }>;
 }
 
 // ── Cabinet content (input + saved state) ─────────────────────────────────────

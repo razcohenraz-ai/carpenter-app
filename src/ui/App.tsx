@@ -4,7 +4,7 @@ import { useProject } from './hooks/useProject';
 import { ProjectView } from './components/ProjectView';
 import CabinetForm from './components/CabinetForm';
 import type { CabinetInput } from '../types/cabinet';
-import { emptyCabinetState } from '../core/product/productDefaults';
+import type { SavedCabinetState } from '../types/project';
 import styles from './App.module.css';
 
 export default function App(): React.JSX.Element {
@@ -58,8 +58,9 @@ export default function App(): React.JSX.Element {
         {activeProduct ? (
           <CabinetForm
             initialInput={activeProduct.cabinet.input}
-            onCabinetChange={(input: CabinetInput) =>
-              updateProductCabinet(activeProduct.id, { input, state: emptyCabinetState() })
+            initialState={activeProduct.cabinet.state}
+            onCabinetChange={(input: CabinetInput, state: SavedCabinetState) =>
+              updateProductCabinet(activeProduct.id, { input, state })
             }
           />
         ) : (

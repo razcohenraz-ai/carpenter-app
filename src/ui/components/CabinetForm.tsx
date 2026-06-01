@@ -76,9 +76,14 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
 interface CabinetFormProps {
   /** Initial dimensions/settings to populate the form (from a saved project). */
   initialInput?: import('../../types/cabinet').CabinetInput;
-  /** Called after every successful calculate() with the current CabinetInput.
-   *  Used by the project layer to auto-save form values. */
-  onCabinetChange?: (input: import('../../types/cabinet').CabinetInput) => void;
+  /** Saved interior/door/override state to restore on first calculate(). */
+  initialState?: import('../../types/project').SavedCabinetState;
+  /** Called after every successful calculate() with the current input+state.
+   *  Used by the project layer to auto-save. */
+  onCabinetChange?: (
+    input: import('../../types/cabinet').CabinetInput,
+    state: import('../../types/project').SavedCabinetState,
+  ) => void;
 }
 
 function inputToFormState(
@@ -105,7 +110,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, onCabinetChange }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -120,7 +125,18 @@ export default function CabinetForm({ initialInput, onCabinetChange }: CabinetFo
     boardOverridesByStableId,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
+    getSnapshot, restoreState,
   } = useCabinet();
+
+  // Restore saved state once, after the first calculate() populates the boxes
+  const restoredRef = React.useRef(false);
+  React.useEffect(() => {
+    if (initialState && !restoredRef.current) {
+      restoredRef.current = true;
+      restoreState(initialState);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Unified editor state: one editor open at a time. The body/door/plinth
   // editors replace the main view; the drawer editor renders as an overlay
@@ -340,7 +356,7 @@ export default function CabinetForm({ initialInput, onCabinetChange }: CabinetFo
       edging: buildCabinetEdging(form),
     };
     calculate(cabinetInput);
-    onCabinetChange?.(cabinetInput);
+    onCabinetChange?.(cabinetInput, getSnapshot());
   }
 
   // ── derived values ─────────────────────────────────────────────────────────

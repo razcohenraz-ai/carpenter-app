@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### נוסף — שמירה ושחזור state מלא של מוצר בפרויקט
+- **`getSnapshot(): SavedCabinetState`** ב-`useCabinet` — בונה את ה-state הנוכחי מה-refs (interior, cellInterior, partitions, doors, overrides) עם rekey מ-box.id ל-boxStableKey. קריאה סינכרונית — בטוחה מיד אחרי `calculate()`.
+- **`restoreState(state): void`** ב-`useCabinet` — מאפסת refs, מאכלסת `pendingRestoreRef`, ומריצה `calculate()` מחדש. ב-`calculate()` נוסף בלוק שצורך את `pendingRestoreRef` ומאכלס את ה-stable maps (interior, cells, partitions, doors) מה-state השמור.
+- **`boxDimensionOverrides?`** נוסף ל-`SavedCabinetState` — שומר override מידות גוף יחד עם שאר ה-state.
+- **`CabinetForm`** — קיבל `initialState?: SavedCabinetState` (קורא ל-`restoreState` ב-mount) ו-`onCabinetChange(input, state)` (מעביר snapshot מלא אחרי כל calculate).
+- **`App.tsx`** — `onCabinetChange` שומר עכשיו `{ input, state }` מלא לפרויקט; `initialState` מועבר לעורך בפתיחת מוצר. מחיקת `emptyCabinetState` מה-bridge.
+
 ### נוסף — ניהול פרויקטים + סוגי מוצרים
 - **`ProductType`** חדש (`'wardrobe'|'bookcase'|'sideboard'|'kitchen'|'free-build'`) + **`ProductUnit`** ב-`types/project.ts`. `Project` עבר מ-`cabinet: Cabinet` ל-`products: ProductUnit[]`.
 - **Migration v1→v2** ב-`migrations.ts` — `CURRENT_SCHEMA_VERSION=2`; cabinet יחיד נעטף ב-`ProductUnit` מסוג `'wardrobe'`.
