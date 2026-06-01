@@ -365,10 +365,14 @@ export function deriveEnvelopeFlags(
     box.position === 'right' ||
     box.position === 'single' ||
     (isUnit && box.unitIndex !== undefined && box.unitIndex === box.unitTotal);
+  // Envelope side panels span the FULL cabinet height — they are a single
+  // physical board, not split per level. Only the bottom-most row (or the
+  // only row) emits them so the cut list doesn't get duplicate entries.
+  const isBottomRow = box.level === 'bottom' || box.level === 'single';
   const isTopRow = box.level === 'top' || box.level === 'single';
   return {
-    hasEnvelopeLeft: isLeftEdge,
-    hasEnvelopeRight: isRightEdge,
+    hasEnvelopeLeft: isLeftEdge && isBottomRow,
+    hasEnvelopeRight: isRightEdge && isBottomRow,
     hasEnvelopeTop: hasEnvelopeTop && isTopRow,
   };
 }

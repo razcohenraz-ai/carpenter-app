@@ -135,7 +135,12 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         backThicknessCm,
         joint: cabinetJoint,
       });
-      boardsByBoxId.set(box.id, boards);
+      // Envelope side panels are drawn as full-height rects via geo.envelopePanels
+      // (always visible below). Exclude them from per-body board rendering to
+      // avoid a seam where top and bottom bodies would each draw half the panel.
+      boardsByBoxId.set(box.id, boards.filter(
+        b => b.role !== 'envelope-left' && b.role !== 'envelope-right',
+      ));
     }
   }
 
@@ -190,9 +195,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
           />
         ))}
 
-        {/* Outer envelope side panels — drawn only PRE-calc.
-            Post-calc the per-body board model emits envelope boards. */}
-        {!hasBoards && geo.envelopePanels && (
+        {/* Outer envelope side panels — always drawn as full-height rects.
+            Post-calc, per-body envelope-left/right boards are filtered out of
+            boardsByBoxId so there is no seam at level boundaries. */}
+        {geo.envelopePanels && (
           <>
             <rect
               x={geo.envelopePanels.left.x}

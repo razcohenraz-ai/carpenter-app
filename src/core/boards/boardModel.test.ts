@@ -1154,14 +1154,26 @@ describe('deriveEnvelopeFlags', () => {
     expect(flags.hasEnvelopeRight).toBe(false);
   });
 
-  it('unit_1 of 3 → envelope-left only', () => {
+  it('unit_1 of 3, level=top → no envelope (side panels only from bottom row)', () => {
     const flags = deriveEnvelopeFlags(b('unit_1', 'top', 1, 3), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(false);
+    expect(flags.hasEnvelopeRight).toBe(false);
+  });
+
+  it('unit_1 of 3, level=bottom → envelope-left only', () => {
+    const flags = deriveEnvelopeFlags(b('unit_1', 'bottom', 1, 3), true, false);
     expect(flags.hasEnvelopeLeft).toBe(true);
     expect(flags.hasEnvelopeRight).toBe(false);
   });
 
-  it('unit_3 of 3 → envelope-right only', () => {
+  it('unit_3 of 3, level=top → no envelope (side panels only from bottom row)', () => {
     const flags = deriveEnvelopeFlags(b('unit_3', 'top', 3, 3), true, false);
+    expect(flags.hasEnvelopeLeft).toBe(false);
+    expect(flags.hasEnvelopeRight).toBe(false);
+  });
+
+  it('unit_3 of 3, level=bottom → envelope-right only', () => {
+    const flags = deriveEnvelopeFlags(b('unit_3', 'bottom', 3, 3), true, false);
     expect(flags.hasEnvelopeLeft).toBe(false);
     expect(flags.hasEnvelopeRight).toBe(true);
   });
