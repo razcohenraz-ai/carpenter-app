@@ -20,10 +20,22 @@ const PAD_BOT = 8;
 const OVERVIEW_H = 340;
 const DRAW_H = OVERVIEW_H - PAD_TOP - PAD_BOT;
 
+/** Returns effective W/H/D for a unit, applying any boxDimensionOverrides.
+ *  The override key is "single:single" (boxStableKey for a single-box cabinet). */
+function effectiveDims(unit: KitchenUnit): { W: number; H: number; D: number } {
+  const inp = unit.cabinet.input;
+  const ovr = unit.cabinet.state.boxDimensionOverrides?.['single:single'];
+  return {
+    W: ovr?.W ?? inp.W,
+    H: ovr?.H ?? inp.H,
+    D: ovr?.D ?? inp.D,
+  };
+}
+
 function computeScale(units: KitchenUnit[], availableW: number): number {
   if (units.length === 0) return 4;
-  const totalW = units.reduce((s, u) => s + u.cabinet.input.W, 0) + (units.length - 1) * GAP_CM;
-  const maxH   = Math.max(...units.map(u => u.cabinet.input.H));
+  const totalW = units.reduce((s, u) => s + effectiveDims(u).W, 0) + (units.length - 1) * GAP_CM;
+  const maxH   = Math.max(...units.map(u => effectiveDims(u).H));
   const sx = availableW / totalW;
   const sy = DRAW_H / maxH;
   return Math.min(sx, sy, 8);
@@ -38,9 +50,10 @@ function FrontPanels({ unit, layout, scale }: {
   scale: number;
 }) {
   const inp = unit.cabinet.input;
+  const { W: effW, H: effH } = effectiveDims(unit);
   const tFront = getMaterial(inp.frontMaterialId).thickness / 10; // cm
   const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
-  const dl = calcDoors(inp.W, inp.H, inp.plinth, inp.doorCoversPlinth,
+  const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, inp.hasShell, tFront, forceRows);
   if (dl.n === 0) return null;
 
@@ -49,7 +62,7 @@ function FrontPanels({ unit, layout, scale }: {
   const gapCm = inp.doorGapMm / 10;
 
   const frontLayout = computeRowFrontLayout({
-    cabinetW: inp.W,
+    cabinetW: effW,
     hasOuterShell: inp.hasShell,
     shellThicknessCm: tFront,
     totalFrontsInRow: dl.n,
@@ -156,20 +169,21 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
   }, []);
 
   const scale = computeScale(units, availableW);
-  const maxH  = units.length ? Math.max(...units.map(u => u.cabinet.input.H)) : 90;
+  const maxH  = units.length ? Math.max(...units.map(u => effectiveDims(u).H)) : 90;
 
-  // Dimension summary
-  const totalW = units.reduce((s, u) => s + u.cabinet.input.W, 0);
+  // Dimension summary — use effective (overridden) dimensions
+  const totalW = units.reduce((s, u) => s + effectiveDims(u).W, 0);
 
-  // Compute layout for each unit
+  // Compute layout for each unit using effective dimensions
   let xCursor = 0;
   const unitLayouts = units.map(u => {
     const inp = u.cabinet.input;
-    const uw = inp.W * scale;
-    const uh = inp.H * scale;
+    const { W: effW, H: effH } = effectiveDims(u);
+    const uw = effW * scale;
+    const uh = effH * scale;
     const l = {
       x: xCursor,
-      y: PAD_TOP + (maxH - inp.H) * scale,
+      y: PAD_TOP + (maxH - effH) * scale,
       w: uw,
       h: uh,
       plinthH: inp.plinth * scale,
@@ -314,7 +328,7 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
                     textAnchor="middle" fontSize={8.5}
                     fill="var(--color-text-secondary)"
                   >
-                    {unit.cabinet.input.W}×{unit.cabinet.input.H}
+                    {effectiveDims(unit).W}×{effectiveDims(unit).H}
                   </text>
                 </g>
               );
