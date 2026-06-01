@@ -128,6 +128,8 @@ export interface Translations {
     dimOverrideH: string;
     dimOverrideD: string;
     dimOverrideReset: string;
+    warnHeightMismatch: string;
+    warnWidthMismatch: string;
   };
 
   doors: {
@@ -375,6 +377,8 @@ const he: Translations = {
     dimOverrideH: 'גובה (ס"מ)',
     dimOverrideD: 'עומק (ס"מ)',
     dimOverrideReset: 'אפס מידות',
+    warnHeightMismatch: 'שים לב: גופים צמודים עם גובה שונה — הפרש {diff} ס"מ',
+    warnWidthMismatch: 'שים לב: קומות מוערמות עם רוחב שונה — הפרש {diff} ס"מ',
   },
 
   doors: {
@@ -604,6 +608,8 @@ const en: Translations = {
     dimOverrideH: 'Height (cm)',
     dimOverrideD: 'Depth (cm)',
     dimOverrideReset: 'Reset dimensions',
+    warnHeightMismatch: 'Note: adjacent bodies have different heights — difference {diff} cm',
+    warnWidthMismatch: 'Note: stacked levels have different total widths — difference {diff} cm',
   },
 
   doors: {

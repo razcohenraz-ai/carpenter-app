@@ -16,6 +16,7 @@ import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
+import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -912,6 +913,21 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       <button type="submit" className={styles.submitBtn}>
         {t.form.calculate}
       </button>
+
+      {result !== null && boxDimensionOverrides.size > 0 && (() => {
+        const dimWarnings = checkBoxConsistency(result.boxes);
+        return dimWarnings.length > 0 ? (
+          <div className={styles.dimMismatchBanner}>
+            {dimWarnings.map((w, i) => (
+              <span key={i}>
+                {w.kind === 'h_mismatch'
+                  ? t.interior.warnHeightMismatch.replace('{diff}', String(w.diffCm))
+                  : t.interior.warnWidthMismatch.replace('{diff}', String(w.diffCm))}
+              </span>
+            ))}
+          </div>
+        ) : null;
+      })()}
 
       {result !== null && (
         <>

@@ -218,6 +218,19 @@
 }
 
 /* ── תוצאת חישוב ── */
+.dimMismatchBanner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  background: #fff8e1;
+  border: var(--border-width) solid #f59e0b;
+  border-inline-start: 4px solid #f59e0b;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  color: #92400e;
+}
+
 .summary {
   background: var(--color-surface-raised);
   border: var(--border-width) solid var(--color-border);
