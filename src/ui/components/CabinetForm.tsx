@@ -73,7 +73,39 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
   return false;
 }
 
-export default function CabinetForm(): React.JSX.Element {
+interface CabinetFormProps {
+  /** Initial dimensions/settings to populate the form (from a saved project). */
+  initialInput?: import('../../types/cabinet').CabinetInput;
+  /** Called after every successful calculate() with the current CabinetInput.
+   *  Used by the project layer to auto-save form values. */
+  onCabinetChange?: (input: import('../../types/cabinet').CabinetInput) => void;
+}
+
+function inputToFormState(
+  inp: import('../../types/cabinet').CabinetInput,
+): FormState {
+  const dpc: DoorsPerColumn =
+    inp.doorsPerColumn === 1 ? '1' :
+    inp.doorsPerColumn === 2 ? '2' :
+    inp.doorsPerColumn === 3 ? '3' : 'auto';
+  return {
+    W: String(inp.W), H: String(inp.H), D: String(inp.D),
+    backThicknessMm: String(inp.backThickness * 10),
+    plinth: String(inp.plinth), plinthRecess: String(inp.plinthRecess),
+    lowerDoorH: inp.lowerDoorH !== undefined ? String(inp.lowerDoorH) : '110',
+    middleDoorH: inp.middleDoorH !== undefined ? String(inp.middleDoorH) : '80',
+    hasShell: inp.hasShell, hasEnvelopeTop: inp.hasEnvelopeTop,
+    doorCoversPlinth: inp.doorCoversPlinth,
+    bodyMaterialId: inp.bodyMaterialId, frontMaterialId: inp.frontMaterialId,
+    doorsPerColumn: dpc,
+    doorGap: String(inp.doorGapMm), doorGapManuallySet: true,
+    maxDoorWidth: String(inp.maxDoorWidth),
+    edgingThicknessMm: inp.edging?.thickness === 1.3 ? '1.3' : '0.6',
+    edgingFinishMaterialId: (inp.edging?.finishMaterialId ?? '') as '' | import('../../types/materials').MaterialId,
+  };
+}
+
+export default function CabinetForm({ initialInput, onCabinetChange }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -195,17 +227,19 @@ export default function CabinetForm(): React.JSX.Element {
     return out;
   }, [interiorById, cellInteriorById]);
 
-  const [form, setForm] = useState<FormState>({
-    W: '240', H: '220', D: '60',
-    backThicknessMm: '5',
-    plinth: '10', plinthRecess: '0',
-    lowerDoorH: '110', middleDoorH: '80',
-    hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
-    bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
-    doorGap: '2', doorGapManuallySet: false,
-    maxDoorWidth: '60',
-    edgingThicknessMm: '0.6', edgingFinishMaterialId: '',
-  });
+  const [form, setForm] = useState<FormState>(() =>
+    initialInput ? inputToFormState(initialInput) : {
+      W: '240', H: '220', D: '60',
+      backThicknessMm: '5',
+      plinth: '10', plinthRecess: '0',
+      lowerDoorH: '110', middleDoorH: '80',
+      hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
+      bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
+      doorGap: '2', doorGapManuallySet: false,
+      maxDoorWidth: '60',
+      edgingThicknessMm: '0.6', edgingFinishMaterialId: '',
+    }
+  );
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
 
@@ -288,7 +322,7 @@ export default function CabinetForm(): React.JSX.Element {
     const plinthRecess = Number.isFinite(plinthRecessParsed) && plinthRecessParsed > 0
       ? plinthRecessParsed : 0;
 
-    calculate({
+    const cabinetInput = {
       W, H, D,
       backThickness: backThicknessCm,
       hasShell: form.hasShell,
@@ -304,7 +338,9 @@ export default function CabinetForm(): React.JSX.Element {
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
       edging: buildCabinetEdging(form),
-    });
+    };
+    calculate(cabinetInput);
+    onCabinetChange?.(cabinetInput);
   }
 
   // ── derived values ─────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-import type { Cabinet, CabinetInput, Project, SavedCabinetState } from '../../types';
+import type { Cabinet, CabinetInput, ProductUnit, Project, SavedCabinetState } from '../../types';
+import type { ProductType } from '../../types/project';
 import { CURRENT_SCHEMA_VERSION, migrate } from './migrations';
 
 // ── Required field manifests ─────────────────────────────────────────────────
@@ -33,6 +34,10 @@ const REQUIRED_STATE_KEYS: ReadonlyArray<keyof SavedCabinetState> = [
   'plinthGableOverrides',
   'boardOverrides',
 ];
+
+const VALID_PRODUCT_TYPES = new Set<ProductType>([
+  'wardrobe', 'bookcase', 'sideboard', 'kitchen', 'free-build',
+]);
 
 // ── Serialize ────────────────────────────────────────────────────────────────
 
@@ -83,13 +88,13 @@ function validateProject(p: Project): void {
       `deserializeProject: post-migration schemaVersion ${String(p.schemaVersion)} ≠ ${CURRENT_SCHEMA_VERSION}`,
     );
   }
-  if (p.cabinet === null || typeof p.cabinet !== 'object') {
-    throw new Error('deserializeProject: missing "cabinet" object');
-  }
-  validateCabinet(p.cabinet);
-  if (p.projectName !== undefined && typeof p.projectName !== 'string') {
+  if (typeof p.projectName !== 'string') {
     throw new Error('deserializeProject: projectName must be a string');
   }
+  if (!Array.isArray(p.products)) {
+    throw new Error('deserializeProject: products must be an array');
+  }
+  p.products.forEach((pu, i) => validateProductUnit(pu as ProductUnit, i));
   if (p.createdAt !== undefined && typeof p.createdAt !== 'string') {
     throw new Error('deserializeProject: createdAt must be an ISO 8601 string');
   }
@@ -98,28 +103,47 @@ function validateProject(p: Project): void {
   }
 }
 
-function validateCabinet(c: Cabinet): void {
-  if (c.input === null || typeof c.input !== 'object') {
-    throw new Error('deserializeProject: cabinet.input missing or not an object');
+function validateProductUnit(pu: ProductUnit, index: number): void {
+  const path = `products[${index}]`;
+  if (typeof pu.id !== 'string' || pu.id === '') {
+    throw new Error(`deserializeProject: ${path}.id must be a non-empty string`);
   }
-  validateInput(c.input);
-  if (c.state === null || typeof c.state !== 'object') {
-    throw new Error('deserializeProject: cabinet.state missing or not an object');
+  if (typeof pu.name !== 'string') {
+    throw new Error(`deserializeProject: ${path}.name must be a string`);
   }
-  validateState(c.state);
+  if (!VALID_PRODUCT_TYPES.has(pu.productType)) {
+    throw new Error(
+      `deserializeProject: ${path}.productType must be one of ${[...VALID_PRODUCT_TYPES].join('|')}, got ${String(pu.productType)}`,
+    );
+  }
+  if (pu.cabinet === null || typeof pu.cabinet !== 'object') {
+    throw new Error(`deserializeProject: ${path}.cabinet missing or not an object`);
+  }
+  validateCabinet(pu.cabinet, path);
 }
 
-function validateInput(input: CabinetInput): void {
+function validateCabinet(c: Cabinet, path: string): void {
+  if (c.input === null || typeof c.input !== 'object') {
+    throw new Error(`deserializeProject: ${path}.cabinet.input missing or not an object`);
+  }
+  validateInput(c.input, path);
+  if (c.state === null || typeof c.state !== 'object') {
+    throw new Error(`deserializeProject: ${path}.cabinet.state missing or not an object`);
+  }
+  validateState(c.state, path);
+}
+
+function validateInput(input: CabinetInput, path: string): void {
   for (const key of REQUIRED_INPUT_KEYS) {
     if (!(key in input)) {
-      throw new Error(`deserializeProject: cabinet.input missing required field "${key}"`);
+      throw new Error(`deserializeProject: ${path}.cabinet.input missing required field "${key}"`);
     }
   }
   const inputRecord = input as unknown as Record<string, unknown>;
   const must = (key: keyof CabinetInput, type: 'number' | 'string' | 'boolean'): void => {
     const v = inputRecord[key as string];
     if (typeof v !== type) {
-      throw new Error(`deserializeProject: cabinet.input.${String(key)} must be ${type}`);
+      throw new Error(`deserializeProject: ${path}.cabinet.input.${String(key)} must be ${type}`);
     }
   };
   must('W', 'number');
@@ -138,45 +162,43 @@ function validateInput(input: CabinetInput): void {
   const dpc = input.doorsPerColumn;
   if (dpc !== 'auto' && dpc !== 1 && dpc !== 2 && dpc !== 3) {
     throw new Error(
-      `deserializeProject: cabinet.input.doorsPerColumn must be 'auto'|1|2|3, got ${String(dpc)}`,
+      `deserializeProject: ${path}.cabinet.input.doorsPerColumn must be 'auto'|1|2|3, got ${String(dpc)}`,
     );
   }
   if (input.lowerDoorH !== undefined && typeof input.lowerDoorH !== 'number') {
-    throw new Error('deserializeProject: cabinet.input.lowerDoorH must be number or undefined');
+    throw new Error(`deserializeProject: ${path}.cabinet.input.lowerDoorH must be number or undefined`);
   }
   if (input.middleDoorH !== undefined && typeof input.middleDoorH !== 'number') {
-    throw new Error('deserializeProject: cabinet.input.middleDoorH must be number or undefined');
+    throw new Error(`deserializeProject: ${path}.cabinet.input.middleDoorH must be number or undefined`);
   }
   if (input.edging !== undefined) {
-    validateEdging(input.edging, 'cabinet.input.edging');
+    validateEdging(input.edging, `${path}.cabinet.input.edging`);
   }
 }
 
-function validateState(state: SavedCabinetState): void {
+function validateState(state: SavedCabinetState, path: string): void {
   const stateRecord = state as unknown as Record<string, unknown>;
   for (const key of REQUIRED_STATE_KEYS) {
     if (!(key in state)) {
-      throw new Error(`deserializeProject: cabinet.state missing required field "${key}"`);
+      throw new Error(`deserializeProject: ${path}.cabinet.state missing required field "${key}"`);
     }
     const value = stateRecord[key as string];
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(
-        `deserializeProject: cabinet.state.${String(key)} must be a plain object (Record)`,
+        `deserializeProject: ${path}.cabinet.state.${String(key)} must be a plain object (Record)`,
       );
     }
   }
-  // Optional edging-override maps. When present they must be plain objects
-  // whose values are valid Edging shapes; absence falls back to "no overrides".
   if (state.bodyEdgingOverrides !== undefined) {
     if (
       state.bodyEdgingOverrides === null ||
       typeof state.bodyEdgingOverrides !== 'object' ||
       Array.isArray(state.bodyEdgingOverrides)
     ) {
-      throw new Error('deserializeProject: cabinet.state.bodyEdgingOverrides must be a plain object (Record)');
+      throw new Error(`deserializeProject: ${path}.cabinet.state.bodyEdgingOverrides must be a plain object (Record)`);
     }
     for (const [k, v] of Object.entries(state.bodyEdgingOverrides)) {
-      validateEdging(v, `cabinet.state.bodyEdgingOverrides[${k}]`);
+      validateEdging(v, `${path}.cabinet.state.bodyEdgingOverrides[${k}]`);
     }
   }
   if (state.doorEdgingOverrides !== undefined) {
@@ -185,17 +207,15 @@ function validateState(state: SavedCabinetState): void {
       typeof state.doorEdgingOverrides !== 'object' ||
       Array.isArray(state.doorEdgingOverrides)
     ) {
-      throw new Error('deserializeProject: cabinet.state.doorEdgingOverrides must be a plain object (Record)');
+      throw new Error(`deserializeProject: ${path}.cabinet.state.doorEdgingOverrides must be a plain object (Record)`);
     }
     for (const [k, v] of Object.entries(state.doorEdgingOverrides)) {
-      validateEdging(v, `cabinet.state.doorEdgingOverrides[${k}]`);
+      validateEdging(v, `${path}.cabinet.state.doorEdgingOverrides[${k}]`);
     }
   }
 }
 
-/** Validates an {@link Edging} value carried by an optional field. Used for
- *  the cabinet-wide default, per-body, per-door, and (via boardOverrides
- *  iteration in a future stage) per-board entries. */
+/** Validates an {@link Edging} value carried by an optional field. */
 function validateEdging(value: unknown, path: string): void {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`deserializeProject: ${path} must be a plain object`);

@@ -5,6 +5,20 @@ export interface Translations {
   appSubtitle: string;
   langToggle: string;
 
+  project: {
+    unnamed: string;
+    newProject: string;
+    newProjectPlaceholder: string;
+    addProduct: string;
+    noProducts: string;
+    export: string;
+    import: string;
+    importError: string;
+    deleteConfirm: string;
+    backToProject: string;
+    productTypes: Record<string, string>;
+  };
+
   sketch: {
     preview: string;
     invalidDimensions: string;
@@ -222,6 +236,26 @@ export interface Translations {
 
 const he: Translations = {
   appTitle: 'תכנון ארונות',
+
+  project: {
+    unnamed: 'פרויקט ללא שם',
+    newProject: 'פרויקט חדש',
+    newProjectPlaceholder: 'שם הפרויקט',
+    addProduct: '+ הוסף מוצר',
+    noProducts: 'אין מוצרים עדיין. לחץ על "הוסף מוצר" כדי להתחיל.',
+    export: 'שמור קובץ',
+    import: 'פתח קובץ',
+    importError: 'שגיאה בפתיחת הקובץ. ודא שמדובר בקובץ פרויקט תקין.',
+    deleteConfirm: 'למחוק את המוצר?',
+    backToProject: '← חזרה לפרויקט',
+    productTypes: {
+      wardrobe: 'ארון',
+      bookcase: 'ספריה',
+      sideboard: 'מזנון',
+      kitchen: 'מטבח',
+      'free-build': 'בנייה חופשית',
+    },
+  },
   appSubtitle: 'חישוב חיתוכים, דלתות ופרזולים',
   langToggle: 'English',
 
@@ -424,6 +458,26 @@ const he: Translations = {
 
 const en: Translations = {
   appTitle: 'Cabinet Planner',
+
+  project: {
+    unnamed: 'Unnamed Project',
+    newProject: 'New Project',
+    newProjectPlaceholder: 'Project name',
+    addProduct: '+ Add Product',
+    noProducts: 'No products yet. Click "Add Product" to start.',
+    export: 'Save File',
+    import: 'Open File',
+    importError: 'Failed to open file. Make sure it is a valid project file.',
+    deleteConfirm: 'Delete this product?',
+    backToProject: '← Back to Project',
+    productTypes: {
+      wardrobe: 'Wardrobe',
+      bookcase: 'Bookcase',
+      sideboard: 'Sideboard',
+      kitchen: 'Kitchen',
+      'free-build': 'Free Build',
+    },
+  },
   appSubtitle: 'Cuts, doors & hardware calculator',
   langToggle: 'עברית',
 

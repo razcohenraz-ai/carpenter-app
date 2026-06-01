@@ -93,6 +93,28 @@ export interface Cabinet {
   state: SavedCabinetState;
 }
 
+// ── Product types ─────────────────────────────────────────────────────────────
+
+/** The kind of furniture unit in a project. All types share the same
+ *  decomposition engine; each type has different default inputs and will
+ *  expose different construction options over time. */
+export type ProductType =
+  | 'wardrobe'   // ארון
+  | 'bookcase'   // ספריה
+  | 'sideboard'  // מזנון
+  | 'kitchen'    // מטבח
+  | 'free-build'; // בנייה חופשית
+
+/** One furniture unit inside a project. */
+export interface ProductUnit {
+  /** Unique id — stable across renames and reorders. */
+  id: string;
+  /** Carpenter-visible name (e.g. "ארון חדר שינה"). */
+  name: string;
+  productType: ProductType;
+  cabinet: Cabinet;
+}
+
 // ── Project wrapper (cloud-save envelope) ─────────────────────────────────────
 
 /** The outermost envelope for a saved project. Designed so cloud save can
@@ -101,12 +123,14 @@ export interface Cabinet {
  *  `updatedAt` are maintained automatically by the serializer. */
 export interface Project {
   schemaVersion: number;
-  projectName?: string;
+  /** Project name — shown on the project landing page. Required from v2. */
+  projectName: string;
   /** ISO 8601 — assigned by the serializer on first save. */
   createdAt?: string;
   /** ISO 8601 — refreshed by the serializer on every save. */
   updatedAt?: string;
-  cabinet: Cabinet;
+  /** All furniture units in this project (ordered by insertion). */
+  products: ProductUnit[];
 }
 
 // ── App-level constants ───────────────────────────────────────────────────────

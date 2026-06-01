@@ -42,6 +42,20 @@
   color: var(--color-primary-light);
 }
 
+.backBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-light);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.backBtn:hover {
+  color: var(--color-surface);
+}
+
 .langToggle {
   background: transparent;
   border: var(--border-width) solid var(--color-primary-light);

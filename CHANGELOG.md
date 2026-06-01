@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### נוסף — ניהול פרויקטים + סוגי מוצרים
+- **`ProductType`** חדש (`'wardrobe'|'bookcase'|'sideboard'|'kitchen'|'free-build'`) + **`ProductUnit`** ב-`types/project.ts`. `Project` עבר מ-`cabinet: Cabinet` ל-`products: ProductUnit[]`.
+- **Migration v1→v2** ב-`migrations.ts` — `CURRENT_SCHEMA_VERSION=2`; cabinet יחיד נעטף ב-`ProductUnit` מסוג `'wardrobe'`.
+- **`productDefaults.ts`** — `defaultInputForType` + `emptyCabinetState` לאיתחול מוצר חדש.
+- **`useProject` hook** — ניהול פרויקט פעיל: `addProduct`, `removeProduct`, `updateProductCabinet`, `renameProject/Product`, `newProject`; auto-save ל-`localStorage`; `exportProject` (download JSON) + `importProject` (FileReader → deserialize).
+- **`ProjectView`** — מסך פרויקט: כותרת הניתנת לעריכה, כרטיסי מוצרים (שם+סוג+מידות), כפתורי שמור/פתח/חדש.
+- **`AddProductDialog`** — בחירת סוג מוצר (5 אפשרויות) + שם → `addProduct`.
+- **`App.tsx`** — view switch: מסך פרויקט ↔ עורך מוצר; כפתור "חזרה לפרויקט" ב-header.
+- **`CabinetForm`** — קיבל `initialInput?` (טעינת מוצר קיים) + `onCabinetChange?` (auto-save input אחרי כל calculate).
+- טסטי serialize עודכנו למבנה החדש; נוספו: round-trip ריבוי מוצרים, migration v1→v2, validation productType. 597/597 עוברים.
+
 ### נוסף — עקיפת מידות גוף (Box Dimension Override)
 - **`boxDimensionOverrides`** ב-`useCabinet` — Map<boxStableKey, {W?, H?, D?}>; דפוס זהה ל-`bodyEdgingOverrides`.
 - **`setBoxDimension(slotId, axis, value | undefined)`** + **`resetBoxDimensions(slotId)`** — setters; כל שינוי מפעיל `calculate()` מחדש.

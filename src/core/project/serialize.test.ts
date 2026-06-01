@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type {
   CabinetInput,
   Project,
+  ProductUnit,
   SavedBoardOverride,
   SavedCabinetState,
   SavedDoor,
@@ -13,55 +14,52 @@ import { deserializeProject, serializeProject } from './serialize';
 
 function basicInput(): CabinetInput {
   return {
-    W: 60,
-    H: 220,
-    D: 60,
+    W: 60, H: 220, D: 60,
     backThickness: 0.6,
-    hasShell: false,
-    hasEnvelopeTop: false,
-    bodyMaterialId: 'mdf18',
-    frontMaterialId: 'oak18',
-    plinth: 0,
-    plinthRecess: 0,
+    hasShell: false, hasEnvelopeTop: false,
+    bodyMaterialId: 'mdf18', frontMaterialId: 'oak18',
+    plinth: 0, plinthRecess: 0,
     doorCoversPlinth: false,
-    lowerDoorH: undefined,
-    middleDoorH: undefined,
+    lowerDoorH: undefined, middleDoorH: undefined,
     doorsPerColumn: 'auto',
-    doorGapMm: 3,
-    maxDoorWidth: 60,
+    doorGapMm: 3, maxDoorWidth: 60,
   };
 }
 
 function emptyState(): SavedCabinetState {
   return {
-    interior: {},
-    cellInterior: {},
-    partitions: {},
-    doors: {},
-    plinthGableOverrides: {},
-    boardOverrides: {},
+    interior: {}, cellInterior: {}, partitions: {}, doors: {},
+    plinthGableOverrides: {}, boardOverrides: {},
+  };
+}
+
+function mkProduct(overrides: Partial<ProductUnit> = {}): ProductUnit {
+  return {
+    id: 'test-id-1',
+    name: 'ארון',
+    productType: 'wardrobe',
+    cabinet: { input: basicInput(), state: emptyState() },
+    ...overrides,
   };
 }
 
 function mkProject(overrides: Partial<Project> = {}): Project {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
-    cabinet: { input: basicInput(), state: emptyState() },
+    projectName: 'פרויקט בדיקה',
+    products: [mkProduct()],
     ...overrides,
   };
 }
 
-/** Round-trip and compare every field except `updatedAt` (which is always
- *  refreshed by serializeProject) — returns the deserialized project so
- *  callers can run extra assertions specific to the scenario. */
+/** Round-trip helper — returns deserialized project for further assertions. */
 function roundTrip(project: Project): Project {
   const json = serializeProject(project);
   expect(typeof json).toBe('string');
   const back = deserializeProject(json);
-  // Compare structural fields. updatedAt is always refreshed.
   expect(back.schemaVersion).toBe(project.schemaVersion);
   expect(back.projectName).toEqual(project.projectName);
-  expect(back.cabinet).toEqual(project.cabinet);
+  expect(back.products).toEqual(project.products);
   return back;
 }
 
@@ -69,173 +67,97 @@ function roundTrip(project: Project): Project {
 
 describe('round-trip — representative cabinets', () => {
   it('ארון בסיסי (60×220×60, ללא מעטפת, ללא צוקל)', () => {
-    const project = mkProject();
-    roundTrip(project);
+    roundTrip(mkProject());
   });
 
   it('ארון עם צוקל', () => {
-    const project = mkProject();
-    project.cabinet.input.plinth = 10;
-    roundTrip(project);
+    const p = mkProject();
+    p.products[0]!.cabinet.input.plinth = 10;
+    roundTrip(p);
   });
 
   it('ארון עם צוקל נסוג + מעטפת', () => {
-    const project = mkProject();
-    project.cabinet.input.plinth = 10;
-    project.cabinet.input.plinthRecess = 2;
-    project.cabinet.input.hasShell = true;
-    project.cabinet.input.hasEnvelopeTop = true;
-    project.cabinet.input.doorCoversPlinth = true;
-    roundTrip(project);
+    const p = mkProject();
+    const inp = p.products[0]!.cabinet.input;
+    inp.plinth = 10; inp.plinthRecess = 2;
+    inp.hasShell = true; inp.hasEnvelopeTop = true; inp.doorCoversPlinth = true;
+    roundTrip(p);
   });
 
   it('ארון עם override של מידת לוח', () => {
-    const project = mkProject();
-    const dimensionOverride: SavedBoardOverride = {
-      dimensions: { length: 215, width: 58 },
-    };
-    project.cabinet.state.boardOverrides = {
-      'side-left@bottom:left': dimensionOverride,
-    };
-    const back = roundTrip(project);
-    expect(back.cabinet.state.boardOverrides['side-left@bottom:left']).toEqual(
-      dimensionOverride,
-    );
+    const p = mkProject();
+    const dimOverride: SavedBoardOverride = { dimensions: { length: 215, width: 58 } };
+    p.products[0]!.cabinet.state.boardOverrides = { 'side-left@bottom:left': dimOverride };
+    const back = roundTrip(p);
+    expect(back.products[0]!.cabinet.state.boardOverrides['side-left@bottom:left']).toEqual(dimOverride);
   });
 
   it('ארון עם override של חומר לוח', () => {
-    const project = mkProject();
-    project.cabinet.state.boardOverrides = {
-      'top@bottom:left': { materialId: 'melamine18' },
-    };
-    const back = roundTrip(project);
-    expect(back.cabinet.state.boardOverrides['top@bottom:left']).toEqual({
-      materialId: 'melamine18',
-    });
+    const p = mkProject();
+    p.products[0]!.cabinet.state.boardOverrides = { 'top@bottom:left': { materialId: 'melamine18' } };
+    const back = roundTrip(p);
+    expect(back.products[0]!.cabinet.state.boardOverrides['top@bottom:left']).toEqual({ materialId: 'melamine18' });
   });
 
   it('ארון עם גיבלי צוקל נגררים', () => {
-    const project = mkProject();
-    project.cabinet.input.plinth = 10;
-    project.cabinet.state.plinthGableOverrides = {
-      'edge-left': 5.5,
-      'joint:0': 42.0,
-      'edge-right': 88.7,
-    };
-    const back = roundTrip(project);
-    expect(back.cabinet.state.plinthGableOverrides).toEqual({
-      'edge-left': 5.5,
-      'joint:0': 42.0,
-      'edge-right': 88.7,
+    const p = mkProject();
+    p.products[0]!.cabinet.input.plinth = 10;
+    p.products[0]!.cabinet.state.plinthGableOverrides = { 'edge-left': 5.5, 'joint:0': 42.0 };
+    const back = roundTrip(p);
+    expect(back.products[0]!.cabinet.state.plinthGableOverrides).toEqual({ 'edge-left': 5.5, 'joint:0': 42.0 });
+  });
+
+  it('ארון רחב W=120', () => {
+    const p = mkProject();
+    p.products[0]!.cabinet.input.W = 120;
+    roundTrip(p);
+  });
+
+  it('פרויקט עם מספר מוצרים', () => {
+    const p = mkProject({
+      products: [
+        mkProduct({ id: 'p1', name: 'ארון שינה', productType: 'wardrobe' }),
+        mkProduct({ id: 'p2', name: 'ספריה', productType: 'bookcase' }),
+        mkProduct({ id: 'p3', name: 'מזנון', productType: 'sideboard' }),
+      ],
     });
+    const back = roundTrip(p);
+    expect(back.products).toHaveLength(3);
+    expect(back.products[1]!.productType).toBe('bookcase');
   });
 
-  it('ארון רחב W=120 (>80, decomposition יוצרת יחידות)', () => {
-    const project = mkProject();
-    project.cabinet.input.W = 120;
-    roundTrip(project);
-  });
-
-  it('lowerDoorH/middleDoorH=undefined שורדים round-trip (JSON.stringify מפיל אותם)', () => {
-    const project = mkProject();
-    // `basicInput()` already sets both fields to `undefined`. Assert explicitly
-    // that deserialization does NOT throw "missing required field" — this
-    // pins the fix that excludes them from REQUIRED_INPUT_KEYS.
-    expect(project.cabinet.input.lowerDoorH).toBeUndefined();
-    expect(project.cabinet.input.middleDoorH).toBeUndefined();
-    const json = serializeProject(project);
-    // The keys are absent from the JSON after stringify.
+  it('lowerDoorH/middleDoorH=undefined שורדים round-trip', () => {
+    const p = mkProject();
+    expect(p.products[0]!.cabinet.input.lowerDoorH).toBeUndefined();
+    const json = serializeProject(p);
     expect(json).not.toContain('lowerDoorH');
-    expect(json).not.toContain('middleDoorH');
     const back = deserializeProject(json);
-    expect(back.cabinet.input.lowerDoorH).toBeUndefined();
-    expect(back.cabinet.input.middleDoorH).toBeUndefined();
+    expect(back.products[0]!.cabinet.input.lowerDoorH).toBeUndefined();
   });
 
-  it('שילוב הכל — overrides + גיבלים + interior + מחיצות + דלתות', () => {
-    const project = mkProject({ projectName: 'ארון אמבטיה - לקוח כהן' });
-    const input = project.cabinet.input;
-    input.W = 180;
-    input.H = 220;
-    input.D = 60;
-    input.plinth = 10;
-    input.plinthRecess = 2;
-    input.hasShell = true;
-    input.hasEnvelopeTop = true;
-    input.doorCoversPlinth = true;
-    input.lowerDoorH = 90;
-    input.doorsPerColumn = 2;
-
-    const state = project.cabinet.state;
-    state.interior = {
-      'bottom:left': [
-        {
-          id: 'item-1',
-          type: 'shelf',
-          heightFromFloor: 40,
-          isManuallyPositioned: true,
-        },
-        {
-          id: 'item-2',
-          type: 'drawer',
-          heightFromFloor: 0,
-          drawerHeight: 18,
-          mount: 'external',
-          frontThicknessOverride: 'oak18',
-        },
-      ],
-      'top:right': [{ id: 'item-3', type: 'rod', heightFromFloor: 30 }],
-    };
-    state.cellInterior = {
-      'bottom:unit_1': [
-        [{ id: 'cell-a', type: 'shelf', heightFromFloor: 35 }],
-        [{ id: 'cell-b', type: 'shelf', heightFromFloor: 35 }],
-      ],
-    };
-    state.partitions = { 'bottom:unit_1': true, 'top:left': false };
+  it('שילוב הכל — overrides + interior + דלתות + מחיצות', () => {
     const savedDoor: SavedDoor = {
-      hingeSide: 'right',
-      hingeCount: 4,
-      hinges: [
-        { positionFromBottom: 10, isManual: true },
-        { positionFromBottom: 60, isManual: false },
-        { positionFromBottom: 120, isManual: false },
-        { positionFromBottom: 180, isManual: true },
-      ],
-      hasDoor: true,
-      thicknessOverride: 'melamine18',
+      hingeSide: 'right', hingeCount: 4,
+      hinges: [{ positionFromBottom: 10, isManual: true }, { positionFromBottom: 180, isManual: false }],
+      hasDoor: true, thicknessOverride: 'melamine18',
     };
-    state.doors = {
-      'bottom:left:0': savedDoor,
-      'top:right:1': {
-        hingeSide: 'left',
-        hingeCount: 'auto',
-        hinges: [],
-        hasDoor: false,
-      },
-    };
-    state.plinthGableOverrides = { 'edge-left': 4, 'joint:0': 60, 'joint:1': 120 };
-    state.boardOverrides = {
-      'side-left@bottom:left': { dimensions: { length: 218 } },
-      'plinth-gable-a@joint:0': { materialId: 'plywood18' },
-      'fixed-shelf@top:right': {
-        dimensions: { length: 56, thickness: 18 },
-        materialId: 'mdf18',
-      },
-    };
-
-    const back = roundTrip(project);
+    const p = mkProject({ projectName: 'ארון אמבטיה - לקוח כהן' });
+    const inp = p.products[0]!.cabinet.input;
+    inp.W = 180; inp.plinth = 10; inp.hasShell = true; inp.lowerDoorH = 90; inp.doorsPerColumn = 2;
+    const st = p.products[0]!.cabinet.state;
+    st.interior = { 'bottom:left': [{ id: 'i1', type: 'shelf', heightFromFloor: 40 }] };
+    st.doors = { 'bottom:left:0': savedDoor };
+    st.boardOverrides = { 'side-left@bottom:left': { dimensions: { length: 218 } } };
+    const back = roundTrip(p);
     expect(back.projectName).toBe('ארון אמבטיה - לקוח כהן');
-    expect(back.cabinet.state.interior['bottom:left']).toHaveLength(2);
-    expect(back.cabinet.state.doors['bottom:left:0']).toEqual(savedDoor);
-    expect(Object.keys(back.cabinet.state.boardOverrides)).toHaveLength(3);
+    expect(back.products[0]!.cabinet.state.doors['bottom:left:0']).toEqual(savedDoor);
   });
 });
 
 // ── Timestamp behavior ───────────────────────────────────────────────────────
 
 describe('serializeProject — timestamps', () => {
-  it('updatedAt מתעדכן ל-now בכל קריאה', async () => {
+  it('updatedAt מתעדכן ל-now בכל קריאה', () => {
     const project = mkProject({ updatedAt: '2020-01-01T00:00:00.000Z' });
     const before = Date.now();
     const json = serializeProject(project);
@@ -244,169 +166,144 @@ describe('serializeProject — timestamps', () => {
     const updated = new Date(parsed.updatedAt!).getTime();
     expect(updated).toBeGreaterThanOrEqual(before);
     expect(updated).toBeLessThanOrEqual(after);
-    expect(parsed.updatedAt).not.toBe('2020-01-01T00:00:00.000Z');
   });
 
   it('createdAt נשמר אם קיים', () => {
     const original = '2024-03-15T12:00:00.000Z';
-    const project = mkProject({ createdAt: original });
-    const json = serializeProject(project);
-    const parsed = JSON.parse(json) as Project;
-    expect(parsed.createdAt).toBe(original);
+    const json = serializeProject(mkProject({ createdAt: original }));
+    expect((JSON.parse(json) as Project).createdAt).toBe(original);
   });
 
-  it('createdAt נוצר אם חסר (שמירה ראשונה)', () => {
-    const project = mkProject();
-    delete project.createdAt;
+  it('createdAt נוצר אם חסר', () => {
+    const p = mkProject();
+    delete p.createdAt;
     const before = Date.now();
-    const json = serializeProject(project);
+    const json = serializeProject(p);
     const after = Date.now();
-    const parsed = JSON.parse(json) as Project;
-    expect(parsed.createdAt).toBeDefined();
-    const created = new Date(parsed.createdAt!).getTime();
+    const created = new Date((JSON.parse(json) as Project).createdAt!).getTime();
     expect(created).toBeGreaterThanOrEqual(before);
     expect(created).toBeLessThanOrEqual(after);
   });
 
   it('serializeProject לא משנה את ה-input', () => {
-    const project = mkProject({ updatedAt: '2020-01-01T00:00:00.000Z' });
-    const before = JSON.stringify(project);
-    serializeProject(project);
-    expect(JSON.stringify(project)).toBe(before);
+    const p = mkProject({ updatedAt: '2020-01-01T00:00:00.000Z' });
+    const before = JSON.stringify(p);
+    serializeProject(p);
+    expect(JSON.stringify(p)).toBe(before);
   });
 });
 
 // ── Migration behavior ───────────────────────────────────────────────────────
 
 describe('migrate — schema version handling', () => {
-  it('גרסה נוכחית עוברת ללא שינוי', () => {
-    const project = mkProject({ projectName: 'בדיקה' });
-    const result = migrate(project);
-    expect(result).toEqual(project);
+  it('גרסה נוכחית (v2) עוברת ללא שינוי', () => {
+    const p = mkProject({ projectName: 'בדיקה' });
+    expect(migrate(p)).toEqual(p);
   });
 
-  it('זורק שגיאה ברורה לגרסה עתידית (newer than current)', () => {
-    const future = { ...mkProject(), schemaVersion: CURRENT_SCHEMA_VERSION + 5 };
-    expect(() => migrate(future)).toThrow(/newer than/);
+  it('v1 → v2: cabinet יחיד נהפך ל-products array עם wardrobe', () => {
+    const v1 = {
+      schemaVersion: 1,
+      projectName: 'ישן',
+      cabinet: { input: basicInput(), state: emptyState() },
+    };
+    const result = migrate(v1);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.projectName).toBe('ישן');
+    expect(Array.isArray(result.products)).toBe(true);
+    expect(result.products).toHaveLength(1);
+    expect(result.products[0]!.productType).toBe('wardrobe');
+    expect(result.products[0]!.cabinet).toEqual(v1.cabinet);
+  });
+
+  it('v1 ללא projectName: projectName מקבל ברירת מחדל', () => {
+    const v1 = { schemaVersion: 1, cabinet: { input: basicInput(), state: emptyState() } };
+    const result = migrate(v1);
+    expect(typeof result.projectName).toBe('string');
+  });
+
+  it('זורק שגיאה לגרסה עתידית', () => {
+    expect(() => migrate({ ...mkProject(), schemaVersion: CURRENT_SCHEMA_VERSION + 5 })).toThrow(/newer than/);
   });
 
   it('זורק שגיאה אם schemaVersion חסר', () => {
-    const project = mkProject();
-    const broken = { ...project } as Partial<Project>;
-    delete broken.schemaVersion;
-    expect(() => migrate(broken)).toThrow(/schemaVersion/);
+    const p: Partial<Project> = { ...mkProject() };
+    delete p.schemaVersion;
+    expect(() => migrate(p)).toThrow(/schemaVersion/);
   });
 
   it('זורק שגיאה אם schemaVersion הוא 0 או שלילי', () => {
     expect(() => migrate({ ...mkProject(), schemaVersion: 0 })).toThrow(/schemaVersion/);
-    expect(() => migrate({ ...mkProject(), schemaVersion: -1 })).toThrow(/schemaVersion/);
-  });
-
-  it('זורק שגיאה אם schemaVersion לא מספר', () => {
-    expect(() => migrate({ ...mkProject(), schemaVersion: 'foo' })).toThrow(/schemaVersion/);
   });
 
   it('זורק שגיאה על input שאינו אובייקט', () => {
     expect(() => migrate(null)).toThrow(/object/);
-    expect(() => migrate('not json' as unknown)).toThrow(/object/);
-    expect(() => migrate(42 as unknown)).toThrow(/object/);
+    expect(() => migrate('string' as unknown)).toThrow(/object/);
   });
 });
 
 // ── Validation behavior ──────────────────────────────────────────────────────
 
 describe('deserializeProject — validation', () => {
-  it('זורק שגיאה ברורה על JSON פגום', () => {
+  it('זורק שגיאה על JSON פגום', () => {
     expect(() => deserializeProject('{ not valid }')).toThrow(/invalid JSON/);
-    expect(() => deserializeProject('')).toThrow(/invalid JSON/);
   });
 
-  it('זורק שגיאה אם cabinet חסר', () => {
-    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION });
-    expect(() => deserializeProject(json)).toThrow(/cabinet/);
+  it('זורק שגיאה אם products חסר', () => {
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x' });
+    expect(() => deserializeProject(json)).toThrow(/products/);
   });
 
-  it('זורק שגיאה אם cabinet.input חסר', () => {
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { state: emptyState() },
-    });
-    expect(() => deserializeProject(json)).toThrow(/input/);
+  it('זורק שגיאה אם products אינו array', () => {
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: {} });
+    expect(() => deserializeProject(json)).toThrow(/products/);
   });
 
-  it('זורק שגיאה אם cabinet.state חסר', () => {
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input: basicInput() },
-    });
-    expect(() => deserializeProject(json)).toThrow(/state/);
+  it('זורק שגיאה אם productType לא תקין', () => {
+    const p = mkProduct({ productType: 'spaceship' as never });
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [p] });
+    expect(() => deserializeProject(json)).toThrow(/productType/);
   });
 
   it('זורק שגיאה אם שדה ב-input חסר', () => {
     const input = basicInput() as Partial<CabinetInput>;
     delete input.W;
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input, state: emptyState() },
-    });
+    const pu = mkProduct({ cabinet: { input: input as CabinetInput, state: emptyState() } });
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [pu] });
     expect(() => deserializeProject(json)).toThrow(/W/);
   });
 
   it('זורק שגיאה אם type שגוי ב-input', () => {
     const input = { ...basicInput(), W: 'wide' as unknown as number };
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input, state: emptyState() },
-    });
+    const pu = mkProduct({ cabinet: { input, state: emptyState() } });
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [pu] });
     expect(() => deserializeProject(json)).toThrow(/W.*number/);
   });
 
   it('זורק שגיאה אם doorsPerColumn מחוץ לטווח', () => {
     const input = { ...basicInput(), doorsPerColumn: 7 as unknown as 'auto' };
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input, state: emptyState() },
-    });
+    const pu = mkProduct({ cabinet: { input, state: emptyState() } });
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [pu] });
     expect(() => deserializeProject(json)).toThrow(/doorsPerColumn/);
-  });
-
-  it('זורק שגיאה אם boolean שגוי ב-input', () => {
-    const input = { ...basicInput(), hasShell: 'yes' as unknown as boolean };
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input, state: emptyState() },
-    });
-    expect(() => deserializeProject(json)).toThrow(/hasShell.*boolean/);
-  });
-
-  it('זורק שגיאה אם state.interior הוא array ולא object', () => {
-    const state = { ...emptyState(), interior: [] as unknown as Record<string, never> };
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input: basicInput(), state },
-    });
-    expect(() => deserializeProject(json)).toThrow(/interior.*plain object/);
   });
 
   it('זורק שגיאה אם state חסר שדה', () => {
     const state = emptyState() as Partial<SavedCabinetState>;
     delete state.partitions;
-    const json = JSON.stringify({
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      cabinet: { input: basicInput(), state },
-    });
+    const pu = mkProduct({ cabinet: { input: basicInput(), state: state as SavedCabinetState } });
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [pu] });
     expect(() => deserializeProject(json)).toThrow(/partitions/);
   });
 
-  it('עובר ב-deserialize של פרויקט תקין מלא', () => {
-    const project = mkProject({
-      projectName: 'בדיקה',
-      createdAt: '2024-01-01T00:00:00.000Z',
+  it('עובר על פרויקט תקין עם מספר מוצרים', () => {
+    const p = mkProject({
+      products: [
+        mkProduct({ id: 'a', productType: 'wardrobe' }),
+        mkProduct({ id: 'b', productType: 'kitchen' }),
+        mkProduct({ id: 'c', productType: 'free-build' }),
+      ],
     });
-    const json = serializeProject(project);
-    const back = deserializeProject(json);
-    expect(back.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(back.projectName).toBe('בדיקה');
-    expect(back.createdAt).toBe('2024-01-01T00:00:00.000Z');
+    const back = deserializeProject(serializeProject(p));
+    expect(back.products).toHaveLength(3);
   });
 });

@@ -4,7 +4,7 @@ import type { Project } from '../../types';
  *  the {@link Project} shape changes in an incompatible way, and add a
  *  corresponding migration to {@link migrations} that converts the previous
  *  version to the new one. */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /** Migration from version `n` to `n + 1`. Input is typed `unknown` because
  *  by definition it is in the OLD shape; each migration is responsible for
@@ -13,11 +13,41 @@ export const CURRENT_SCHEMA_VERSION = 1;
  *  migrations in order. */
 export type Migration = (data: unknown) => unknown;
 
+/** v1 → v2: Project changed from a single `cabinet` to a `products` array.
+ *  Wraps the lone cabinet in a ProductUnit with type 'wardrobe'. */
+const migrateV1toV2: Migration = (data: unknown): unknown => {
+  const d = data as {
+    schemaVersion: number;
+    projectName?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    cabinet: unknown;
+  };
+  const id = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2, 11);
+  return {
+    schemaVersion: 2,
+    projectName: d.projectName ?? 'פרויקט',
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+    products: [
+      {
+        id,
+        name: d.projectName ?? 'ארון',
+        productType: 'wardrobe',
+        cabinet: d.cabinet,
+      },
+    ],
+  };
+};
+
 /** Registry of upgrade migrations. Keyed by SOURCE version (the version of
  *  the data passed in). Add an entry here when bumping
- *  {@link CURRENT_SCHEMA_VERSION}. Currently empty because we are at the
- *  baseline (version 1). */
-export const migrations: Readonly<Record<number, Migration>> = {};
+ *  {@link CURRENT_SCHEMA_VERSION}. */
+export const migrations: Readonly<Record<number, Migration>> = {
+  1: migrateV1toV2,
+};
 
 /** Upgrades `data` (with a numeric `schemaVersion` field) to
  *  {@link CURRENT_SCHEMA_VERSION} by running each registered migration in
