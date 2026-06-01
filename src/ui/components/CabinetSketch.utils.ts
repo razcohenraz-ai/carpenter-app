@@ -1,5 +1,6 @@
 import { decomposeBoxes } from '../../core';
 import { computeInnerWidth } from '../../core/boards/boardModel';
+import { boxStableKey } from '../../core/interior/interiorUtils';
 import type { Box, BoxLevel } from '../../types';
 import type { BodyLevel } from '../../types/interior';
 
@@ -105,6 +106,7 @@ export function computeSketchGeometry(
   middleDoorH?: number,
   tEnvelope?: number,
   hasEnvelopeTop = false,
+  boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>,
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
@@ -123,7 +125,19 @@ export function computeSketchGeometry(
   const envelopePx = tEnvelope ? tEnvelope * scale : 0;
   const innerW = computeInnerWidth(W, tEnvelope !== undefined, tEnvelope ?? 0);
 
-  const boxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+  const rawBoxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+  const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
+    ? rawBoxes.map(box => {
+        const ovr = boxDimensionOverrides.get(boxStableKey(box));
+        if (!ovr) return box;
+        return {
+          ...box,
+          ...(ovr.W !== undefined ? { W: ovr.W } : {}),
+          ...(ovr.H !== undefined ? { H: ovr.H } : {}),
+          ...(ovr.D !== undefined ? { D: ovr.D } : {}),
+        };
+      })
+    : rawBoxes;
 
   // ── Build level → H map (body boxes only) ────────────────────────────────────
   const levelHeightMap = new Map<BoxLevel, number>();

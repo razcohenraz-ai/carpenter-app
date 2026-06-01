@@ -884,6 +884,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(result && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
               boardOverrides={boardOverridesByStableId}
+              boxDimensionOverrides={boxDimensionOverrides}
             />
           ) : (
             <CabinetFrontsSketch

@@ -51,9 +51,12 @@ interface Props {
   /** Per-board override map; the cut-sketch surface uses it via
    *  `getMaterial` to tag boards with an effective material attribute. */
   boardOverrides?: ReadonlyMap<string, import('../../core/boards/boardModel').BoardOverrides>;
+  /** Per-body dimension overrides keyed by boxStableKey. When provided, the
+   *  sketch applies them to box geometry so the visual matches the cut list. */
+  boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -78,7 +81,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const fullD = parseFloat(D);
   const tFrontCm = frontMaterialThickness ?? 0;
   const carcassD = computeCarcassDepth(fullD, backThicknessCm, HINGE_GAP_CM, tFrontCm);
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv);
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
   // Boards are emitted only post-calc (interiorById defined) and only when
