@@ -128,9 +128,46 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     getLastInput, getSnapshot, restoreState,
   } = useCabinet();
 
-  // Restore saved state once on mount (before first user interaction)
+  // On mount: if we have a saved product, calculate immediately so
+  // lastInputRef is set (enables setBoxInterior / all other setters) and the
+  // sketch appears without requiring the user to click "חשב".
+  // Then restore the saved state so interior/doors/overrides come back.
   const restoredRef = React.useRef(false);
   React.useEffect(() => {
+    if (!initialInput) return;
+    // Build CabinetInput from the initialised FormState (mirrors handleSubmit)
+    const doorsPerColumn: 'auto' | 1 | 2 | 3 =
+      form.doorsPerColumn === '1' ? 1 :
+      form.doorsPerColumn === '2' ? 2 :
+      form.doorsPerColumn === '3' ? 3 : 'auto';
+    const backThicknessMm = parseFloat(form.backThicknessMm);
+    const backThicknessCm = Number.isFinite(backThicknessMm) && backThicknessMm >= 0
+      ? backThicknessMm / 10 : 0.5;
+    const plinthRecessParsed = parseFloat(form.plinthRecess);
+    const needsLo = showLowerDoor(form.doorsPerColumn, form.H);
+    const needsMid = form.doorsPerColumn === '3';
+    const loDoor = parseFloat(form.lowerDoorH);
+    const midDoor = parseFloat(form.middleDoorH);
+    calculate({
+      W: parseFloat(form.W) || initialInput.W,
+      H: parseFloat(form.H) || initialInput.H,
+      D: parseFloat(form.D) || initialInput.D,
+      backThickness: backThicknessCm,
+      hasShell: form.hasShell,
+      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
+      bodyMaterialId: form.bodyMaterialId,
+      frontMaterialId: form.frontMaterialId,
+      plinth: parseFloat(form.plinth) || 0,
+      plinthRecess: Number.isFinite(plinthRecessParsed) && plinthRecessParsed > 0 ? plinthRecessParsed : 0,
+      doorCoversPlinth: form.doorCoversPlinth,
+      lowerDoorH: needsLo ? loDoor : undefined,
+      middleDoorH: needsMid ? midDoor : undefined,
+      doorsPerColumn,
+      doorGapMm: parseFloat(form.doorGap) || 0,
+      maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
+      edging: buildCabinetEdging(form),
+    });
+    // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
       restoredRef.current = true;
       restoreState(initialState);
