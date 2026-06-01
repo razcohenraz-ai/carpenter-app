@@ -43,6 +43,8 @@ function FrontPanels({ unit, layout, scale }: {
 
   if (dl.n === 0) return null;
 
+  const bodyH = layout.h - layout.plinthH;
+  const clipId = `clip-unit-${unit.id}`;
   const gapCm = inp.doorGapMm / 10;
   const frontLayout = computeRowFrontLayout({
     cabinetW: inp.W,
@@ -52,7 +54,6 @@ function FrontPanels({ unit, layout, scale }: {
     gapCm,
   });
 
-  const bodyH = layout.h - layout.plinthH; // px
   const doorStartPx = dl.doorStart * scale;
   const panels: React.ReactElement[] = [];
 
@@ -71,8 +72,9 @@ function FrontPanels({ unit, layout, scale }: {
 
   rows.forEach((row, ri) => {
     const panelH = row.heightCm * scale;
-    // y from bottom of body
-    const panelY = layout.y + bodyH - (row.yOffsetFromBottom + row.heightCm) * scale;
+    // y is relative to the total cabinet height H (floor = layout.y + layout.h),
+    // NOT bodyH, because calcDoors measures from the floor (including plinth).
+    const panelY = layout.y + layout.h - (row.yOffsetFromBottom + row.heightCm) * scale;
 
     for (let fi = 0; fi < dl.n; fi++) {
       const frontPos = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
@@ -106,7 +108,16 @@ function FrontPanels({ unit, layout, scale }: {
   }
 
   void doorStartPx;
-  return <>{panels}</>;
+  return (
+    <>
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={layout.x} y={layout.y} width={layout.w} height={bodyH} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`}>{panels}</g>
+    </>
+  );
 }
 
 export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }: Props) {
