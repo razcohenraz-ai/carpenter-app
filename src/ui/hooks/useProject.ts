@@ -43,6 +43,7 @@ export interface UseProjectReturn {
   removeKitchenUnit: (productId: string, unitId: string) => void;
   updateKitchenUnit: (productId: string, unitId: string, cabinet: import('../../types').Cabinet) => void;
   renameKitchenUnit: (productId: string, unitId: string, name: string) => void;
+  reorderKitchenUnit: (productId: string, unitId: string, direction: 'left' | 'right') => void;
   removeProduct: (id: string) => void;
   updateProductCabinet: (id: string, cabinet: Cabinet) => void;
   renameProject: (name: string) => void;
@@ -129,6 +130,22 @@ export function useProject(): UseProjectReturn {
     }));
   }, []);
 
+  const reorderKitchenUnit = useCallback((productId: string, unitId: string, direction: 'left' | 'right') => {
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.map(p => {
+        if (p.id !== productId) return p;
+        const arr = [...(p.kitchenUnits ?? [])];
+        const idx = arr.findIndex(u => u.id === unitId);
+        if (idx < 0) return p;
+        const swapIdx = direction === 'left' ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= arr.length) return p;
+        [arr[idx], arr[swapIdx]] = [arr[swapIdx]!, arr[idx]!];
+        return { ...p, kitchenUnits: arr };
+      }),
+    }));
+  }, []);
+
   const renameKitchenUnit = useCallback((productId: string, unitId: string, name: string) => {
     setProject(prev => ({
       ...prev,
@@ -196,7 +213,7 @@ export function useProject(): UseProjectReturn {
     project, activeProductId,
     setActiveProduct, clearActiveProduct,
     addProduct, removeProduct, updateProductCabinet,
-    addKitchenUnit, removeKitchenUnit, updateKitchenUnit, renameKitchenUnit,
+    addKitchenUnit, removeKitchenUnit, updateKitchenUnit, renameKitchenUnit, reorderKitchenUnit,
     renameProject, renameProduct,
     newProject, exportProject, importProject,
   };

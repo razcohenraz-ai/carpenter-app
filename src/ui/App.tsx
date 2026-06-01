@@ -16,7 +16,7 @@ export default function App(): React.JSX.Element {
     addProduct, removeProduct, updateProductCabinet,
     renameProject, newProject,
     exportProject, importProject,
-    addKitchenUnit, removeKitchenUnit, updateKitchenUnit,
+    addKitchenUnit, removeKitchenUnit, updateKitchenUnit, reorderKitchenUnit,
   } = useProject();
 
   // Active kitchen unit id (third navigation level)
@@ -88,11 +88,11 @@ export default function App(): React.JSX.Element {
         {/* Level 2a: kitchen editor (list of units) */}
         {!activeKitchenUnit && activeProduct && isKitchen && (
           <KitchenEditor
-            productName={activeProduct.name}
             units={activeProduct.kitchenUnits ?? []}
             onAddUnit={(moduleType, name, W) => addKitchenUnit(activeProduct.id, moduleType, name, W)}
             onRemoveUnit={unitId => removeKitchenUnit(activeProduct.id, unitId)}
             onOpenUnit={unitId => setActiveKitchenUnitId(unitId)}
+            onReorderUnit={(unitId, dir) => reorderKitchenUnit(activeProduct.id, unitId, dir)}
           />
         )}
 

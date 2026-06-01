@@ -1,0 +1,32 @@
+.container {
+  width: 100%;
+  background: var(--color-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  overflow-x: auto;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.unitGroup {
+  transition: opacity 0.1s;
+}
+
+.unitGroup:hover {
+  opacity: 0.85;
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  width: 100%;
+}
