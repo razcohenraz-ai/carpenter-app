@@ -915,10 +915,12 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       </button>
 
       {result !== null && boxDimensionOverrides.size > 0 && (() => {
+        const envTopH = (form.hasEnvelopeTop && form.hasShell) ? frontThicknessCm : 0;
         const dimWarnings = checkBoxConsistency(
           result.boxes,
           parseFloat(form.H) || undefined,
           parseFloat(form.plinth) || 0,
+          envTopH,
         );
         return dimWarnings.length > 0 ? (
           <div className={styles.dimMismatchBanner}>

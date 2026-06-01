@@ -41,6 +41,7 @@ export function checkBoxConsistency(
   boxes: Box[],
   cabinetH?: number,
   plinth?: number,
+  envelopeTopH = 0,
 ): ConsistencyWarning[] {
   const warnings: ConsistencyWarning[] = [];
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
@@ -81,7 +82,9 @@ export function checkBoxConsistency(
   // Vertical gap: sum of unique level heights vs expected inner body height
   // Only relevant when there are multiple stacked levels AND we know the cabinet dims.
   if (byLevel.size > 1 && cabinetH !== undefined && plinth !== undefined) {
-    const expectedBodyH = cabinetH - plinth;
+    // envelopeTopH is subtracted from the top box's H by decomposeBoxes when
+    // a ceiling envelope panel is present — it is not empty space.
+    const expectedBodyH = cabinetH - plinth - envelopeTopH;
     // Each level contributes its representative H (first box in that level)
     const totalLevelH = [...byLevel.values()]
       .reduce((sum, levelBoxes) => sum + (levelBoxes[0]?.H ?? 0), 0);
