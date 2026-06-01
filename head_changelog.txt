@@ -7,25 +7,6 @@
 
 ## [Unreleased]
 
-### נוסף — עקיפת מידות גוף (Box Dimension Override)
-- **`boxDimensionOverrides`** ב-`useCabinet` — Map<boxStableKey, {W?, H?, D?}>; דפוס זהה ל-`bodyEdgingOverrides`.
-- **`setBoxDimension(slotId, axis, value | undefined)`** + **`resetBoxDimensions(slotId)`** — setters; כל שינוי מפעיל `calculate()` מחדש.
-- **`CabinetResult.derivedBoxDims`** — Map המכיל את מידות `decomposeBoxes` לפני ה-override; מוצג כ-placeholder אפור בשדות הUI.
-- **UI ב-`BoxInteriorEditor`** — סקשן "עקיפת מידות גוף" עם שלושה inputs (W/H/D); שדה שלא שונה מציג את הנגזר כ-placeholder; שדה שונה גבול כחול; כפתור "אפס מידות" מופיע כשיש override כלשהו.
-- Override משפיע על ה-**boards של הגוף בלבד** — לא משנה את חלוקת הגופים הכללית; הנגר אחראי לקוהרנטיות.
-
-### נוסף — רשימת פרזולים (HardwareList)
-- **`calcHardware(doorsById, interiorById, cellInteriorById)`** חדש ב-`core/hardware/calcHardware.ts` — סופר דלתות (`hasDoor`), מגירות, ומדפים מכל הגופים (כולל תאי מחיצה) וקורא ל-`buildHW('cabinet', ...)` הקיים.
-- **`CabinetResult.hardwareItems`** חדש — מחושב בכל `calculate()` ב-`useCabinet`.
-- **`HardwareList.tsx`** — קומפוננטה חדשה: טבלת פרזולים עם שם, כמות, יחידה, מחיר יחידה, סה"כ, ושורת סיכום עלות כוללת.
-- **טאב "פרזולים" / "Hardware"** ב-`CabinetForm` — מוצג אחרי טאב "חיתוכים"; הסקיצה נשארת בתצוגה (כמו טאב חיתוכים).
-- תרגומים חדשים `hardwareList.*` (HE/EN) ב-`translations.ts`.
-
-### תוקן — תצוגת מידות ב-CutsList + רזולוציית עיגול ב-boardsToCutItems
-- **Bug 1 — ספרות עשרוניות**: `CutsList` הציג מידות עם `toFixed(1)` (ספרה אחת) אחרי שנוסף `format2`. תוקן: `format2(lengthCm)` / `format2(widthCm)` לאורך/רוחב; `c.qty` ו-`totalPieces` נשארים שלמים (לא format2) כדי למנוע "1.00" בשדה כמות.
-- **Bug 2 — override edging בלתי גלוי ברשימה**: `boardsToCutItems` עיגל `w`/`h` ל-mm שלם (`Math.round(... * 10)`). הפרש 0.7mm בין edging 0.6mm ל-1.3mm נבלע בעיגול → שתי השורות קיבלו `mergeKey` זהה ואוחדו. תוקן: רזולוציה 0.01mm (`Math.round(... * 1000) / 100`) מונעת אובדן ההפרש; `format2` ב-UI מציג 2 ספרות נכון.
-- **טסט רגרסיה**: נוסף ב-`boardModel.test.ts` — case עם D=60cm שבו הנוסחה הישנה מסכה את ה-override; 595/595 עוברים.
-
 ### נוסף — Project wrapper לתשתית cloud-readiness (schemaVersion + migrations + serialize)
 - **`Project`** חדש (`types/project.ts`) — עטיפת ארון שמור עם `schemaVersion`, `projectName?`, `createdAt?`, `updatedAt?`, ו-`cabinet: Cabinet`. מיועד ל-cloud save עתידי; אין UI חדש בשלב הזה.
 - **`Cabinet = { input: CabinetInput, state: SavedCabinetState }`** — `CabinetInput` הוצא ל-`types/cabinet.ts` (היה ב-`ui/hooks/useCabinet.ts`) כדי שטיפוסים יהיו ב-`types/` בלבד. `useCabinet.ts` עדיין מייצא אותו לתאימות לאחור.

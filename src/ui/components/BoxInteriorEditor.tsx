@@ -58,6 +58,19 @@ interface Props {
   /** Setter: pass `undefined` to revert to cabinet edging, an `Edging` value
    *  to apply / update the per-body band. */
   onSetBodyEdging: (edging: Edging | undefined) => void;
+  /** Current per-body dimension overrides, if any. Derived (decomposeBoxes)
+   *  values are in `box.W / box.H / box.D`; an override replaces only the
+   *  axis the carpenter explicitly set. */
+  boxDimensionOverride: import('../hooks/useCabinet').BoxDimensionOverride | undefined;
+  /** Set one dimension axis override. Pass `undefined` to revert that axis. */
+  onSetBoxDimension: (axis: 'W' | 'H' | 'D', value: number | undefined) => void;
+  /** Reset all dimension overrides for this body. */
+  onResetBoxDimensions: () => void;
+  /** Derived box dimensions (from decomposeBoxes, before overrides) — shown
+   *  as placeholder values in override inputs. */
+  derivedW: number;
+  derivedH: number;
+  derivedD: number;
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -73,6 +86,8 @@ export default function BoxInteriorEditor({
   cellItems, onCellItemsChange, tBody, doorGapMm,
   bodyMaterialId, frontMaterialId, hasOuterShell, hasEnvelopeTop,
   cabinetEdging, bodyEdgingOverride, onSetBodyEdging,
+  boxDimensionOverride, onSetBoxDimension, onResetBoxDimensions,
+  derivedW, derivedH, derivedD,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -614,6 +629,45 @@ export default function BoxInteriorEditor({
               </select>
             </label>
           </>
+        )}
+      </div>
+
+      {/* ── Dimension overrides ─────────────────────────────────────────── */}
+      <div className={styles.dimOverrideSection}>
+        <span className={styles.dimOverrideTitle}>{t.interior.dimOverrideTitle}</span>
+        {(['W', 'H', 'D'] as const).map(axis => {
+          const derived = axis === 'W' ? derivedW : axis === 'H' ? derivedH : derivedD;
+          const overrideVal = boxDimensionOverride?.[axis];
+          return (
+            <label key={axis} className={styles.dimOverrideField}>
+              <span className={styles.dimOverrideLabel}>
+                {axis === 'W' ? t.interior.dimOverrideW
+                  : axis === 'H' ? t.interior.dimOverrideH
+                  : t.interior.dimOverrideD}
+              </span>
+              <input
+                type="number"
+                className={`${styles.dimOverrideInput} ${overrideVal !== undefined ? styles.dimOverrideInputActive : ''}`}
+                value={overrideVal !== undefined ? overrideVal : ''}
+                placeholder={String(Math.round(derived * 10) / 10)}
+                min={1}
+                step={0.5}
+                onChange={e => {
+                  const v = parseFloat(e.target.value);
+                  onSetBoxDimension(axis, isNaN(v) || v <= 0 ? undefined : v);
+                }}
+              />
+            </label>
+          );
+        })}
+        {boxDimensionOverride !== undefined && (
+          <button
+            type="button"
+            className={styles.dimOverrideResetBtn}
+            onClick={onResetBoxDimensions}
+          >
+            {t.interior.dimOverrideReset}
+          </button>
         )}
       </div>
 

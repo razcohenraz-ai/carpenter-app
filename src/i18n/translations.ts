@@ -103,6 +103,11 @@ export interface Translations {
     deleteDrawer: string;
     fixedShelfLabel: string;
     fixedShelfTooltip: string;
+    dimOverrideTitle: string;
+    dimOverrideW: string;
+    dimOverrideH: string;
+    dimOverrideD: string;
+    dimOverrideReset: string;
   };
 
   doors: {
@@ -318,6 +323,11 @@ const he: Translations = {
     deleteDrawer: 'מחק מגירה',
     fixedShelfLabel: 'קבוע',
     fixedShelfTooltip: 'מדף קבוע מעל מגירה חיצונית — נוצר אוטומטית',
+    dimOverrideTitle: 'עקיפת מידות גוף',
+    dimOverrideW: 'רוחב (ס"מ)',
+    dimOverrideH: 'גובה (ס"מ)',
+    dimOverrideD: 'עומק (ס"מ)',
+    dimOverrideReset: 'אפס מידות',
   },
 
   doors: {
@@ -515,6 +525,11 @@ const en: Translations = {
     deleteDrawer: 'Delete drawer',
     fixedShelfLabel: 'Fixed',
     fixedShelfTooltip: 'Fixed shelf above external drawer — auto-generated',
+    dimOverrideTitle: 'Body dimension override',
+    dimOverrideW: 'Width (cm)',
+    dimOverrideH: 'Height (cm)',
+    dimOverrideD: 'Depth (cm)',
+    dimOverrideReset: 'Reset dimensions',
   },
 
   doors: {

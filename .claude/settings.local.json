@@ -21,7 +21,8 @@
       "Bash(npm run *)",
       "Bash(jobs -p)",
       "Bash(xargs -r kill)",
-      "Bash(jobs)"
+      "Bash(jobs)",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\" //FO TABLE)"
     ]
   }
 }

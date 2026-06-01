@@ -87,6 +87,7 @@ export default function CabinetForm(): React.JSX.Element {
     plinthGableOverrides, setPlinthGableOverride, resetPlinthGableOverrides,
     boardOverridesByStableId,
     bodyEdgingOverrides, setBodyEdgingOverride,
+    boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
   } = useCabinet();
 
   // Unified editor state: one editor open at a time. The body/door/plinth
@@ -441,6 +442,12 @@ export default function CabinetForm(): React.JSX.Element {
             cabinetEdging={cabinetEdging}
             bodyEdgingOverride={bodyEdgingOverrides.get(editingBoxSlotId)}
             onSetBodyEdging={e => setBodyEdgingOverride(editingBoxSlotId, e)}
+            boxDimensionOverride={boxDimensionOverrides.get(editingBoxSlotId)}
+            onSetBoxDimension={(axis, val) => setBoxDimension(editingBoxSlotId, axis, val)}
+            onResetBoxDimensions={() => resetBoxDimensions(editingBoxSlotId)}
+            derivedW={result?.derivedBoxDims.get(editingBoxSlotId)?.W ?? editingBox.W}
+            derivedH={result?.derivedBoxDims.get(editingBoxSlotId)?.H ?? editingBox.H}
+            derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
           />
         </div>
       );

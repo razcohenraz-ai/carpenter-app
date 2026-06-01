@@ -103,6 +103,12 @@ function computePartitionCuts(
   return cuts;
 }
 
+export interface BoxDimensionOverride {
+  W?: number;
+  H?: number;
+  D?: number;
+}
+
 export interface CabinetResult {
   boxes: Box[];
   cuts: CutItem[];
@@ -116,6 +122,10 @@ export interface CabinetResult {
    *  layout, the body decomposition, and the live sketches. */
   innerW: number;
   hardwareItems: HardwareLineItem[];
+  /** Derived (pre-override) dimensions for each body, keyed by boxStableKey.
+   *  UI reads this to show the decomposeBoxes value as placeholder in override
+   *  inputs, so the component never re-derives the formula. */
+  derivedBoxDims: ReadonlyMap<string, { W: number; H: number; D: number }>;
 }
 
 export function useCabinet(): {
@@ -177,6 +187,14 @@ export function useCabinet(): {
   /** Set the per-body edging override. Pass `undefined` to revert to the
    *  cabinet default. */
   setBodyEdgingOverride: (boxSlotId: BoxSlotId, edging: Edging | undefined) => void;
+  /** Per-body dimension overrides keyed by `boxStableKey(box)`. Each entry
+   *  holds only the axes that were overridden — absent axes fall back to the
+   *  value produced by `decomposeBoxes`. */
+  boxDimensionOverrides: ReadonlyMap<BoxSlotId, BoxDimensionOverride>;
+  /** Set one dimension (W/H/D) for a body. Pass `undefined` to revert. */
+  setBoxDimension: (boxSlotId: BoxSlotId, axis: 'W' | 'H' | 'D', value: number | undefined) => void;
+  /** Drop all dimension overrides for a body at once. */
+  resetBoxDimensions: (boxSlotId: BoxSlotId) => void;
 } {
   const [result, setResult] = useState<CabinetResult | null>(null);
   const [interiorById, setInteriorById] = useState<InteriorById>({});
@@ -197,6 +215,8 @@ export function useCabinet(): {
   // update through `boardsToCutItems` → `resolveEdging`.
   const [bodyEdgingOverrides, setBodyEdgingOverridesState] = useState<ReadonlyMap<BoxSlotId, Edging>>(new Map());
   const bodyEdgingOverridesRef = useRef<ReadonlyMap<BoxSlotId, Edging>>(new Map());
+  const [boxDimensionOverrides, setBoxDimensionOverridesState] = useState<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
+  const boxDimensionOverridesRef = useRef<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
 
   const interiorRef = useRef<InteriorById>({});
   const cellInteriorRef = useRef<CellInteriorById>({});
@@ -624,6 +644,33 @@ export function useCabinet(): {
     if (lastInputRef.current) calculate(lastInputRef.current);
   }
 
+  function setBoxDimension(boxSlotId: BoxSlotId, axis: 'W' | 'H' | 'D', value: number | undefined): void {
+    const current = boxDimensionOverridesRef.current;
+    const existing = current.get(boxSlotId) ?? {};
+    const updated: BoxDimensionOverride = { ...existing, [axis]: value };
+    // If all axes are undefined after the change, remove the entry entirely
+    if (updated.W === undefined && updated.H === undefined && updated.D === undefined) {
+      const next = new Map(current);
+      next.delete(boxSlotId);
+      boxDimensionOverridesRef.current = next;
+      setBoxDimensionOverridesState(next);
+    } else {
+      const next = new Map(current);
+      next.set(boxSlotId, updated);
+      boxDimensionOverridesRef.current = next;
+      setBoxDimensionOverridesState(next);
+    }
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
+  function resetBoxDimensions(boxSlotId: BoxSlotId): void {
+    const next = new Map(boxDimensionOverridesRef.current);
+    next.delete(boxSlotId);
+    boxDimensionOverridesRef.current = next;
+    setBoxDimensionOverridesState(next);
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
   // ── Calculate ─────────────────────────────────────────────────────────────
 
   function calculate(input: CabinetInput): void {
@@ -643,7 +690,23 @@ export function useCabinet(): {
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
     const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
-    const boxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    // Apply per-body dimension overrides (W/H/D). Each override replaces only
+    // the axes the carpenter explicitly set; unset axes keep the decomposed value.
+    // The override affects only the board model for that body — it does NOT
+    // change the global decomposition or adjacent bodies. The carpenter is
+    // responsible for ensuring the dimensions stay coherent.
+    const boxDimOvr = boxDimensionOverridesRef.current;
+    const boxes = boxDimOvr.size === 0 ? rawBoxes : rawBoxes.map(box => {
+      const ovr = boxDimOvr.get(boxStableKey(box));
+      if (!ovr) return box;
+      return {
+        ...box,
+        ...(ovr.W !== undefined ? { W: ovr.W } : {}),
+        ...(ovr.H !== undefined ? { H: ovr.H } : {}),
+        ...(ovr.D !== undefined ? { D: ovr.D } : {}),
+      };
+    });
     // Cabinet-wide edging default — drives per-board front bands and the
     // perimeter band applied to door / drawer-front cuts. Body and per-board
     // override layers exist on the type surface (stage 2) but no setters
@@ -988,7 +1051,12 @@ export function useCabinet(): {
       ...enrich(externalDrawerCuts),
     ];
     const hardwareItems = calcHardware(newDoors, newInterior, newCellInteriorById);
-    setResult({ boxes, cuts: allCuts, doors, carcassD, innerW, hardwareItems });
+    const derivedBoxDims = new Map(
+      rawBoxes
+        .filter(b => b.level !== 'plinth')
+        .map(b => [boxStableKey(b), { W: b.W, H: b.H, D: b.D }])
+    );
+    setResult({ boxes, cuts: allCuts, doors, carcassD, innerW, hardwareItems, derivedBoxDims });
   }
 
   return {
@@ -1007,5 +1075,6 @@ export function useCabinet(): {
     setBoardMaterialOverride, resetBoardMaterialOverride,
     resetAllBoardOverrides,
     bodyEdgingOverrides, setBodyEdgingOverride,
+    boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
   };
 }
