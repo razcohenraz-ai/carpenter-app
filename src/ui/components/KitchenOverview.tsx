@@ -284,7 +284,7 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
                   )}
 
                   {/* Fronts overlay (fronts view mode) */}
-                  {viewMode === 'fronts' && !l.sinkOpen && (
+                  {viewMode === 'fronts' && (
                     <FrontPanels unit={unit} layout={l} scale={scale} />
                   )}
 
