@@ -29,7 +29,9 @@ function computeScale(units: KitchenUnit[], availableW: number): number {
   return Math.min(sx, sy, 8);
 }
 
-/** Render a single unit's front panels (doors) in the fronts view. */
+/** Render a single unit's front panels in the fronts view.
+ *  External drawers from SavedCabinetState take precedence over door panels
+ *  in the area they occupy. */
 function FrontPanels({ unit, layout, scale }: {
   unit: KitchenUnit;
   layout: { x: number; y: number; w: number; h: number; plinthH: number };
@@ -40,12 +42,12 @@ function FrontPanels({ unit, layout, scale }: {
   const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
   const dl = calcDoors(inp.W, inp.H, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, inp.hasShell, tFront, forceRows);
-
   if (dl.n === 0) return null;
 
-  const bodyH = layout.h - layout.plinthH;
+  const bodyH = layout.h - layout.plinthH; // px — body rect height (without plinth)
   const clipId = `clip-unit-${unit.id}`;
   const gapCm = inp.doorGapMm / 10;
+
   const frontLayout = computeRowFrontLayout({
     cabinetW: inp.W,
     hasOuterShell: inp.hasShell,
@@ -54,60 +56,78 @@ function FrontPanels({ unit, layout, scale }: {
     gapCm,
   });
 
-  const doorStartPx = dl.doorStart * scale;
   const panels: React.ReactElement[] = [];
 
-  // Draw each row from bottom to top
-  const rows: { heightCm: number; yOffsetFromBottom: number }[] = [];
-  if (dl.rows === 1) {
-    rows.push({ heightCm: dl.lowerH!, yOffsetFromBottom: dl.doorStart });
-  } else if (dl.rows === 2) {
-    rows.push({ heightCm: dl.lowerH!, yOffsetFromBottom: dl.doorStart });
-    rows.push({ heightCm: dl.upperH!, yOffsetFromBottom: dl.doorStart + dl.lowerH! + 0.2 });
-  } else {
-    rows.push({ heightCm: dl.lowerH!, yOffsetFromBottom: dl.doorStart });
-    rows.push({ heightCm: dl.upperH!, yOffsetFromBottom: dl.doorStart + dl.lowerH! + 0.2 });
-    rows.push({ heightCm: dl.topH!, yOffsetFromBottom: dl.doorStart + dl.lowerH! + dl.upperH! + 0.4 });
-  }
-
-  rows.forEach((row, ri) => {
-    const panelH = row.heightCm * scale;
-    // y is relative to the total cabinet height H (floor = layout.y + layout.h),
-    // NOT bodyH, because calcDoors measures from the floor (including plinth).
-    const panelY = layout.y + layout.h - (row.yOffsetFromBottom + row.heightCm) * scale;
-
+  // Helper: draw front rects for a given row across all n columns
+  function pushFrontRow(key: string, heightCm: number, yFromBodyBottom: number) {
+    const panelH = heightCm * scale;
+    // y measured upward from body bottom (= layout.y + bodyH)
+    const panelY = layout.y + bodyH - (yFromBodyBottom + heightCm) * scale;
     for (let fi = 0; fi < dl.n; fi++) {
-      const frontPos = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
-      const panelX = layout.x + (frontLayout.cabinetLeftOffset + frontPos.x) * scale;
-      const panelW = frontPos.width * scale;
-
+      const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
       panels.push(
         <rect
-          key={`row${ri}-front${fi}`}
-          x={panelX} y={panelY}
-          width={Math.max(panelW, 0)}
+          key={`${key}-fi${fi}`}
+          x={layout.x + (frontLayout.cabinetLeftOffset + fp.x) * scale}
+          y={panelY}
+          width={Math.max(fp.width * scale, 0)}
           height={Math.max(panelH, 0)}
           fill="var(--color-fronts, #e8934a)"
-          stroke="var(--color-text-secondary)"
-          strokeWidth={0.8}
-          opacity={0.85}
+          stroke="var(--color-border, #ccc)"
+          strokeWidth={1}
+          opacity={0.9}
         />
       );
     }
+  }
+
+  // ── External drawers from saved state ─────────────────────────────────────
+  // Keyed by "single:single" for a single-box cabinet unit.
+  const slotKey = 'single:single';
+  const savedItems = unit.cabinet.state.interior[slotKey] ?? [];
+  const extDrawers = (savedItems as import('../../types/interior').InteriorItem[])
+    .filter((it): it is import('../../types/interior').DrawerItem =>
+      it.type === 'drawer' && it.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+
+  // heightFromFloor is from the BODY BOTTOM (not from the floor including plinth)
+  let totalDrawerH = 0;
+  extDrawers.forEach((d, di) => {
+    const gap = gapCm / 2;
+    pushFrontRow(`drw${di}`, d.drawerHeight - gap, d.heightFromFloor + gap / 2);
+    totalDrawerH = Math.max(totalDrawerH, d.heightFromFloor + d.drawerHeight);
   });
+
+  // ── Door panel above drawers (if any space remains) ────────────────────────
+  // dl.doorStart = distance from FLOOR (= plinth area bottom) to door bottom.
+  // Convert to "from body bottom": body bottom is at plinth height above floor.
+  const doorStartFromBodyBottom = dl.doorStart - inp.plinth;
+  const doorTopFromBodyBottom = doorStartFromBodyBottom + (dl.lowerH ?? 0);
+
+  if (extDrawers.length === 0) {
+    // No external drawers → render door rows normally
+    const rows: { h: number; yFromBodyBottom: number }[] = [];
+    if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
+    if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
+    if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
+    rows.forEach((r, ri) => pushFrontRow(`door${ri}`, r.h, r.yFromBodyBottom));
+  } else if (totalDrawerH < doorTopFromBodyBottom - 3) {
+    // Door panel above the drawers
+    const remainH = doorTopFromBodyBottom - totalDrawerH;
+    pushFrontRow('doorAbove', remainH, totalDrawerH);
+  }
 
   // Shell side panels
   if (inp.hasShell) {
     const shellW = tFront * scale;
     panels.push(
       <rect key="shell-l" x={layout.x} y={layout.y} width={shellW} height={bodyH}
-        fill="var(--color-fronts, #e8934a)" stroke="var(--color-text-secondary)" strokeWidth={0.8} opacity={0.7} />,
+        fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
       <rect key="shell-r" x={layout.x + layout.w - shellW} y={layout.y} width={shellW} height={bodyH}
-        fill="var(--color-fronts, #e8934a)" stroke="var(--color-text-secondary)" strokeWidth={0.8} opacity={0.7} />,
+        fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
     );
   }
 
-  void doorStartPx;
   return (
     <>
       <defs>
