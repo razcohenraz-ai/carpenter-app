@@ -125,10 +125,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     boardOverridesByStableId,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
-    getSnapshot, restoreState,
+    getLastInput, getSnapshot, restoreState,
   } = useCabinet();
 
-  // Restore saved state once, after the first calculate() populates the boxes
+  // Restore saved state once on mount (before first user interaction)
   const restoredRef = React.useRef(false);
   React.useEffect(() => {
     if (initialState && !restoredRef.current) {
@@ -137,6 +137,18 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-save after EVERY calculate() — covers handleSubmit, setBoxInterior,
+  // setDoorHingeCount, and all other paths that trigger calculate internally.
+  // Skips if no onCabinetChange prop or no result yet.
+  React.useEffect(() => {
+    if (!onCabinetChange || !result) return;
+    const input = getLastInput();
+    if (!input) return;
+    onCabinetChange(input, getSnapshot());
+  // result is the only dep that changes after every calculate()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   // Unified editor state: one editor open at a time. The body/door/plinth
   // editors replace the main view; the drawer editor renders as an overlay
@@ -356,7 +368,6 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       edging: buildCabinetEdging(form),
     };
     calculate(cabinetInput);
-    onCabinetChange?.(cabinetInput, getSnapshot());
   }
 
   // ── derived values ─────────────────────────────────────────────────────────

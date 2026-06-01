@@ -195,6 +195,9 @@ export function useCabinet(): {
   setBoxDimension: (boxSlotId: BoxSlotId, axis: 'W' | 'H' | 'D', value: number | undefined) => void;
   /** Drop all dimension overrides for a body at once. */
   resetBoxDimensions: (boxSlotId: BoxSlotId) => void;
+  /** The last CabinetInput passed to `calculate()`. Useful for consumers that
+   *  need to know the current input without re-deriving it from form state. */
+  getLastInput: () => import('../../types/cabinet').CabinetInput | null;
   /** Snapshot of all current user choices as a serialisable {@link SavedCabinetState}.
    *  Called synchronously — safe to call immediately after `calculate()`. */
   getSnapshot: () => SavedCabinetState;
@@ -1224,6 +1227,7 @@ export function useCabinet(): {
     resetAllBoardOverrides,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
+    getLastInput: () => lastInputRef.current,
     getSnapshot, restoreState,
   };
 }
