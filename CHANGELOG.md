@@ -7,6 +7,11 @@
 
 ## [Unreleased]
 
+### תוקן — תצוגת מידות ב-CutsList + רזולוציית עיגול ב-boardsToCutItems
+- **Bug 1 — ספרות עשרוניות**: `CutsList` הציג מידות עם `toFixed(1)` (ספרה אחת) אחרי שנוסף `format2`. תוקן: `format2(lengthCm)` / `format2(widthCm)` לאורך/רוחב; `c.qty` ו-`totalPieces` נשארים שלמים (לא format2) כדי למנוע "1.00" בשדה כמות.
+- **Bug 2 — override edging בלתי גלוי ברשימה**: `boardsToCutItems` עיגל `w`/`h` ל-mm שלם (`Math.round(... * 10)`). הפרש 0.7mm בין edging 0.6mm ל-1.3mm נבלע בעיגול → שתי השורות קיבלו `mergeKey` זהה ואוחדו. תוקן: רזולוציה 0.01mm (`Math.round(... * 1000) / 100`) מונעת אובדן ההפרש; `format2` ב-UI מציג 2 ספרות נכון.
+- **טסט רגרסיה**: נוסף ב-`boardModel.test.ts` — case עם D=60cm שבו הנוסחה הישנה מסכה את ה-override; 595/595 עוברים.
+
 ### נוסף — Project wrapper לתשתית cloud-readiness (schemaVersion + migrations + serialize)
 - **`Project`** חדש (`types/project.ts`) — עטיפת ארון שמור עם `schemaVersion`, `projectName?`, `createdAt?`, `updatedAt?`, ו-`cabinet: Cabinet`. מיועד ל-cloud save עתידי; אין UI חדש בשלב הזה.
 - **`Cabinet = { input: CabinetInput, state: SavedCabinetState }`** — `CabinetInput` הוצא ל-`types/cabinet.ts` (היה ב-`ui/hooks/useCabinet.ts`) כדי שטיפוסים יהיו ב-`types/` בלבד. `useCabinet.ts` עדיין מייצא אותו לתאימות לאחור.
