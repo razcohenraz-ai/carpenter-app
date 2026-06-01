@@ -915,14 +915,20 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       </button>
 
       {result !== null && boxDimensionOverrides.size > 0 && (() => {
-        const dimWarnings = checkBoxConsistency(result.boxes);
+        const dimWarnings = checkBoxConsistency(
+          result.boxes,
+          parseFloat(form.H) || undefined,
+          parseFloat(form.plinth) || 0,
+        );
         return dimWarnings.length > 0 ? (
           <div className={styles.dimMismatchBanner}>
             {dimWarnings.map((w, i) => (
               <span key={i}>
                 {w.kind === 'h_mismatch'
                   ? t.interior.warnHeightMismatch.replace('{diff}', String(w.diffCm))
-                  : t.interior.warnWidthMismatch.replace('{diff}', String(w.diffCm))}
+                  : w.kind === 'w_mismatch'
+                  ? t.interior.warnWidthMismatch.replace('{diff}', String(w.diffCm))
+                  : t.interior.warnVerticalGap.replace('{diff}', String(w.gapCm))}
               </span>
             ))}
           </div>

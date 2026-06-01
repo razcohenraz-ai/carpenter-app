@@ -130,6 +130,7 @@ export interface Translations {
     dimOverrideReset: string;
     warnHeightMismatch: string;
     warnWidthMismatch: string;
+    warnVerticalGap: string;
   };
 
   doors: {
@@ -379,6 +380,7 @@ const he: Translations = {
     dimOverrideReset: 'אפס מידות',
     warnHeightMismatch: 'שים לב: גופים צמודים עם גובה שונה — הפרש {diff} ס"מ',
     warnWidthMismatch: 'שים לב: קומות מוערמות עם רוחב שונה — הפרש {diff} ס"מ',
+    warnVerticalGap: 'שים לב: חלל ריק בין הקומות — {diff} ס"מ ללא גוף',
   },
 
   doors: {
@@ -610,6 +612,7 @@ const en: Translations = {
     dimOverrideReset: 'Reset dimensions',
     warnHeightMismatch: 'Note: adjacent bodies have different heights — difference {diff} cm',
     warnWidthMismatch: 'Note: stacked levels have different total widths — difference {diff} cm',
+    warnVerticalGap: 'Note: empty gap between levels — {diff} cm without a body',
   },
 
   doors: {

@@ -13,19 +13,35 @@ export interface WidthMismatchWarning {
   diffCm: number;
 }
 
-export type ConsistencyWarning = DimensionMismatchWarning | WidthMismatchWarning;
+export interface VerticalGapWarning {
+  /** סכום גבהי הקומות קטן מגובה הגוף הפנימי — יש חלל ריק */
+  kind: 'v_gap';
+  gapCm: number;
+}
+
+export type ConsistencyWarning =
+  | DimensionMismatchWarning
+  | WidthMismatchWarning
+  | VerticalGapWarning;
 
 /**
  * Checks whether box dimensions are mutually consistent after overrides.
  *
- * Two classes of mismatch:
+ * Three classes of mismatch:
  * - `h_mismatch`: boxes at the same level (side by side) have different H.
  * - `w_mismatch`: stacked levels have different total widths.
+ * - `v_gap`: sum of level heights is less than the cabinet's inner body height,
+ *   leaving empty space between stacked rows.
  *
- * Only meaningful when `boxDimensionOverrides` is non-empty; pass
- * `result.boxes` which already has overrides applied.
+ * Pass `result.boxes` (overrides already applied) + the original cabinet
+ * H and plinth from CabinetInput so the gap check can compare against the
+ * expected inner height.
  */
-export function checkBoxConsistency(boxes: Box[]): ConsistencyWarning[] {
+export function checkBoxConsistency(
+  boxes: Box[],
+  cabinetH?: number,
+  plinth?: number,
+): ConsistencyWarning[] {
   const warnings: ConsistencyWarning[] = [];
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
 
@@ -59,6 +75,19 @@ export function checkBoxConsistency(boxes: Box[]): ConsistencyWarning[] {
     const diff = Math.round((maxW - minW) * 10) / 10;
     if (diff > 0.05) {
       warnings.push({ kind: 'w_mismatch', diffCm: diff });
+    }
+  }
+
+  // Vertical gap: sum of unique level heights vs expected inner body height
+  // Only relevant when there are multiple stacked levels AND we know the cabinet dims.
+  if (byLevel.size > 1 && cabinetH !== undefined && plinth !== undefined) {
+    const expectedBodyH = cabinetH - plinth;
+    // Each level contributes its representative H (first box in that level)
+    const totalLevelH = [...byLevel.values()]
+      .reduce((sum, levelBoxes) => sum + (levelBoxes[0]?.H ?? 0), 0);
+    const gap = Math.round((expectedBodyH - totalLevelH) * 10) / 10;
+    if (gap > 0.1) {
+      warnings.push({ kind: 'v_gap', gapCm: gap });
     }
   }
 
