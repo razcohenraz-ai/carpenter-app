@@ -1127,6 +1127,8 @@ export function useCabinet(): {
         // length regardless of which body emits them.
         cabinetTotalH: H,
         joint: cabinetJoint,
+        ...(input.topVariant ? { topVariant: input.topVariant } : {}),
+        ...(input.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: input.sinkTraverseWidthCm } : {}),
       }).filter(b => b.role !== 'partition'); // partition emitted separately
       // BoxSlotId placeholder: the eventual stable per-slot id is deferred
       // (DECISIONS_LOG 2026-05-29). Using boxStableKey here keeps the body

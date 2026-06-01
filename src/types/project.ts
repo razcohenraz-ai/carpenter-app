@@ -108,6 +108,17 @@ export type ProductType =
   | 'kitchen'    // מטבח
   | 'free-build'; // בנייה חופשית
 
+/** A single cabinet body inside a kitchen product. */
+export interface KitchenUnit {
+  /** Unique id within the kitchen product. */
+  id: string;
+  /** Carpenter-visible label (e.g. "מגירות 60", "כיור"). */
+  name: string;
+  /** Which preset this unit was created from (for display only). */
+  moduleType: string;
+  cabinet: Cabinet;
+}
+
 /** One furniture unit inside a project. */
 export interface ProductUnit {
   /** Unique id — stable across renames and reorders. */
@@ -115,7 +126,11 @@ export interface ProductUnit {
   /** Carpenter-visible name (e.g. "ארון חדר שינה"). */
   name: string;
   productType: ProductType;
+  /** Cabinet data — used for all product types except 'kitchen'. */
   cabinet: Cabinet;
+  /** Kitchen units — only present when productType === 'kitchen'.
+   *  Each entry is one cabinet body in the kitchen row. */
+  kitchenUnits?: KitchenUnit[];
 }
 
 // ── Project wrapper (cloud-save envelope) ─────────────────────────────────────

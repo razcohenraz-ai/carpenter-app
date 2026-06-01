@@ -4,6 +4,8 @@ import type { ProductType } from '../../types/project';
 import { serializeProject, deserializeProject } from '../../core/project/serialize';
 import { CURRENT_SCHEMA_VERSION } from '../../core/project/migrations';
 import { defaultInputForType, emptyCabinetState } from '../../core/product/productDefaults';
+import { kitchenModuleInput, kitchenModuleState, type KitchenModuleType } from '../../core/product/kitchenModules';
+import type { KitchenUnit } from '../../types/project';
 
 const STORAGE_KEY = 'carpenter-project-v2';
 
@@ -37,6 +39,10 @@ export interface UseProjectReturn {
   setActiveProduct: (id: string) => void;
   clearActiveProduct: () => void;
   addProduct: (type: ProductType, name: string) => string;
+  addKitchenUnit: (productId: string, moduleType: KitchenModuleType, name: string, W?: number) => string;
+  removeKitchenUnit: (productId: string, unitId: string) => void;
+  updateKitchenUnit: (productId: string, unitId: string, cabinet: import('../../types').Cabinet) => void;
+  renameKitchenUnit: (productId: string, unitId: string, name: string) => void;
   removeProduct: (id: string) => void;
   updateProductCabinet: (id: string, cabinet: Cabinet) => void;
   renameProject: (name: string) => void;
@@ -72,16 +78,66 @@ export function useProject(): UseProjectReturn {
   const addProduct = useCallback((type: ProductType, name: string): string => {
     const id = generateId();
     const unit: ProductUnit = {
-      id,
-      name,
-      productType: type,
-      cabinet: {
-        input: defaultInputForType(type),
-        state: emptyCabinetState(),
-      },
+      id, name, productType: type,
+      cabinet: { input: defaultInputForType(type), state: emptyCabinetState() },
+      ...(type === 'kitchen' ? { kitchenUnits: [] } : {}),
     };
     setProject(prev => ({ ...prev, products: [...prev.products, unit] }));
     return id;
+  }, []);
+
+  const addKitchenUnit = useCallback((
+    productId: string, moduleType: KitchenModuleType, name: string, W?: number,
+  ): string => {
+    const unitId = generateId();
+    const newUnit: KitchenUnit = {
+      id: unitId, name, moduleType,
+      cabinet: { input: kitchenModuleInput(moduleType, W), state: kitchenModuleState(moduleType) },
+    };
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.map(p =>
+        p.id === productId
+          ? { ...p, kitchenUnits: [...(p.kitchenUnits ?? []), newUnit] }
+          : p,
+      ),
+    }));
+    return unitId;
+  }, []);
+
+  const removeKitchenUnit = useCallback((productId: string, unitId: string) => {
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.map(p =>
+        p.id === productId
+          ? { ...p, kitchenUnits: (p.kitchenUnits ?? []).filter(u => u.id !== unitId) }
+          : p,
+      ),
+    }));
+  }, []);
+
+  const updateKitchenUnit = useCallback((
+    productId: string, unitId: string, cabinet: import('../../types').Cabinet,
+  ) => {
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.map(p =>
+        p.id === productId
+          ? { ...p, kitchenUnits: (p.kitchenUnits ?? []).map(u => u.id === unitId ? { ...u, cabinet } : u) }
+          : p,
+      ),
+    }));
+  }, []);
+
+  const renameKitchenUnit = useCallback((productId: string, unitId: string, name: string) => {
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.map(p =>
+        p.id === productId
+          ? { ...p, kitchenUnits: (p.kitchenUnits ?? []).map(u => u.id === unitId ? { ...u, name } : u) }
+          : p,
+      ),
+    }));
   }, []);
 
   const removeProduct = useCallback((id: string) => {
@@ -140,6 +196,7 @@ export function useProject(): UseProjectReturn {
     project, activeProductId,
     setActiveProduct, clearActiveProduct,
     addProduct, removeProduct, updateProductCabinet,
+    addKitchenUnit, removeKitchenUnit, updateKitchenUnit, renameKitchenUnit,
     renameProject, renameProduct,
     newProject, exportProject, importProject,
   };

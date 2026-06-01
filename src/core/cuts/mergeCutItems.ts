@@ -28,6 +28,8 @@ export interface PairLabels {
    *  are cut to identical dimensions — a single row with summed qty (2 per
    *  gable) reads more cleanly on the saw operator's list. */
   plinthGables: string;
+  /** Combined label for `sink-traverse-front` + `sink-traverse-back`. */
+  sinkTraverses: string;
 }
 
 interface PairDef {
@@ -40,6 +42,7 @@ const PAIRS: readonly PairDef[] = [
   { roles: ['side-left', 'side-right'], labelKey: 'sides' },
   { roles: ['envelope-left', 'envelope-right'], labelKey: 'envelopeSides' },
   { roles: ['plinth-gable-a', 'plinth-gable-b'], labelKey: 'plinthGables' },
+  { roles: ['sink-traverse-front', 'sink-traverse-back'], labelKey: 'sinkTraverses' },
 ];
 
 function mergeKey(c: CutItem): string {

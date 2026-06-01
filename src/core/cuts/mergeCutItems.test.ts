@@ -11,6 +11,7 @@ const PAIR_LABELS: PairLabels = {
   sides: 'צד ימין / צד שמאל',
   envelopeSides: 'מעטפת ימין / מעטפת שמאל',
   plinthGables: 'גיבל צוקל',
+  sinkTraverses: 'קורת רוחב',
 };
 
 describe('mergeCutItems', () => {

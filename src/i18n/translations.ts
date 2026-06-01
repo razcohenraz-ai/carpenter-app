@@ -17,6 +17,12 @@ export interface Translations {
     deleteConfirm: string;
     backToProject: string;
     productTypes: Record<string, string>;
+    kitchenAddUnit: string;
+    kitchenModuleTitle: string;
+    kitchenModuleWidth: string;
+    kitchenModules: Record<string, string>;
+    kitchenNoUnits: string;
+    kitchenEditUnit: string;
   };
 
   sketch: {
@@ -200,6 +206,7 @@ export interface Translations {
     pairSides: string;
     pairEnvelopeSides: string;
     pairPlinthGables: string;
+    pairSinkTraverses: string;
     /** Title for the plinth top-view editor (opened by clicking the
      *  plinth rect in the main cabinet sketch). */
     plinthEditorTitle: string;
@@ -248,6 +255,12 @@ const he: Translations = {
     importError: 'שגיאה בפתיחת הקובץ. ודא שמדובר בקובץ פרויקט תקין.',
     deleteConfirm: 'למחוק את המוצר?',
     backToProject: '← חזרה לפרויקט',
+    kitchenAddUnit: '+ הוסף גוף',
+    kitchenModuleTitle: 'סוג גוף',
+    kitchenModuleWidth: 'רוחב (ס"מ)',
+    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור' },
+    kitchenNoUnits: 'אין גופים עדיין. לחץ על "הוסף גוף" כדי להתחיל.',
+    kitchenEditUnit: 'עריכה →',
     productTypes: {
       wardrobe: 'ארון',
       bookcase: 'ספריה',
@@ -436,6 +449,7 @@ const he: Translations = {
     pairSides: 'צד ימין / צד שמאל',
     pairEnvelopeSides: 'מעטפת ימין / מעטפת שמאל',
     pairPlinthGables: 'גיבל צוקל',
+    pairSinkTraverses: 'קורת רוחב קדמית / אחורית',
     plinthEditorTitle: 'תצוגת על — צוקל',
     plinthHeightLabel: 'גובה צוקל (ס"מ)',
     plinthResetGables: 'אפס מיקומי גיבלים',
@@ -470,6 +484,12 @@ const en: Translations = {
     importError: 'Failed to open file. Make sure it is a valid project file.',
     deleteConfirm: 'Delete this product?',
     backToProject: '← Back to Project',
+    kitchenAddUnit: '+ Add Unit',
+    kitchenModuleTitle: 'Unit type',
+    kitchenModuleWidth: 'Width (cm)',
+    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink' },
+    kitchenNoUnits: 'No units yet. Click "Add Unit" to start.',
+    kitchenEditUnit: 'Edit →',
     productTypes: {
       wardrobe: 'Wardrobe',
       bookcase: 'Bookcase',
@@ -658,6 +678,7 @@ const en: Translations = {
     pairSides: 'Right / Left Side',
     pairEnvelopeSides: 'Right / Left Envelope',
     pairPlinthGables: 'Plinth Gable',
+    pairSinkTraverses: 'Front / Back Traverse',
     plinthEditorTitle: 'Top view — Plinth',
     plinthHeightLabel: 'Plinth height (cm)',
     plinthResetGables: 'Reset gable positions',

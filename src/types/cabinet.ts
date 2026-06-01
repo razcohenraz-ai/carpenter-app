@@ -32,4 +32,12 @@ export interface CabinetInput {
    *  {@link DEFAULT_EDGING}. Kept optional so projects saved before edging
    *  was introduced still deserialize cleanly without a schema bump. */
   edging?: Edging;
+  /** Top-panel structural variant.
+   *  - `'standard'` (default): full-width top board.
+   *  - `'sink-open'`: no top board; two narrow traverse boards (front + back)
+   *    are added instead so the sink basin can drop in from above. */
+  topVariant?: 'standard' | 'sink-open';
+  /** Width (depth direction) of each sink traverse in cm. Only used when
+   *  `topVariant === 'sink-open'`. Defaults to 8 cm. */
+  sinkTraverseWidthCm?: number;
 }

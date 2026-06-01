@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+### נוסף — מודולי מטבח: גופים מוכנים ויחידת כיור
+
+**תשתית ליבה:**
+- **`topVariant?: 'standard' | 'sink-open'`** + **`sinkTraverseWidthCm?`** ב-`CabinetInput` — מגדיר שיחידת כיור אין לה תקרה אלא שתי קורות רוחב (traverses) בחלק הקדמי והאחורי.
+- **roles חדשים** ב-`BoardRole`: `'sink-traverse-front'`, `'sink-traverse-back'` — מחליפים את `'top'` כשהדגל פעיל.
+- **`buildBoardModel`** — כשה-`topVariant === 'sink-open'`: ב-rabbet מוציא `(W-2t) × tw` ×2; ב-butt מוציא `W × tw` ×2. Edging pattern: `'front'` (כמו top).
+- **`PairLabels.sinkTraverses`** + זוג חדש ב-`mergeCutItems` — שתי קורות הרוחב מתמזגות לשורה אחת "קורת רוחב קדמית / אחורית".
+- **`kitchenModules.ts`** — `kitchenModuleInput(type, W?)` + `kitchenModuleState(type)` לשלושה מודולים: `drawers` (3 מגירות חיצוניות 32/32/16), `shelves` (2 מדפים), `sink` (כיור, topVariant='sink-open').
+
+**ארכיטקטורת מוצר מטבח:**
+- **`KitchenUnit`** חדש ב-`types/project.ts` — גוף יחיד בתוך מטבח עם `moduleType`, `cabinet`.
+- **`ProductUnit.kitchenUnits?: KitchenUnit[]`** — רשימת גופים עבור מוצרי מטבח.
+- **`useProject`** — נוספו `addKitchenUnit`, `removeKitchenUnit`, `updateKitchenUnit`, `renameKitchenUnit`.
+- **`KitchenEditor.tsx`** — מסך ניהול גופי המטבח: רשימה ממוספרת, כפתורי עריכה/מחיקה, טופס הוספת גוף עם בחירת סוג + רוחב.
+- **`App.tsx`** — ניתוב 3 רמות: פרויקט → עורך מטבח → עורך גוף בודד.
+
 ### נוסף — שמירה ושחזור state מלא של מוצר בפרויקט
 - **`getSnapshot(): SavedCabinetState`** ב-`useCabinet` — בונה את ה-state הנוכחי מה-refs (interior, cellInterior, partitions, doors, overrides) עם rekey מ-box.id ל-boxStableKey. קריאה סינכרונית — בטוחה מיד אחרי `calculate()`.
 - **`restoreState(state): void`** ב-`useCabinet` — מאפסת refs, מאכלסת `pendingRestoreRef`, ומריצה `calculate()` מחדש. ב-`calculate()` נוסף בלוק שצורך את `pendingRestoreRef` ומאכלס את ה-stable maps (interior, cells, partitions, doors) מה-state השמור.
