@@ -13,6 +13,7 @@ import BoxInteriorEditor from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import CutsList from './CutsList';
+import { HardwareList } from './HardwareList';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import styles from './CabinetForm.module.css';
@@ -98,7 +99,7 @@ export default function CabinetForm(): React.JSX.Element {
     | { type: 'drawer'; drawerId: string }
     | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
-  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts'>('bodies');
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
 
   function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
@@ -741,13 +742,20 @@ export default function CabinetForm(): React.JSX.Element {
               >
                 {t.cutsList.tab}
               </button>
+              <button
+                type="button"
+                className={`${styles.modeBtn} ${sketchMode === 'hardware' ? styles.modeBtnActive : ''}`}
+                onClick={() => setSketchMode('hardware')}
+              >
+                {t.hardwareList.tab}
+              </button>
             </div>
           )}
 
           {/* Main sketch — bodies layout doubles as the cuts-tab reference.
               Clicking the plinth rect opens the PlinthEditor full-screen
               (see editing.type === 'plinth' block above). */}
-          {sketchMode === 'bodies' || sketchMode === 'cuts' || !result ? (
+          {sketchMode === 'bodies' || sketchMode === 'cuts' || sketchMode === 'hardware' || !result ? (
             <CabinetSketch
               W={form.W}
               H={form.H}
@@ -821,6 +829,7 @@ export default function CabinetForm(): React.JSX.Element {
             />
           )}
           {sketchMode === 'cuts' && <CutsList cuts={result.cuts} />}
+          {sketchMode === 'hardware' && <HardwareList items={result.hardwareItems} />}
         </>
       )}
       {editing.type === 'drawer' && drawerById[editing.drawerId] && (

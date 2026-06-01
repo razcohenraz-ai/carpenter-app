@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### נוסף — רשימת פרזולים (HardwareList)
+- **`calcHardware(doorsById, interiorById, cellInteriorById)`** חדש ב-`core/hardware/calcHardware.ts` — סופר דלתות (`hasDoor`), מגירות, ומדפים מכל הגופים (כולל תאי מחיצה) וקורא ל-`buildHW('cabinet', ...)` הקיים.
+- **`CabinetResult.hardwareItems`** חדש — מחושב בכל `calculate()` ב-`useCabinet`.
+- **`HardwareList.tsx`** — קומפוננטה חדשה: טבלת פרזולים עם שם, כמות, יחידה, מחיר יחידה, סה"כ, ושורת סיכום עלות כוללת.
+- **טאב "פרזולים" / "Hardware"** ב-`CabinetForm` — מוצג אחרי טאב "חיתוכים"; הסקיצה נשארת בתצוגה (כמו טאב חיתוכים).
+- תרגומים חדשים `hardwareList.*` (HE/EN) ב-`translations.ts`.
+
 ### תוקן — תצוגת מידות ב-CutsList + רזולוציית עיגול ב-boardsToCutItems
 - **Bug 1 — ספרות עשרוניות**: `CutsList` הציג מידות עם `toFixed(1)` (ספרה אחת) אחרי שנוסף `format2`. תוקן: `format2(lengthCm)` / `format2(widthCm)` לאורך/רוחב; `c.qty` ו-`totalPieces` נשארים שלמים (לא format2) כדי למנוע "1.00" בשדה כמות.
 - **Bug 2 — override edging בלתי גלוי ברשימה**: `boardsToCutItems` עיגל `w`/`h` ל-mm שלם (`Math.round(... * 10)`). הפרש 0.7mm בין edging 0.6mm ל-1.3mm נבלע בעיגול → שתי השורות קיבלו `mergeKey` זהה ואוחדו. תוקן: רזולוציה 0.01mm (`Math.round(... * 1000) / 100`) מונעת אובדן ההפרש; `format2` ב-UI מציג 2 ספרות נכון.

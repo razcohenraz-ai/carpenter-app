@@ -26,6 +26,7 @@ import {
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
+import { calcHardware } from '../../core/hardware/calcHardware';
 import {
   buildBoardModel,
   buildPlinthBoardModel,
@@ -43,6 +44,7 @@ import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import { getMaterial } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
+import type { HardwareLineItem } from '../../types/hardware';
 import type { CabinetInput } from '../../types/cabinet';
 import { DEFAULT_EDGING, type Edging } from '../../types/edging';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
@@ -113,6 +115,7 @@ export interface CabinetResult {
    *  by {@link computeInnerWidth}. Single source of truth for the front
    *  layout, the body decomposition, and the live sketches. */
   innerW: number;
+  hardwareItems: HardwareLineItem[];
 }
 
 export function useCabinet(): {
@@ -984,7 +987,8 @@ export function useCabinet(): {
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),
     ];
-    setResult({ boxes, cuts: allCuts, doors, carcassD, innerW });
+    const hardwareItems = calcHardware(newDoors, newInterior, newCellInteriorById);
+    setResult({ boxes, cuts: allCuts, doors, carcassD, innerW, hardwareItems });
   }
 
   return {

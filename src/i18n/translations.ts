@@ -153,6 +153,16 @@ export interface Translations {
     note: string;
   };
 
+  hardwareList: {
+    tab: string;
+    item: string;
+    qty: string;
+    unit: string;
+    unitPrice: string;
+    total: string;
+    grandTotal: string;
+  };
+
   cutsList: {
     tab: string;
     materialGroup: string;
@@ -357,6 +367,16 @@ const he: Translations = {
     note: 'הערה',
   },
 
+  hardwareList: {
+    tab: 'פרזולים',
+    item: 'פריט',
+    qty: 'כמות',
+    unit: 'יחידה',
+    unitPrice: 'מחיר יחידה',
+    total: 'סה"כ',
+    grandTotal: 'סה"כ עלות פרזולים',
+  },
+
   cutsList: {
     tab: 'חיתוכים',
     materialGroup: 'חומר',
@@ -542,6 +562,16 @@ const en: Translations = {
     length: 'Length',
     thickness: 'Thickness',
     note: 'Note',
+  },
+
+  hardwareList: {
+    tab: 'Hardware',
+    item: 'Item',
+    qty: 'Qty',
+    unit: 'Unit',
+    unitPrice: 'Unit price',
+    total: 'Total',
+    grandTotal: 'Total hardware cost',
   },
 
   cutsList: {
