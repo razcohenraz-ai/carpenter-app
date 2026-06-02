@@ -1,13 +1,19 @@
 import React from 'react';
 import type { CutItem } from '../../types/cuts';
 import type { MaterialId } from '../../types/materials';
-import { MATERIALS } from '../../catalog';
+import { MATERIALS, getMaterialWithCustom } from '../../catalog';
 import { mergeCutItems } from '../../core/cuts/mergeCutItems';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './CutsList.module.css';
 
 interface CutsListProps {
   cuts: CutItem[];
+  settings?: {
+    bodyMaterialPriceOverrides?: Partial<Record<MaterialId, number>> | undefined;
+    bodyCustomMaterials?: import('../../types/materials').CustomMaterial[] | undefined;
+    frontMaterialPriceOverrides?: Partial<Record<MaterialId, number>> | undefined;
+    frontCustomMaterials?: import('../../types/materials').CustomMaterial[] | undefined;
+  };
 }
 
 /** Display-only formatter: always 2 decimals, round-half-up for positive
@@ -20,9 +26,9 @@ function format2(v: number): string {
 }
 
 interface MaterialGroup {
-  /** materialId, or null when the cut is not bound to a catalog material
+  /** materialId (catalog or custom) or null when the cut is not bound to any material
    *  (drawer-box parts at fixed 12mm/6mm). */
-  materialId: MaterialId | null;
+  materialId: MaterialId | string | null;
   cuts: CutItem[];
 }
 
@@ -37,18 +43,26 @@ function groupByMaterial(cuts: CutItem[]): MaterialGroup[] {
     }
     bucket.cuts.push(c);
   }
-  // Catalog materials first (in MATERIALS insertion order), "other" last.
+  // Catalog materials first (in MATERIALS insertion order), then custom
+  // materials (any remaining non-catalog, non-none keys), "other" last.
   const ordered: MaterialGroup[] = [];
+  const catalogIds = new Set(Object.keys(MATERIALS));
   for (const id of Object.keys(MATERIALS) as MaterialId[]) {
     const g = buckets.get(id);
     if (g) ordered.push(g);
+  }
+  // Add custom material groups (ids not in catalog and not '__none__')
+  for (const [key, g] of buckets.entries()) {
+    if (!catalogIds.has(key) && key !== '__none__') {
+      ordered.push(g);
+    }
   }
   const none = buckets.get('__none__');
   if (none) ordered.push(none);
   return ordered;
 }
 
-export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
+export default function CutsList({ cuts, settings }: CutsListProps): React.JSX.Element {
   const { t } = useTranslation();
   // Collapse identical pieces (same material + dims + name) into a single row
   // with summed qty BEFORE grouping by material. The merge logic lives in
@@ -82,9 +96,17 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
 
       <div className={styles.printable}>
         {groups.map(group => {
-          const name = group.materialId !== null
-            ? (MATERIALS[group.materialId]?.name ?? group.materialId)
-            : t.cutsList.noMaterial;
+          let name: string;
+          if (group.materialId !== null) {
+            const allCustomMaterials = [
+              ...(settings?.bodyCustomMaterials ?? []),
+              ...(settings?.frontCustomMaterials ?? []),
+            ];
+            const mat = getMaterialWithCustom(group.materialId, allCustomMaterials);
+            name = mat.name;
+          } else {
+            name = t.cutsList.noMaterial;
+          }
           let totalPieces = 0;
           let totalAreaCm2 = 0;
           for (const c of group.cuts) {
@@ -147,6 +169,51 @@ export default function CutsList({ cuts }: CutsListProps): React.JSX.Element {
                       {Math.round(totalAreaCm2).toLocaleString()}
                     </td>
                   </tr>
+                  {(() => {
+                    if (!group.materialId) return null;
+
+                    // Get material with custom overrides
+                    const allCustomMaterials = [
+                      ...(settings?.bodyCustomMaterials ?? []),
+                      ...(settings?.frontCustomMaterials ?? []),
+                    ];
+                    const mat = getMaterialWithCustom(group.materialId, allCustomMaterials);
+
+                    // For custom materials, use their pricePerSheet directly (already updated in settings)
+                    // For catalog materials, apply price overrides if they exist
+                    let effectivePrice = mat.pricePerSheet;
+                    if (!mat.isCustom && group.materialId) {
+                      const allPriceOverrides = {
+                        ...(settings?.bodyMaterialPriceOverrides ?? {}),
+                        ...(settings?.frontMaterialPriceOverrides ?? {}),
+                      };
+                      effectivePrice = allPriceOverrides[group.materialId as MaterialId] ?? mat.pricePerSheet;
+                    }
+
+                    const sheetAreaCm2 = mat.sheetW * mat.sheetH; // 244 × 122 = 29,768
+                    const sheetsNeeded = Math.ceil(totalAreaCm2 / sheetAreaCm2);
+                    const woodCost = sheetsNeeded * effectivePrice;
+                    return (
+                      <>
+                        <tr>
+                          <td className={styles.footerLabel} colSpan={3}>
+                            {t.cutsList.sheetsNeeded}
+                          </td>
+                          <td className={styles.colArea}>
+                            {sheetsNeeded}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className={styles.footerLabel} colSpan={3}>
+                            {t.cutsList.woodCost}
+                          </td>
+                          <td className={styles.colArea}>
+                            ₪{woodCost.toLocaleString()}
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  })()}
                 </tfoot>
               </table>
             </div>

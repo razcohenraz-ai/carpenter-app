@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import DoorBodySketch from './DoorBodySketch';
 import { computeHingeWarnings, computeHingeSpacingWarnings, getDoorThicknessCm } from '../../core/doors/doorUtils';
-import { MATERIALS, getMaterial } from '../../catalog';
+import { MATERIALS, getEffectiveMaterial } from '../../catalog';
 import type { MaterialId } from '../../types/materials';
 import styles from './DoorEditor.module.css';
 import type { Door } from '../../types/doors';
@@ -40,7 +40,7 @@ export default function DoorEditor({
   const isSmallDoor       = door.hasDoor && door.height < 25;
 
   const thicknessCm       = door.hasDoor ? getDoorThicknessCm(door, globalMaterialId) : undefined;
-  const globalThicknessCm = getMaterial(globalMaterialId as MaterialId).thickness / 10;
+  const globalThicknessCm = getEffectiveMaterial(globalMaterialId as MaterialId).thickness / 10;
   const hasOverride     = door.thicknessOverride !== undefined;
   const warnThickLow    = thicknessCm !== undefined && thicknessCm < 1.5;
   const warnThickHigh   = thicknessCm !== undefined && thicknessCm > 2.5;

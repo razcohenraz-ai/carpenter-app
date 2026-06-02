@@ -221,6 +221,35 @@ export interface Translations {
     /** Recess (קונסולי / נסוג) — checkbox + input. */
     plinthRecessedLabel: string;
     plinthRecessLabel: string;
+    /** Panel count footer row. */
+    sheetsNeeded: string;
+    /** Wood cost footer row. */
+    woodCost: string;
+  };
+
+  kitchen: {
+    /** Warning shown when units in a kitchen have different heights. */
+    mixedHeightsWarning: string;
+  };
+
+  settings: {
+    title: string;
+    materialsTab: string;
+    materialName: string;
+    materialThickness: string;
+    materialPrice: string;
+    sheetDimensions: string;
+    resetPrice: string;
+    addMaterial: string;
+    removeMaterial: string;
+    close: string;
+    catalogMaterials: string;
+    customMaterials: string;
+    noCustomMaterials: string;
+    newMaterialName: string;
+    newMaterialThickness: string;
+    newMaterialPrice: string;
+    addMaterialBtn: string;
   };
 
   edging: {
@@ -462,6 +491,32 @@ const he: Translations = {
     plinthResetGablesTooltip: 'החזר את הגיבלים למיקומים האוטומטיים (קצוות וחיבורי גופים)',
     plinthRecessedLabel: 'צוקל נסוג',
     plinthRecessLabel: 'נסיגה (ס"מ)',
+    sheetsNeeded: 'פלטות נדרשות',
+    woodCost: 'עלות עץ',
+  },
+
+  kitchen: {
+    mixedHeightsWarning: 'גופים בגבהים שונים — בדוק יישור לפני ייצור',
+  },
+
+  settings: {
+    title: 'הגדרות',
+    materialsTab: 'חומרים',
+    materialName: 'שם חומר',
+    materialThickness: 'עובי (מ"מ)',
+    materialPrice: 'מחיר לפלטה (₪)',
+    sheetDimensions: 'מידת פלטה (ס"מ)',
+    resetPrice: 'אפס',
+    addMaterial: 'הוסף חומר',
+    removeMaterial: 'הסר',
+    close: 'סגור',
+    catalogMaterials: 'חומרי קטלוג',
+    customMaterials: 'חומרים מותאמים',
+    noCustomMaterials: 'לא נוספו חומרים מותאמים עדיין.',
+    newMaterialName: 'שם',
+    newMaterialThickness: 'עובי (מ"מ)',
+    newMaterialPrice: 'מחיר (₪)',
+    addMaterialBtn: 'הוסף',
   },
 
   edging: {
@@ -694,6 +749,32 @@ const en: Translations = {
     plinthResetGablesTooltip: 'Restore gables to their automatic positions (edges and body joints)',
     plinthRecessedLabel: 'Recessed plinth',
     plinthRecessLabel: 'Recess (cm)',
+    sheetsNeeded: 'Sheets needed',
+    woodCost: 'Wood cost',
+  },
+
+  kitchen: {
+    mixedHeightsWarning: 'Units with different heights — verify alignment before manufacturing',
+  },
+
+  settings: {
+    title: 'Settings',
+    materialsTab: 'Materials',
+    materialName: 'Material name',
+    materialThickness: 'Thickness (mm)',
+    materialPrice: 'Price per sheet (₪)',
+    sheetDimensions: 'Sheet size (cm)',
+    resetPrice: 'Reset',
+    addMaterial: 'Add material',
+    removeMaterial: 'Remove',
+    close: 'Close',
+    catalogMaterials: 'Catalog materials',
+    customMaterials: 'Custom materials',
+    noCustomMaterials: 'No custom materials yet.',
+    newMaterialName: 'Name',
+    newMaterialThickness: 'Thickness (mm)',
+    newMaterialPrice: 'Price (₪)',
+    addMaterialBtn: 'Add',
   },
 
   edging: {

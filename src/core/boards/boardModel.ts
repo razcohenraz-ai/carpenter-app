@@ -61,7 +61,7 @@ export interface Board {
    *    'plinth-gable-a@joint:0' */
   stableId: string;
   role: BoardRole;
-  materialId: MaterialId;
+  materialId: MaterialId | string;  // MaterialId for catalog, string for custom materials
   /** cm — physical length of the cut piece (the long dimension). */
   length: number;
   /** cm — physical width of the cut piece (typically equals box.D). */
@@ -136,7 +136,7 @@ export function getDimension(
 export function getMaterial(
   board: Board,
   overrides: ReadonlyMap<string, BoardOverrides>,
-): MaterialId {
+): MaterialId | string {
   return overrides.get(board.stableId)?.materialId ?? board.materialId;
 }
 
@@ -254,7 +254,7 @@ export function getEdgingFinishMaterial(
   board: Board,
   edging: Edging,
   boardOverrides: ReadonlyMap<string, BoardOverrides>,
-): MaterialId {
+): MaterialId | string {
   return edging.finishMaterialId ?? getMaterial(board, boardOverrides);
 }
 
@@ -381,8 +381,8 @@ export function deriveEnvelopeFlags(
 
 export interface BuildBoardModelArgs {
   box: Box;
-  bodyMaterial: Material;
-  frontMaterial: Material;
+  bodyMaterial: Material | (Omit<Material, 'id'> & { id: string });
+  frontMaterial: Material | (Omit<Material, 'id'> & { id: string });
   /** Outer envelope on the left edge — true only when this box sits at the
    *  cabinet's left edge AND a shell is present. */
   hasEnvelopeLeft: boolean;
@@ -867,7 +867,7 @@ export interface BuildPlinthBoardModelArgs {
   cabinetW: number;
   cabinetD: number;
   plinthHeight: number;
-  bodyMaterial: Material;
+  bodyMaterial: Material | (Omit<Material, 'id'> & { id: string });
   /** Bottom-row body boxes (caller filters out plinth boxes and other rows).
    *  Used to compute internal gable positions. */
   boxes: Box[];
@@ -882,7 +882,7 @@ export interface BuildPlinthBoardModelArgs {
    *  thickness — the carcass keeps the cabinet's external footprint while
    *  the visible facade gets a separate, replaceable cladding piece. Pass
    *  `undefined` to skip cladding entirely (legacy / unit tests). */
-  frontMaterial?: Material;
+  frontMaterial?: Material | (Omit<Material, 'id'> & { id: string });
   /** Recess depth in cm — pushes the plinth back from the cabinet's front
    *  face. The cabinet footprint stays at `cabinetD`; the plinth structure
    *  (cladding + plinth-front + gables + plinth-back) sits inside it,

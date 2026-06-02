@@ -42,7 +42,7 @@ import {
 } from '../../core/boards/boardModel';
 import { newItemId } from '../../core/interior/interiorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
-import { getMaterial } from '../../catalog';
+import { getMaterialWithCustom } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { HardwareLineItem } from '../../types/hardware';
 import type { CabinetInput } from '../../types/cabinet';
@@ -128,7 +128,9 @@ export interface CabinetResult {
   derivedBoxDims: ReadonlyMap<string, { W: number; H: number; D: number }>;
 }
 
-export function useCabinet(): {
+export function useCabinet(settings?: {
+  customMaterials?: import('../../types/materials').CustomMaterial[];
+}): {
   result: CabinetResult | null;
   calculate: (input: CabinetInput) => void;
   interiorById: InteriorById;
@@ -778,8 +780,10 @@ export function useCabinet(): {
     lastInputRef.current = input;
 
     const { W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
-    const bodyMaterial  = getMaterial(bodyMaterialId);
-    const frontMaterial = getMaterial(frontMaterialId);
+    // Use getMaterialWithCustom to support both catalog and custom materials
+    const allCustomMaterials = settings?.customMaterials ?? [];
+    const bodyMaterial  = getMaterialWithCustom(bodyMaterialId, allCustomMaterials);
+    const frontMaterial = getMaterialWithCustom(frontMaterialId, allCustomMaterials);
     const tBody  = bodyMaterial.thickness / 10;   // cm
     const tFront = frontMaterial.thickness / 10;  // cm
     const innerW = computeInnerWidth(W, hasShell, tFront);

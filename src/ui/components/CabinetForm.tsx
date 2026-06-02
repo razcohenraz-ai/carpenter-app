@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { useCabinet } from '../hooks/useCabinet';
-import { MATERIALS, getMaterial } from '../../catalog';
+import { MATERIALS, getMaterialWithCustom } from '../../catalog';
 import { computeInnerWidth } from '../../core/boards/boardModel';
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import type { MaterialId } from '../../types';
@@ -85,6 +85,14 @@ interface CabinetFormProps {
     input: import('../../types/cabinet').CabinetInput,
     state: import('../../types/project').SavedCabinetState,
   ) => void;
+  /** Settings including custom materials and overrides. */
+  settings?: {
+    customMaterials?: import('../../types/materials').CustomMaterial[];
+    bodyEnabledMaterialIds?: string[];
+    frontEnabledMaterialIds?: string[];
+    bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+    frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+  };
 }
 
 function inputToFormState(
@@ -111,7 +119,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, initialState, onCabinetChange }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -127,7 +135,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
     getLastInput, getSnapshot, restoreState,
-  } = useCabinet();
+  } = useCabinet(settings);
 
   // On mount: if we have a saved product, calculate immediately so
   // lastInputRef is set (enables setBoxInterior / all other setters) and the
@@ -187,6 +195,28 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   // result is the only dep that changes after every calculate()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
+
+  // When settings change (e.g., user adds a custom material), re-run calculate
+  // with the last input so the results reflect the updated material definitions
+  React.useEffect(() => {
+    const lastInput = getLastInput();
+    if (lastInput) {
+      calculate(lastInput);
+    }
+  }, [settings]);
+
+  // All materials: catalog first, then custom — filtered by enabled IDs per category
+  const allMaterials = [
+    ...Object.values(MATERIALS).map(m => ({ ...m, isCustom: false as const })),
+    ...(settings?.customMaterials ?? []).map(m => ({ ...m, isCustom: true as const })),
+  ];
+  const defaultIds = Object.keys(MATERIALS);  // fallback when no settings yet
+  const availableBodyMaterials = allMaterials.filter(
+    m => (settings?.bodyEnabledMaterialIds ?? defaultIds).includes(m.id)
+  );
+  const availableFrontMaterials = allMaterials.filter(
+    m => (settings?.frontEnabledMaterialIds ?? defaultIds).includes(m.id)
+  );
 
   // Unified editor state: one editor open at a time. The body/door/plinth
   // editors replace the main view; the drawer editor renders as an overlay
@@ -308,6 +338,20 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   );
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+
+  // When the enabled material list changes, reset bodyMaterialId/frontMaterialId
+  // to the first available option if the current selection was removed.
+  React.useEffect(() => {
+    const bodyIds = availableBodyMaterials.map(m => m.id);
+    const frontIds = availableFrontMaterials.map(m => m.id);
+    setForm(prev => {
+      const newBody = bodyIds.includes(prev.bodyMaterialId) ? prev.bodyMaterialId : (bodyIds[0] ?? prev.bodyMaterialId) as MaterialId;
+      const newFront = frontIds.includes(prev.frontMaterialId) ? prev.frontMaterialId : (frontIds[0] ?? prev.frontMaterialId) as MaterialId;
+      if (newBody === prev.bodyMaterialId && newFront === prev.frontMaterialId) return prev;
+      return { ...prev, bodyMaterialId: newBody, frontMaterialId: newFront };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.bodyEnabledMaterialIds, settings?.frontEnabledMaterialIds, settings?.customMaterials]);
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -534,7 +578,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onRemovePartition={() => removePartition(editingBox.id)}
             cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
             onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
-            tBody={getMaterial(form.bodyMaterialId).thickness / 10}
+            tBody={getMaterialWithCustom(form.bodyMaterialId, settings?.customMaterials).thickness / 10}
             doorGapMm={parseFloat(form.doorGap) || 2}
             bodyMaterialId={form.bodyMaterialId}
             frontMaterialId={form.frontMaterialId}
@@ -571,8 +615,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             return Number.isFinite(r) && r > 0 ? r : 0;
           })()}
           boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
-          bodyMaterial={getMaterial(form.bodyMaterialId)}
-          frontMaterial={getMaterial(form.frontMaterialId)}
+          bodyMaterial={getMaterialWithCustom(form.bodyMaterialId, settings?.customMaterials)}
+          frontMaterial={getMaterialWithCustom(form.frontMaterialId, settings?.customMaterials)}
           gableOverrides={plinthGableOverrides}
           boardOverrides={boardOverridesByStableId}
           onSetGableOverride={setPlinthGableOverride}
@@ -660,8 +704,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   setForm(p => ({ ...p, bodyMaterialId: e.target.value as MaterialId }))
                 }
               >
-                {materialsArray.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                {availableBodyMaterials.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -694,8 +740,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   setForm(p => ({ ...p, frontMaterialId: e.target.value as MaterialId }))
                 }
               >
-                {materialsArray.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                {availableFrontMaterials.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -960,7 +1008,17 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               onDrawerFrontClick={handleDrawerFrontClick}
             />
           )}
-          {sketchMode === 'cuts' && <CutsList cuts={result.cuts} />}
+          {sketchMode === 'cuts' && (
+            <CutsList
+              cuts={result.cuts}
+              settings={{
+                bodyMaterialPriceOverrides: settings?.bodyMaterialPriceOverrides,
+                bodyCustomMaterials: settings?.customMaterials,
+                frontMaterialPriceOverrides: settings?.frontMaterialPriceOverrides,
+                frontCustomMaterials: settings?.customMaterials,
+              }}
+            />
+          )}
           {sketchMode === 'hardware' && <HardwareList items={result.hardwareItems} />}
         </>
       )}

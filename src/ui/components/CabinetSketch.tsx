@@ -9,7 +9,7 @@ import {
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
 import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
-import { getMaterial } from '../../catalog';
+import { getEffectiveMaterial } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
 import type { MaterialId } from '../../types/materials';
@@ -87,8 +87,8 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   // Boards are emitted only post-calc (interiorById defined) and only when
   // we have material info. Pre-calc the sketch falls back to the legacy
   // envelopePanels + shelfLine rendering below.
-  const bodyMat  = bodyMaterialId  ? getMaterial(bodyMaterialId)  : null;
-  const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : null;
+  const bodyMat  = bodyMaterialId  ? getEffectiveMaterial(bodyMaterialId)  : null;
+  const frontMat = frontMaterialId ? getEffectiveMaterial(frontMaterialId) : null;
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
   const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
 

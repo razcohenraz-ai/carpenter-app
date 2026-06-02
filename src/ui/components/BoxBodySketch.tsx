@@ -3,7 +3,7 @@ import type { InteriorItem, DrawerItem } from '../../types/interior';
 import type { Box } from '../../types/geometry';
 import type { MaterialId } from '../../types/materials';
 import { useTranslation } from '../hooks/useTranslation';
-import { getMaterial } from '../../catalog';
+import { getEffectiveMaterial } from '../../catalog';
 import { buildBoardModel } from '../../core/boards/boardModel';
 import CabinetCutSketch from './CabinetCutSketch';
 import styles from './BoxBodySketch.module.css';
@@ -112,7 +112,7 @@ export default function BoxBodySketch({
   // the side boards, not edge-to-edge. Uses the body-material thickness so
   // it matches the boards drawn by CabinetCutSketch behind them. Defaults
   // to 18mm when no material is provided.
-  const tBodyCm = (bodyMaterialId ? getMaterial(bodyMaterialId).thickness : 18) / 10;
+  const tBodyCm = (bodyMaterialId ? getEffectiveMaterial(bodyMaterialId).thickness : 18) / 10;
   const innerX  = bX + tBodyCm * scale;
   const innerW  = bW - 2 * tBodyCm * scale;
 
@@ -125,8 +125,8 @@ export default function BoxBodySketch({
   // a thin wrapper around the dimensions we already render — position/level
   // are 'single' because BoxBodySketch is body-isolated; envelope flags are
   // derived from `hasOuterShell` (false in cell views).
-  const bodyMat  = bodyMaterialId  ? getMaterial(bodyMaterialId)  : null;
-  const frontMat = frontMaterialId ? getMaterial(frontMaterialId) : bodyMat;
+  const bodyMat  = bodyMaterialId  ? getEffectiveMaterial(bodyMaterialId)  : null;
+  const frontMat = frontMaterialId ? getEffectiveMaterial(frontMaterialId) : bodyMat;
   // The body editor shows the carcass in isolation — envelope panels belong
   // to the cabinet view, not the body editor. Force all envelope flags off
   // here regardless of the cabinet-level props (which are kept on Props for

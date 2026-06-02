@@ -56,6 +56,26 @@
   color: var(--color-surface);
 }
 
+.settingsBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-surface);
+  font-size: var(--font-size-lg);
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-md);
+  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.settingsBtn:hover {
+  background-color: var(--color-primary-dark);
+}
+
 .langToggle {
   background: transparent;
   border: var(--border-width) solid var(--color-primary-light);

@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-06-02 — Custom Materials: Support בכל ה-stack מ-form עד cuts list
+
+**ההחלטה**: Custom materials (יוצרים ידי משתמש שמוגדרים בהגדרות) יידרשו לתמיכה בחישובי מטריאלים בעומק ה-core. זה דורש:
+1. `useCabinet` קיבל `settings` כפרמטר כדי לחפש מטריאלים בcustom list בזמן calculating thickness
+2. `Board.materialId` ו-`CutItem.materialId` תומכים ב-`string` בנוסף ל-`MaterialId` (catalog)
+3. `CutsList` משתמש ב-`getMaterialWithCustom` כדי להביא שמות וצפיפות
+4. כשsettings משתנו (משתמש הוסיף custom material בהגדרות), `CabinetForm` מריץ `calculate()` מחדש עם הקלט הקודם כדי לעדכן את ה-results
+
+**הנימוק**:
+- **End-to-End flow**: ככל שמטריאל מעבור מhazzy form → calculate core → cuts list, זה צריך לשמור את ה-id שלו בלי fallback לקטלוג
+- **Type flexibility**: MaterialId היא literal union (catalog keys). Custom ids הם strings. הקוד צריך לעזוב ל-union, לא מטיל כל custom→catalog
+- **Settings injection**: ה-hook צריך גישה לcustom materials כדי לחפש properties (thickness להשבחה מידות, pricePerSheet ל-CutsList). Prop passing כל הדרך מקל על testing
+- **Re-calculate on settings change**: כשמשתמש משנה הגדרות (מוסיף/מוחק custom material), ה-results צריכים להתעדכן כדי לשקף את ה-definitions החדשות
+
+**טריידאוף**:
+- הניחה שהמשתמש תמיד בוחר מthropdown המכיל custom materials אם הם קיימים, או fallback לקטלוג. אם dropdown ריק ואין custom materials עדיין, הניחה הכנסנו fallback לקטלוג ב-CabinetForm
+- סיכום: הזרימה עבדה, אבל רק כשהsettings העבורו כנכון וthe dropdown האוכלוס כראוי
+
+**יישום**:
+- `useCabinet(settings?)` — קיבל settings עם `bodyCustomMaterials` ו-`frontCustomMaterials`
+- `calculate()` משתמש `getMaterialWithCustom(materialId, allCustomMaterials)` כדי לחפש thickness
+- `CabinetForm` מעביר settings ל-`useCabinet(settings)`
+- `CabinetForm` הוספה `useEffect` שקורא ל-`calculate(getLastInput())` כשsettings משתנו
+- `CutsList.tsx` משתמש `getMaterialWithCustom` בעת הצגת שמות ומחירים
+- Fallback: כשאין custom materials, `CabinetForm` מציג catalog materials בdropdown
+
+---
+
 ## 2026-05-31 — Edging: רק cabinet default + per-body override; אין per-door
 
 **ההחלטה**: שכבת ה-edging חושפת ב-UI שתי רמות בלבד — ברירת מחדל ארון (ב-`CabinetForm`) ו-override פר-גוף (radio "כמו ארון / מותאם" ב-`BoxInteriorEditor`). **אין UI ל-override פר-דלת**, ו-`calcCuts` לא מקבל overrides פר-דלת. השדה `SavedCabinetState.doorEdgingOverrides?` ו-ה-validation שלו ב-`serialize.ts` נשמרים כתשתית טהורה — תמיד `Map` ריק, ללא תקורה, ללא setter בשום מקום.

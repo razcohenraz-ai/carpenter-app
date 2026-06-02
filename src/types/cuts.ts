@@ -19,11 +19,12 @@ export interface CutItem {
   h: number;    // mm
   group?: CutGroup;
   note?: string; // e.g. "6mm", "מדף צף"
-  /** Catalog material id that this piece is cut from. Drives the cut-list
+  /** Material id that this piece is cut from. Drives the cut-list
    *  view grouping (one section per material). Optional: drawer-box parts
    *  use fixed thicknesses (12 mm sides, 6 mm bottom) outside the cabinet
-   *  catalog, so they fall through to an "Other" group. */
-  materialId?: MaterialId;
+   *  catalog, so they fall through to an "Other" group. Can be a catalog
+   *  MaterialId or a custom material id (string). */
+  materialId?: MaterialId | string;
   /** Carpentry role this piece plays (e.g. 'top', 'bottom', 'side-left',
    *  'envelope-right'). Mirrors `BoardRole` from `core/boards/boardModel.ts`
    *  but typed as `string` here to keep the types layer free of core deps.

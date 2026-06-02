@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Box } from '../../types/geometry';
-import type { Material } from '../../types/materials';
+import type { Material, CustomMaterial } from '../../types/materials';
 import {
   buildPlinthBoardModel,
   calcPlinthGables,
@@ -29,9 +29,9 @@ interface Props {
   plinthRecess: number;
   /** Bottom-row body boxes (excluding plinth boxes themselves). */
   boxes: Box[];
-  bodyMaterial: Material;
+  bodyMaterial: Material | CustomMaterial;
   /** Front material — drives the plinth cladding panel. */
-  frontMaterial: Material;
+  frontMaterial: Material | CustomMaterial;
   /** User-set Panel-A x overrides keyed by `PlinthGable.id`. */
   gableOverrides: ReadonlyMap<string, number>;
   /** Per-board override layer (length / width / thickness / materialId).
@@ -166,8 +166,8 @@ export default function PlinthEditor({
 
   const boards = useMemo(
     () => (invalidInputs ? [] : buildPlinthBoardModel({
-      cabinetW, cabinetD, plinthHeight, bodyMaterial, boxes,
-      frontMaterial,
+      cabinetW, cabinetD, plinthHeight, bodyMaterial: bodyMaterial as import('../../types/materials').Material, boxes,
+      frontMaterial: frontMaterial as import('../../types/materials').Material,
       gableOverrides: effectiveOverrides,
       ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
     })),

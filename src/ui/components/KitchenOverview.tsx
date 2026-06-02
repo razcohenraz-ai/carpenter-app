@@ -2,7 +2,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import type { KitchenUnit } from '../../types/project';
 import { calcDoors } from '../../core/doors/doorCalc';
 import { computeRowFrontLayout, computeFrontGeometry } from '../../core/geometry/frontGeometry';
-import { getMaterial } from '../../catalog';
+import { getEffectiveMaterial } from '../../catalog';
+import { useTranslation } from '../../i18n/LanguageContext';
 import styles from './KitchenOverview.module.css';
 
 interface Props {
@@ -51,7 +52,7 @@ function FrontPanels({ unit, layout, scale }: {
 }) {
   const inp = unit.cabinet.input;
   const { W: effW, H: effH } = effectiveDims(unit);
-  const tFront = getMaterial(inp.frontMaterialId).thickness / 10; // cm
+  const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10; // cm
   const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, inp.hasShell, tFront, forceRows);
@@ -154,6 +155,7 @@ function FrontPanels({ unit, layout, scale }: {
 }
 
 export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableW, setAvailableW] = useState(800);
   const [viewMode, setViewMode] = useState<ViewMode>('bodies');
@@ -173,6 +175,10 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
 
   // Dimension summary — use effective (overridden) dimensions
   const totalW = units.reduce((s, u) => s + effectiveDims(u).W, 0);
+
+  // Check for mixed heights warning
+  const heights = units.map(u => effectiveDims(u).H);
+  const hasMixedHeights = new Set(heights).size > 1;
 
   // Compute layout for each unit using effective dimensions
   let xCursor = 0;
@@ -227,6 +233,13 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
           </div>
         )}
       </div>
+
+      {/* Height warning banner */}
+      {hasMixedHeights && units.length > 0 && (
+        <div className={styles.heightWarning}>
+          ⚠️ {t.kitchen.mixedHeightsWarning}
+        </div>
+      )}
 
       {/* SVG canvas */}
       <div ref={containerRef} className={styles.container}>
@@ -285,6 +298,115 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
                     strokeWidth={selected ? 1.5 : 1}
                   />
 
+                  {/* Interior elements visualization (bodies view only) */}
+                  {viewMode === 'bodies' && (
+                    <>
+                      {(() => {
+                        const slotItems = unit.cabinet.state.interior['single:single'] ?? [];
+                        const allItems = (slotItems as import('../../types/interior').InteriorItem[]);
+
+                        // Shelves
+                        const shelves = allItems.filter((it): it is import('../../types/interior').ShelfItem =>
+                          it.type === 'shelf'
+                        );
+
+                        // Hanging rods
+                        const rods = allItems.filter((it): it is import('../../types/interior').RodItem =>
+                          it.type === 'rod'
+                        );
+
+                        // External drawers
+                        const externalDrawers = allItems.filter((it): it is import('../../types/interior').DrawerItem =>
+                          it.type === 'drawer' && it.mount === 'external'
+                        );
+
+                        return (
+                          <>
+                            {/* Shelves as horizontal lines */}
+                            {shelves.map((shelf, si) => {
+                              const shelfY = l.y + bodyH - shelf.heightFromFloor * scale;
+                              return (
+                                <line
+                                  key={`shelf-${si}`}
+                                  x1={l.x + 2}
+                                  x2={l.x + l.w - 2}
+                                  y1={shelfY}
+                                  y2={shelfY}
+                                  stroke="#c9a876"
+                                  strokeWidth={0.6}
+                                />
+                              );
+                            })}
+
+                            {/* Hanging rods as thin horizontal lines */}
+                            {rods.map((rod, ri) => {
+                              const rodY = l.y + bodyH - rod.heightFromFloor * scale;
+                              return (
+                                <line
+                                  key={`rod-${ri}`}
+                                  x1={l.x + 3}
+                                  x2={l.x + l.w - 3}
+                                  y1={rodY}
+                                  y2={rodY}
+                                  stroke="#888"
+                                  strokeWidth={0.4}
+                                  strokeDasharray="2 2"
+                                />
+                              );
+                            })}
+
+                            {/* Drawers */}
+                            {externalDrawers.map((drawer, di) => {
+                              // גובה החזית של המגירה
+                              const faceHeight = drawer.drawerHeight;
+                              // גובה גוף המגירה — 4 ס"מ פחות מהחזית
+                              const boxH = (faceHeight - 4) * scale;
+                              // Y של תחתית החזית
+                              const faceBottomY = l.y + bodyH - drawer.heightFromFloor * scale;
+                              // Y של תחתית גוף המגירה (מתחת לחזית ב-4 ס"מ)
+                              const boxY = faceBottomY - boxH;
+                              const boxW = l.w - 4;
+                              const boxX = l.x + 2;
+
+                              return (
+                                <g key={`drawer-${di}`}>
+                                  {/* Drawer box */}
+                                  <rect
+                                    x={boxX}
+                                    y={boxY}
+                                    width={boxW}
+                                    height={boxH}
+                                    fill="none"
+                                    stroke="#9d8b7e"
+                                    strokeWidth={0.8}
+                                  />
+                                  {/* Left rail (vertical line on left side, bottom part) */}
+                                  <line
+                                    x1={boxX + 1.5}
+                                    x2={boxX + 1.5}
+                                    y1={boxY + boxH - 1}
+                                    y2={faceBottomY - 1}
+                                    stroke="#b8956a"
+                                    strokeWidth={0.6}
+                                  />
+                                  {/* Right rail (vertical line on right side, bottom part) */}
+                                  <line
+                                    x1={boxX + boxW - 1.5}
+                                    x2={boxX + boxW - 1.5}
+                                    y1={boxY + boxH - 1}
+                                    y2={faceBottomY - 1}
+                                    stroke="#b8956a"
+                                    strokeWidth={0.6}
+                                  />
+                                </g>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
+                    </>
+                  )}
+
                   {/* Sink-open indicator */}
                   {l.sinkOpen && (
                     <>
@@ -294,6 +416,25 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
                         fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth={1} />
                       <rect x={l.x} y={l.y + l.tw + 2} width={l.w} height={l.tw}
                         fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth={1} />
+
+                      {/* Sink basin visualization */}
+                      <rect
+                        x={l.x + (l.w - 60 * scale) / 2}
+                        y={l.y + l.tw * 2 + 2}
+                        width={60 * scale}
+                        height={25 * scale}
+                        fill="#b0c4d8"
+                        stroke="#7a9ab5"
+                        strokeWidth={1}
+                        rx={2}
+                      />
+                      {/* Drain hole */}
+                      <circle
+                        cx={l.x + l.w / 2}
+                        cy={l.y + l.tw * 2 + 2 + 12 * scale}
+                        r={2 * scale}
+                        fill="#7a9ab5"
+                      />
                     </>
                   )}
 

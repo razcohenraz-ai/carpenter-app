@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from './hooks/useTranslation';
 import { useProject } from './hooks/useProject';
+import { useSettings } from './hooks/useSettings';
 import { ProjectView } from './components/ProjectView';
 import { KitchenEditor } from './components/KitchenEditor';
+import { SettingsPage } from './pages/SettingsPage';
 import CabinetForm from './components/CabinetForm';
 import type { CabinetInput } from '../types/cabinet';
 import type { SavedCabinetState } from '../types/project';
@@ -18,9 +20,22 @@ export default function App(): React.JSX.Element {
     exportProject, importProject,
     addKitchenUnit, removeKitchenUnit, updateKitchenUnit, reorderKitchenUnit,
   } = useProject();
+  const {
+    settings,
+    toggleBodyMaterial,
+    toggleFrontMaterial,
+    setBodyMaterialPrice,
+    resetBodyMaterialPrice,
+    setFrontMaterialPrice,
+    resetFrontMaterialPrice,
+    addCustomMaterial,
+    removeCustomMaterial,
+    updateCustomMaterial,
+  } = useSettings();
 
   // Active kitchen unit id (third navigation level)
   const [activeKitchenUnitId, setActiveKitchenUnitId] = useState<string | null>(null);
+  const [showSettingsPage, setShowSettingsPage] = useState(false);
 
   const activeProduct = activeProductId
     ? project.products.find(p => p.id === activeProductId) ?? null
@@ -50,6 +65,25 @@ export default function App(): React.JSX.Element {
 
   const showBack = !!activeProduct;
 
+  // If settings page is open, show it fullscreen instead of the main content
+  if (showSettingsPage) {
+    return (
+      <SettingsPage
+        settings={settings}
+        onToggleBodyMaterial={toggleBodyMaterial}
+        onToggleFrontMaterial={toggleFrontMaterial}
+        onSetBodyMaterialPrice={setBodyMaterialPrice}
+        onResetBodyMaterialPrice={resetBodyMaterialPrice}
+        onSetFrontMaterialPrice={setFrontMaterialPrice}
+        onResetFrontMaterialPrice={resetFrontMaterialPrice}
+        onAddCustomMaterial={addCustomMaterial}
+        onRemoveCustomMaterial={removeCustomMaterial}
+        onUpdateCustomMaterial={updateCustomMaterial}
+        onBack={() => setShowSettingsPage(false)}
+      />
+    );
+  }
+
   return (
     <div className={styles.app}>
       <header className={styles.header}>
@@ -63,13 +97,23 @@ export default function App(): React.JSX.Element {
             <h1 className={styles.title}>{headerTitle()}</h1>
             {!activeProduct && <p className={styles.subtitle}>{t.appSubtitle}</p>}
           </div>
-          <button
-            className={styles.langToggle}
-            onClick={() => setLanguage(language === 'he' ? 'en' : 'he')}
-            aria-label="החלף שפה / Switch language"
-          >
-            {t.langToggle}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className={styles.settingsBtn}
+              onClick={() => setShowSettingsPage(true)}
+              aria-label="הגדרות / Settings"
+              title={t.settings.title}
+            >
+              ⚙️
+            </button>
+            <button
+              className={styles.langToggle}
+              onClick={() => setLanguage(language === 'he' ? 'en' : 'he')}
+              aria-label="החלף שפה / Switch language"
+            >
+              {t.langToggle}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -82,6 +126,7 @@ export default function App(): React.JSX.Element {
             onCabinetChange={(input: CabinetInput, state: SavedCabinetState) =>
               updateKitchenUnit(activeProduct.id, activeKitchenUnit.id, { input, state })
             }
+            settings={settings}
           />
         )}
 
@@ -104,6 +149,7 @@ export default function App(): React.JSX.Element {
             onCabinetChange={(input: CabinetInput, state: SavedCabinetState) =>
               updateProductCabinet(activeProduct.id, { input, state })
             }
+            settings={settings}
           />
         )}
 

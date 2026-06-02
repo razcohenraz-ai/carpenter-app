@@ -22,7 +22,10 @@
       "Bash(jobs -p)",
       "Bash(xargs -r kill)",
       "Bash(jobs)",
-      "Bash(tasklist //FI \"IMAGENAME eq node.exe\" //FO TABLE)"
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\" //FO TABLE)",
+      "Bash(wc -l /tmp/SettingsModal.tsx 2>/dev/null || echo \"Let me check the current file size\")",
+      "Bash(sed -i 's/import { getMaterial }/import { getEffectiveMaterial }/g' src/ui/components/*.tsx && echo \"Imports updated\")",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

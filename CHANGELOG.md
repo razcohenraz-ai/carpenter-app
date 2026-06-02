@@ -7,6 +7,33 @@
 
 ## [Unreleased]
 
+### שונה — דף חומרים בהגדרות: רשימה אחידה עם checkboxes
+
+**ארכיטקטורה חדשה (שינוי מהותי):**
+- **AppSettings** — עבר ל-v2 (localStorage key `carpenter-settings-v2`). הוסרו `bodyCustomMaterials`, `frontCustomMaterials` ושדות ה-nameOverrides/thicknessOverrides. במקומם:
+  - `customMaterials: CustomMaterial[]` — רשימה משותפת לכל הקטגוריות
+  - `bodyEnabledMaterialIds: string[]` — אילו חומרים (קטלוג + custom) מופיעים ב-dropdown גוף
+  - `frontEnabledMaterialIds: string[]` — אילו מופיעים ב-dropdown חזית
+- **SettingsPage** — עיצוב מחדש מלא: שני טאבים (גוף/חזית), כל טאב מציג **רשימה אחת אחידה** של כל החומרים (קטלוג + custom) עם checkbox ליד כל שורה. checkbox מסומן = מופיע ב-dropdown הרלוונטי.
+  - קטלוג: שם ועובי read-only, מחיר עריך
+  - custom: כל השדות עריכים + כפתור הסר
+  - חומר custom חדש: מתווסף unchecked (הנגר בוחר מתי להפעיל)
+- **CabinetForm** — לוגיקת `availableBodyMaterials`/`availableFrontMaterials` חדשה: מסנן `allMaterials` לפי enabled IDs
+- **useCabinet** — מקבל `customMaterials` (במקום `bodyCustomMaterials` + `frontCustomMaterials`)
+
+### תוקן — בעיות בחירת חומרים מותאמים
+
+**תיקונים:**
+- **CabinetForm** — כשאין עדיין custom materials, dropdown החומרים מציג fallback לקטלוג כדי לא להשאיר dropdown ריק
+- **CabinetForm** — הוסף `useEffect` שמריץ `calculate` מחדש כשsettings משתנו (למשל כשמוסיפים custom material בהגדרות)
+- **useCabinet** — קיבל `settings` כפרמטר כדי לתמוך בcustom materials. משתמש ב-`getMaterialWithCustom` כדי לחפש תכונות חומר (thickness) גם בcustom materials
+- **CutsList** — `groupByMaterial` מוסיף עכשיו custom material groups לפלט (לא רק catalog + `__none__`)
+- **CutsList** — משתמש ב-`getMaterialWithCustom` כדי להביא שמות custom materials, לא רק catalog materials
+- **CabinetForm** — הוסף `useEffect` שמאפס `bodyMaterialId`/`frontMaterialId` לסלקציה הראשונה הזמינה כשhavailable materials משתנות (מונע מצב שbodyMaterialId=`mdf18` בזמן dropdown מציג custom material)
+- **BoardModel** — `buildBoardModel` ו-`buildPlinthBoardModel` תומכות עכשיו בCustomMaterial union types
+- **CutItem interface** — `materialId` יכול להיות `MaterialId | string` כדי לתמוך בcustom material ids
+- **Board interface** — `materialId` יכול להיות `MaterialId | string` כדי לתמוך בcustom material ids
+
 ### נוסף — מודולי מטבח: גופים מוכנים ויחידת כיור
 
 **תשתית ליבה:**

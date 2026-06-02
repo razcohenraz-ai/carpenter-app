@@ -20,5 +20,14 @@ export interface Material {
   sheetH: number;         // cm
 }
 
+export interface CustomMaterial {
+  id: string;            // prefix 'custom_' + nanoid
+  name: string;
+  thickness: number;     // mm
+  pricePerSheet: number; // ₪
+  sheetW: number;        // cm (default 244)
+  sheetH: number;        // cm (default 122)
+}
+
 // הנתונים עצמם נמצאים ב-src/catalog/materials.json
 // ייבא MATERIALS ו-getMaterial מ-src/catalog
