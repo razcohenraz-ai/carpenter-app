@@ -15,6 +15,11 @@ export interface CabinetInput {
    *  becomes `D - backThickness - HINGE_GAP_CM - frontMaterialThickness`. */
   backThickness: number;
   hasShell: boolean;
+  /** Per-side shell flags. When undefined, both sides fall back to `hasShell`
+   *  (legacy behaviour — symmetric envelope). Used by kitchen units where the
+   *  carpenter can disable a single side (e.g. cabinet flush against a wall). */
+  hasShellLeft?: boolean;
+  hasShellRight?: boolean;
   hasEnvelopeTop: boolean;
   bodyMaterialId: MaterialId;
   frontMaterialId: MaterialId;
@@ -40,4 +45,15 @@ export interface CabinetInput {
   /** Width (depth direction) of each sink traverse in cm. Only used when
    *  `topVariant === 'sink-open'`. Defaults to 8 cm. */
   sinkTraverseWidthCm?: number;
+}
+
+/** Single source of truth for "which sides of the cabinet have a shell".
+ *  Reads per-side flags first; falls back to the legacy `hasShell` flag.
+ *  Use this anywhere that consumes shell information so kitchen units with
+ *  asymmetric shells (e.g. only left side) compute correctly. */
+export function getShellSides(input: CabinetInput): { left: boolean; right: boolean } {
+  return {
+    left: input.hasShellLeft ?? input.hasShell,
+    right: input.hasShellRight ?? input.hasShell,
+  };
 }

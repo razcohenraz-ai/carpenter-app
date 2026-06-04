@@ -9,7 +9,7 @@ import {
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
 import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
-import { getEffectiveMaterial } from '../../catalog';
+import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
 import type { MaterialId } from '../../types/materials';
@@ -33,6 +33,9 @@ interface Props {
   cellInteriorById?: CellInteriorById;
   partitionsById?: Map<string, boolean>;
   hasShell?: boolean;
+  /** Per-side shell flags. When omitted, both default to `hasShell`. */
+  hasShellLeft?: boolean;
+  hasShellRight?: boolean;
   frontMaterialThickness?: number;
   hasEnvelopeTop?: boolean;
   frontLayoutByRow?: Map<BoxLevel, RowFrontLayout>;
@@ -54,9 +57,22 @@ interface Props {
   /** Per-body dimension overrides keyed by boxStableKey. When provided, the
    *  sketch applies them to box geometry so the visual matches the cut list. */
   boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>;
+  /** When true, render only the <svg> (no wrapper div, no title).
+   *  Used by KitchenOverview to embed multiple cabinet sketches side by side. */
+  embedded?: boolean;
+  /** Optional: 'sink-open' triggers sink basin overlay (rect + drain circle).
+   *  Passed through to buildBoardModel for sink-traverse boards (top boards
+   *  become two narrow traverses at front/back). */
+  topVariant?: 'standard' | 'sink-open';
+  /** Optional: width of each sink traverse in cm (default 8). */
+  sinkTraverseWidthCm?: number;
+  /** Custom materials registry — needed to resolve custom material thickness
+   *  when bodyMaterialId/frontMaterialId reference a custom material (not in
+   *  the catalog). Falls back to catalog-only if omitted. */
+  customMaterials?: import('../../types/materials').CustomMaterial[];
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -73,7 +89,13 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
     doorsPerColumn === '1' ? 1 :
     doorsPerColumn === '2' ? 2 :
     doorsPerColumn === '3' ? 3 : 'auto';
-  const tEnv = hasShell && frontMaterialThickness ? frontMaterialThickness : undefined;
+  // Resolve per-side shell flags (kitchen units can have asymmetric shell).
+  const shellSides = {
+    left: hasShellLeft ?? !!hasShell,
+    right: hasShellRight ?? !!hasShell,
+  };
+  const hasAnyShell = shellSides.left || shellSides.right;
+  const tEnv = hasAnyShell && frontMaterialThickness ? frontMaterialThickness : undefined;
   // Carcass depth reduction matches useCabinet.calculate: the sketch needs
   // box.D = carcassD so the visual board model (BoxBodySketch, depth labels)
   // matches the cut list. The full cabinet depth survives only on the
@@ -81,14 +103,21 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const fullD = parseFloat(D);
   const tFrontCm = frontMaterialThickness ?? 0;
   const carcassD = computeCarcassDepth(fullD, backThicknessCm, HINGE_GAP_CM, tFrontCm);
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides);
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides, shellSides);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
   // Boards are emitted only post-calc (interiorById defined) and only when
   // we have material info. Pre-calc the sketch falls back to the legacy
   // envelopePanels + shelfLine rendering below.
-  const bodyMat  = bodyMaterialId  ? getEffectiveMaterial(bodyMaterialId)  : null;
-  const frontMat = frontMaterialId ? getEffectiveMaterial(frontMaterialId) : null;
+  // Resolve materials — prefer customMaterials if provided so custom IDs
+  // (e.g. "custom_xyz") resolve to the right thickness/price. Falls back to
+  // catalog when omitted (legacy callers).
+  const bodyMat = bodyMaterialId
+    ? (customMaterials ? getMaterialWithCustom(bodyMaterialId, customMaterials) : getEffectiveMaterial(bodyMaterialId))
+    : null;
+  const frontMat = frontMaterialId
+    ? (customMaterials ? getMaterialWithCustom(frontMaterialId, customMaterials) : getEffectiveMaterial(frontMaterialId))
+    : null;
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
   const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
 
@@ -119,7 +148,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
       // Centralised envelope-flag derivation handles unit_* positions too —
       // the legacy inline check missed unit_1 / unit_N (only 'left' / 'right'
       // / 'single' got envelope panels).
-      const env = deriveEnvelopeFlags(box, !!hasShell, !!hasEnvelopeTop);
+      const env = deriveEnvelopeFlags(box, shellSides, !!hasEnvelopeTop);
       const boards = buildBoardModel({
         box,
         bodyMaterial: bodyMat!,
@@ -134,6 +163,8 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         envelopeDepth: fullD,
         backThicknessCm,
         joint: cabinetJoint,
+        ...(topVariant ? { topVariant } : {}),
+        ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
       });
       // Envelope side panels are drawn as full-height rects via geo.envelopePanels
       // (always visible below). Exclude them from per-body board rendering to
@@ -144,16 +175,20 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
     }
   }
 
-  return (
-    <div className={styles.wrapper}>
-      <p className={styles.title}>{t.sketch.preview}</p>
-      <svg
-        viewBox={`0 0 ${geo.svgWidth} ${geo.svgHeight}`}
-        className={styles.svg}
-        overflow="visible"
-        role="img"
-        aria-label={t.sketch.preview}
-      >
+  // In embedded mode (KitchenOverview), crop the viewBox to the cabinet area
+  // only — labels and ambient padding are hidden so units sit flush against
+  // each other with no visual gap.
+  const viewBox = embedded
+    ? `${geo.cabinet.x} ${geo.cabinet.y} ${geo.cabinet.w} ${geo.cabinet.h}`
+    : `0 0 ${geo.svgWidth} ${geo.svgHeight}`;
+  const svgElement = (
+    <svg
+      viewBox={viewBox}
+      className={embedded ? styles.svgEmbedded : styles.svg}
+      overflow="visible"
+      role="img"
+      aria-label={t.sketch.preview}
+    >
         {/* Cabinet outline */}
         <rect
           x={geo.cabinet.x}
@@ -200,20 +235,24 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             boardsByBoxId so there is no seam at level boundaries. */}
         {geo.envelopePanels && (
           <>
-            <rect
-              x={geo.envelopePanels.left.x}
-              y={geo.envelopePanels.left.y}
-              width={geo.envelopePanels.left.w}
-              height={geo.envelopePanels.left.h}
-              className={styles.envelopePanel}
-            />
-            <rect
-              x={geo.envelopePanels.right.x}
-              y={geo.envelopePanels.right.y}
-              width={geo.envelopePanels.right.w}
-              height={geo.envelopePanels.right.h}
-              className={styles.envelopePanel}
-            />
+            {geo.envelopePanels.left && (
+              <rect
+                x={geo.envelopePanels.left.x}
+                y={geo.envelopePanels.left.y}
+                width={geo.envelopePanels.left.w}
+                height={geo.envelopePanels.left.h}
+                className={styles.envelopePanel}
+              />
+            )}
+            {geo.envelopePanels.right && (
+              <rect
+                x={geo.envelopePanels.right.x}
+                y={geo.envelopePanels.right.y}
+                width={geo.envelopePanels.right.w}
+                height={geo.envelopePanels.right.h}
+                className={styles.envelopePanel}
+              />
+            )}
           </>
         )}
 
@@ -496,29 +535,65 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
           );
         })}
 
-        {/* Width label */}
-        <text
-          x={geo.wLabel.x}
-          y={geo.wLabel.y}
-          className={`${styles.dimLabel} ${styles.dimLabelWidth}`}
-          textAnchor="middle"
-          dominantBaseline="auto"
-        >
-          {geo.wLabel.text}
-        </text>
+        {/* Sink basin overlay (sink-open units only) — drawn between sink
+            traverses to show the kitchen sink visually. */}
+        {topVariant === 'sink-open' && (() => {
+          const tw = (sinkTraverseWidthCm ?? 8) * geo.scale;
+          const basinW = Math.min(60 * geo.scale, geo.cabinet.w - 20);
+          const basinH = Math.min(25 * geo.scale, geo.cabinet.h * 0.3);
+          const basinX = geo.cabinet.x + (geo.cabinet.w - basinW) / 2;
+          const basinY = geo.cabinet.y + tw * 2 + 2;
+          return (
+            <g key="sink-basin">
+              <rect
+                x={basinX} y={basinY}
+                width={basinW} height={basinH}
+                fill="#b0c4d8" stroke="#7a9ab5" strokeWidth={1} rx={2}
+              />
+              <circle
+                cx={basinX + basinW / 2}
+                cy={basinY + basinH * 0.5}
+                r={Math.max(2, 2 * geo.scale)}
+                fill="#7a9ab5"
+              />
+            </g>
+          );
+        })()}
 
-        {/* Height label — rotated 90° on the left side */}
-        <text
-          x={geo.hLabel.x}
-          y={geo.hLabel.y}
-          className={`${styles.dimLabel} ${styles.dimLabelHeight}`}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          transform={`rotate(-90, ${geo.hLabel.x}, ${geo.hLabel.y})`}
-        >
-          {geo.hLabel.text}
-        </text>
+        {/* Width + height labels — only in standalone mode. In embedded mode
+            (KitchenOverview), the parent already shows dims above each unit
+            so duplicating them inside the sketch is visual noise. */}
+        {!embedded && (
+          <>
+            <text
+              x={geo.wLabel.x}
+              y={geo.wLabel.y}
+              className={`${styles.dimLabel} ${styles.dimLabelWidth}`}
+              textAnchor="middle"
+              dominantBaseline="auto"
+            >
+              {geo.wLabel.text}
+            </text>
+            <text
+              x={geo.hLabel.x}
+              y={geo.hLabel.y}
+              className={`${styles.dimLabel} ${styles.dimLabelHeight}`}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              transform={`rotate(-90, ${geo.hLabel.x}, ${geo.hLabel.y})`}
+            >
+              {geo.hLabel.text}
+            </text>
+          </>
+        )}
       </svg>
+  );
+
+  if (embedded) return svgElement;
+  return (
+    <div className={styles.wrapper}>
+      <p className={styles.title}>{t.sketch.preview}</p>
+      {svgElement}
     </div>
   );
 }

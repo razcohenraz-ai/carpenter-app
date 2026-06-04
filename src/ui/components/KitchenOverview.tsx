@@ -1,19 +1,39 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import type { KitchenUnit } from '../../types/project';
+import type { MaterialId, CustomMaterial } from '../../types/materials';
+import type { CutItem } from '../../types/cuts';
+import type { HardwareLineItem } from '../../types/hardware';
 import { calcDoors } from '../../core/doors/doorCalc';
-import { computeRowFrontLayout, computeFrontGeometry } from '../../core/geometry/frontGeometry';
-import { getEffectiveMaterial } from '../../catalog';
+import { computeRowFrontLayout, computeFrontGeometry, getTotalFrontsInRow, groupBoxesByRow, type RowFrontLayout } from '../../core/geometry/frontGeometry';
+import { decomposeBoxes } from '../../core/geometry/boxDecomposition';
+import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
+import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
+import { boxStableKey } from '../../core/interior/interiorUtils';
+import { getShellSides } from '../../types/cabinet';
+import type { BoxLevel } from '../../types/geometry';
+import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import { useTranslation } from '../../i18n/LanguageContext';
+import CabinetSketch from './CabinetSketch';
+import CutsList from './CutsList';
+import { HardwareList } from './HardwareList';
 import styles from './KitchenOverview.module.css';
+
+interface AppSettingsSlice {
+  customMaterials?: CustomMaterial[];
+  bodyMaterialPriceOverrides?: Partial<Record<MaterialId, number>>;
+  frontMaterialPriceOverrides?: Partial<Record<MaterialId, number>>;
+}
 
 interface Props {
   units: KitchenUnit[];
   selectedUnitId: string | null;
   onSelect: (id: string) => void;
   onOpenUnit: (id: string) => void;
+  settings?: AppSettingsSlice | undefined;
 }
 
-type ViewMode = 'bodies' | 'fronts';
+type ViewMode = 'bodies' | 'fronts' | 'cuts' | 'hardware';
 
 const GAP_CM  = 2;
 const PAD_TOP = 36;
@@ -54,8 +74,10 @@ function FrontPanels({ unit, layout, scale }: {
   const { W: effW, H: effH } = effectiveDims(unit);
   const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10; // cm
   const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
+  const sides = getShellSides(inp);
+  const hasAnyShell = sides.left || sides.right;
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
-                       inp.lowerDoorH, inp.hasShell, tFront, forceRows);
+                       inp.lowerDoorH, hasAnyShell, tFront, forceRows);
   if (dl.n === 0) return null;
 
   const bodyH = layout.h - layout.plinthH; // px — body rect height (without plinth)
@@ -64,7 +86,7 @@ function FrontPanels({ unit, layout, scale }: {
 
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
-    hasOuterShell: inp.hasShell,
+    hasOuterShell: hasAnyShell,
     shellThicknessCm: tFront,
     totalFrontsInRow: dl.n,
     gapCm,
@@ -131,15 +153,21 @@ function FrontPanels({ unit, layout, scale }: {
     pushFrontRow('doorAbove', remainH, totalDrawerH);
   }
 
-  // Shell side panels
-  if (inp.hasShell) {
+  // Shell side panels — per-side flags (kitchen units may have asymmetric shell)
+  if (sides.left || sides.right) {
     const shellW = tFront * scale;
-    panels.push(
-      <rect key="shell-l" x={layout.x} y={layout.y} width={shellW} height={bodyH}
-        fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
-      <rect key="shell-r" x={layout.x + layout.w - shellW} y={layout.y} width={shellW} height={bodyH}
-        fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
-    );
+    if (sides.left) {
+      panels.push(
+        <rect key="shell-l" x={layout.x} y={layout.y} width={shellW} height={bodyH}
+          fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
+      );
+    }
+    if (sides.right) {
+      panels.push(
+        <rect key="shell-r" x={layout.x + layout.w - shellW} y={layout.y} width={shellW} height={bodyH}
+          fill="var(--color-fronts, #e8934a)" stroke="var(--color-border, #ccc)" strokeWidth={0.8} opacity={0.75} />,
+      );
+    }
   }
 
   return (
@@ -154,7 +182,7 @@ function FrontPanels({ unit, layout, scale }: {
   );
 }
 
-export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }: Props) {
+export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, settings }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableW, setAvailableW] = useState(800);
@@ -221,6 +249,20 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
           >
             חזיתות
           </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${viewMode === 'cuts' ? styles.toggleBtnActive : ''}`}
+            onClick={() => setViewMode('cuts')}
+          >
+            חיתוכים
+          </button>
+          <button
+            type="button"
+            className={`${styles.toggleBtn} ${viewMode === 'hardware' ? styles.toggleBtnActive : ''}`}
+            onClick={() => setViewMode('hardware')}
+          >
+            פרזולים
+          </button>
         </div>
 
         {units.length > 0 && (
@@ -241,11 +283,25 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
         </div>
       )}
 
-      {/* SVG canvas */}
+      {/* Cuts/Hardware tabs — aggregate across all units */}
+      {viewMode === 'cuts' && units.length > 0 && (
+        <CutsView units={units} settings={settings} />
+      )}
+      {viewMode === 'hardware' && units.length > 0 && (
+        <HardwareView units={units} settings={settings} />
+      )}
+
+      {/* Bodies tab — flex layout of CabinetSketch per unit */}
+      {viewMode === 'bodies' && units.length > 0 && (
+        <BodiesView units={units} selectedUnitId={selectedUnitId}
+          onSelect={onSelect} onOpenUnit={onOpenUnit} settings={settings} />
+      )}
+
+      {/* SVG canvas — only for fronts view */}
       <div ref={containerRef} className={styles.container}>
         {units.length === 0 ? (
           <div className={styles.empty}>הוסף גופים כדי לראות את המטבח</div>
-        ) : (
+        ) : viewMode === 'fronts' ? (
           <svg
             width={svgW}
             height={OVERVIEW_H}
@@ -298,8 +354,8 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
                     strokeWidth={selected ? 1.5 : 1}
                   />
 
-                  {/* Interior elements visualization (bodies view only) */}
-                  {viewMode === 'bodies' && (
+                  {/* Interior elements visualization (DEAD — bodies view now uses BodiesView component) */}
+                  {false && (
                     <>
                       {(() => {
                         const slotItems = unit.cabinet.state.interior['single:single'] ?? [];
@@ -475,8 +531,235 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit }:
               );
             })}
           </svg>
-        )}
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+// ── BodiesView ──────────────────────────────────────────────────────────────
+// Flex layout of <CabinetSketch embedded /> — one per unit. Each unit shows
+// the full board model (top/bottom/sides with thickness, shelves as boards,
+// partitions, envelope, sink basin) just like the single-unit editor sketch.
+
+interface BodiesViewProps {
+  units: KitchenUnit[];
+  selectedUnitId: string | null;
+  onSelect: (id: string) => void;
+  onOpenUnit: (id: string) => void;
+  settings?: AppSettingsSlice | undefined;
+}
+
+function BodiesView({ units, selectedUnitId, onSelect, onOpenUnit, settings }: BodiesViewProps) {
+  // Compute totalW and maxH to fit all units into the available canvas width.
+  // PX_PER_CM is chosen so the union of all unit widths + label area fits.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [availW, setAvailW] = useState(800);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const obs = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setAvailW(w);
+    });
+    obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const maxH = Math.max(...units.map(u => effectiveDims(u).H));
+  // Total width includes per-unit envelope panels (so the scale calculation
+  // matches the per-unit outerCabW used below for the wrapper div width).
+  const totalW = units.reduce((s, u) => {
+    const sides = getShellSides(u.cabinet.input);
+    const inp = u.cabinet.input;
+    const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
+    const env = (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+    return s + effectiveDims(u).W + env;
+  }, 0);
+  // Pixels-per-cm: derive a single scale so all units fit horizontally
+  // (with some padding) and vertically (cap at 360px tall).
+  const PADDING = 32;
+  const MAX_H_PX = 360;
+  const sx = (availW - PADDING) / Math.max(1, totalW);
+  const sy = MAX_H_PX / Math.max(1, maxH);
+  const scale = Math.max(2, Math.min(sx, sy, 8));
+
+  return (
+    <div ref={containerRef} className={styles.unitsRow}>
+      {units.map((unit, i) => {
+        const inp = unit.cabinet.input;
+        const { W: effW, H: effH } = effectiveDims(unit);
+        const st = unit.cabinet.state;
+        const isSelected = unit.id === selectedUnitId;
+
+        // Compute frontLayoutByRow + numFrontsPerBox so the embedded sketch
+        // can render fronts correctly (it skips fronts in bodies mode but
+        // needs these for external drawer geometry).
+        const customMaterials = settings?.customMaterials ?? [];
+        const bodyMat = getMaterialWithCustom(inp.bodyMaterialId, customMaterials);
+        const frontMat = getMaterialWithCustom(inp.frontMaterialId, customMaterials);
+        const tBody = bodyMat.thickness / 10;
+        const tFront = frontMat.thickness / 10;
+        const sides = getShellSides(inp);
+        const hasAnyShell = sides.left || sides.right;
+        const innerW = computeInnerWidth(effW, sides, tFront);
+        const carcassD = computeCarcassDepth(inp.D, inp.backThickness, HINGE_GAP_CM, tFront);
+        const envelopeTopH = (inp.hasEnvelopeTop && hasAnyShell) ? tFront : 0;
+        const boxes = decomposeBoxes(innerW, effH, carcassD, inp.lowerDoorH, inp.plinth, inp.doorsPerColumn, inp.middleDoorH, envelopeTopH);
+        const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+        const numFrontsPerBox = new Map<string, number>();
+        for (const box of bodyBoxes) {
+          numFrontsPerBox.set(box.id, Math.max(1, Math.ceil(box.W / inp.maxDoorWidth)));
+        }
+        const cabinetGapCm = inp.doorGapMm / 10;
+        const rowsByLevel = groupBoxesByRow(bodyBoxes);
+        const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
+        for (const [level, rowBoxes] of rowsByLevel) {
+          const totalFronts = getTotalFrontsInRow(rowBoxes, numFrontsPerBox);
+          layoutByRow.set(level, computeRowFrontLayout({
+            cabinetW: effW,
+            hasOuterShell: hasAnyShell,
+            shellThicknessCm: tFront,
+            totalFrontsInRow: totalFronts,
+            gapCm: cabinetGapCm,
+          }));
+        }
+        void tBody; // referenced for completeness; not used directly here
+
+        // Translate saved-state Records (keyed by BoxSlotId/boxStableKey) to
+        // runtime Maps keyed by the ad-hoc box.id that the current decomposeBoxes
+        // call produced. Without this, CabinetSketch can't find interior items
+        // / partitions for any body and renders an empty carcass.
+        const interiorById: InteriorById = {};
+        const cellInteriorById: CellInteriorById = {};
+        const partitionsById = new Map<string, boolean>();
+        for (const box of bodyBoxes) {
+          const slotKey = boxStableKey(box);
+          const items = st.interior[slotKey];
+          if (items) interiorById[box.id] = items as InteriorItem[];
+          const cells = st.cellInterior[slotKey];
+          if (cells) cellInteriorById[box.id] = cells as InteriorItem[][];
+          if (st.partitions[slotKey]) partitionsById.set(box.id, true);
+        }
+        const boardOverrides = new Map(Object.entries(st.boardOverrides ?? {}));
+        const boxDimensionOverrides = new Map(Object.entries(st.boxDimensionOverrides ?? {}));
+
+        // Render the unit at its REAL OUTER dimensions × shared `scale`.
+        // The cabinet outer width includes envelope panels (per side), so the
+        // wrapper div must match the SVG's effective cabinet width — otherwise
+        // the SVG's preserveAspectRatio compresses the height to fit a narrower
+        // container, making the unit look shorter than its neighbours.
+        const outerCabW = effW + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+        const unitWpx = outerCabW * scale;
+        const unitHpx = effH * scale;
+
+        return (
+          <div
+            key={unit.id}
+            className={`${styles.unitWrapper} ${isSelected ? styles.unitSelected : ''}`}
+            onClick={() => onSelect(unit.id)}
+            onDoubleClick={() => onOpenUnit(unit.id)}
+            style={{ width: `${unitWpx}px` }}
+          >
+            <div className={styles.unitLabel}>
+              <span className={styles.unitNumber}>{i + 1}</span>
+              <span className={styles.unitName}>{unit.name}</span>
+              <span className={styles.unitDims}>{effW}×{effH}</span>
+            </div>
+            <div className={styles.sketchHolder} style={{ width: `${unitWpx}px`, height: `${unitHpx}px` }}>
+              <CabinetSketch
+                embedded
+                W={String(effW)}
+                H={String(effH)}
+                D={String(inp.D)}
+                backThicknessCm={inp.backThickness}
+                plinth={String(inp.plinth)}
+                doorsPerColumn={String(inp.doorsPerColumn)}
+                {...(inp.lowerDoorH !== undefined ? { lowerDoorH: String(inp.lowerDoorH) } : {})}
+                {...(inp.middleDoorH !== undefined ? { middleDoorH: String(inp.middleDoorH) } : {})}
+                interiorById={interiorById}
+                cellInteriorById={cellInteriorById}
+                partitionsById={partitionsById}
+                hasShell={hasAnyShell}
+                hasShellLeft={sides.left}
+                hasShellRight={sides.right}
+                frontMaterialThickness={tFront}
+                {...(inp.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
+                frontLayoutByRow={layoutByRow}
+                numFrontsPerBox={numFrontsPerBox}
+                bodyMaterialId={inp.bodyMaterialId}
+                frontMaterialId={inp.frontMaterialId}
+                boardOverrides={boardOverrides}
+                boxDimensionOverrides={boxDimensionOverrides}
+                {...(inp.topVariant ? { topVariant: inp.topVariant } : {})}
+                {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
+                customMaterials={customMaterials}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── CutsView ────────────────────────────────────────────────────────────────
+// Aggregate cuts from all units into a single CutsList.
+function CutsView({ units, settings }: { units: KitchenUnit[]; settings?: AppSettingsSlice | undefined }) {
+  const allCuts = useMemo<CutItem[]>(() => {
+    const out: CutItem[] = [];
+    for (const unit of units) {
+      const { cuts } = computeUnitCutsAndHardware(
+        unit.cabinet.input,
+        unit.cabinet.state,
+        settings?.customMaterials ?? [],
+      );
+      // Prefix each cut name with the unit name so the user can tell which
+      // unit each piece belongs to.
+      for (const c of cuts) {
+        out.push({ ...c, name: `${unit.name}: ${c.name}` });
+      }
+    }
+    return out;
+  }, [units, settings]);
+
+  return (
+    <div className={styles.aggregateTab}>
+      <CutsList cuts={allCuts} settings={{
+        ...(settings?.bodyMaterialPriceOverrides ? { bodyMaterialPriceOverrides: settings.bodyMaterialPriceOverrides } : {}),
+        ...(settings?.frontMaterialPriceOverrides ? { frontMaterialPriceOverrides: settings.frontMaterialPriceOverrides } : {}),
+        ...(settings?.customMaterials ? { bodyCustomMaterials: settings.customMaterials, frontCustomMaterials: settings.customMaterials } : {}),
+      }} />
+    </div>
+  );
+}
+
+// ── HardwareView ────────────────────────────────────────────────────────────
+// Aggregate hardware from all units. Items with the same specId are summed.
+function HardwareView({ units, settings }: { units: KitchenUnit[]; settings?: AppSettingsSlice | undefined }) {
+  const allHardware = useMemo<HardwareLineItem[]>(() => {
+    const byId = new Map<string, HardwareLineItem>();
+    for (const unit of units) {
+      const { hardwareItems } = computeUnitCutsAndHardware(
+        unit.cabinet.input,
+        unit.cabinet.state,
+        settings?.customMaterials ?? [],
+      );
+      for (const item of hardwareItems) {
+        const existing = byId.get(item.specId);
+        if (existing) {
+          existing.qty += item.qty;
+          existing.total += item.total;
+        } else {
+          byId.set(item.specId, { ...item });
+        }
+      }
+    }
+    return [...byId.values()];
+  }, [units, settings]);
+
+  return (
+    <div className={styles.aggregateTab}>
+      <HardwareList items={allHardware} />
     </div>
   );
 }

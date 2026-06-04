@@ -10,6 +10,8 @@ const KITCHEN_DEFAULTS = {
   plinth: 10,
   backThickness: 0.6,
   hasShell: false,
+  hasShellLeft: false,
+  hasShellRight: false,
   hasEnvelopeTop: false,
   bodyMaterialId: 'mdf18',
   frontMaterialId: 'oak18',

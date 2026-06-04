@@ -7,6 +7,55 @@
 
 ## [Unreleased]
 
+### שונה — UI מצומצם בעורך גוף מטבח + מעטפת לכל צד בנפרד
+
+**במטבח בלבד** (ארון רגיל ללא שינוי):
+- **תוקן באג labels:** ה-`wLabel`/`hLabel` ב-`CabinetSketch` הציגו את ה-`W`/`H` המקוריים מ-input. כעת מציגים effective dimensions לפי boxes (אחרי overrides) — סכום bottom row + envelope לרוחב, סכום level heights + plinth + envelope-top לגובה.
+- **הסר** שדה "דלתות לגובה" (`doorsPerColumn`) — נשאר 'auto' default.
+- **הסר** שדה "מעטפת תקרה" (`hasEnvelopeTop`).
+- **פירוק** "מעטפת חיצונית" לשני checkboxes נפרדים — **מעטפת שמאל** + **מעטפת ימין** — בגוף קצה במטבח שצמוד לקיר בצד אחד אפשר לבטל את המעטפת באותו צד.
+
+**שינויי core** (backward compatible):
+- `CabinetInput` קיבל `hasShellLeft?` ו-`hasShellRight?` אופציונליים. כשundefined → fallback ל-`hasShell`.
+- helper חדש `getShellSides(input)` ב-`src/types/cabinet.ts` — single source of truth.
+- `computeInnerWidth` ו-`deriveEnvelopeFlags` מקבלים `boolean | { left, right }` — overload מבטיח backward compat ל-callers ישנים.
+- `CabinetSketch.utils.computeSketchGeometry` קיבל `shellSides` param אופציונלי. envelopePanels מציירים לפי הצד שמופעל בלבד; boxes/split lines/internal shelves מותאמים ל-insets אקסmmetric.
+- `KITCHEN_DEFAULTS` מכיל `hasShellLeft: false, hasShellRight: false`.
+
+### שונה — הסרת כפילות W/H/D בעורך גוף מטבח
+
+בגוף מטבח (kitchen unit) יש רק box אחד (`single:single`) — אין הבדל בין "W של הקבינט" ל-"W של ה-box". לכן שדות W/H/D ב-`CabinetForm` היו כפילות עם עקיפת המידות ב-`BoxInteriorEditor`, וגרמו לחוסר סנכרון (עקיפה ב-BoxInteriorEditor לא התעדכנה בשדות הראשיים).
+
+**תיקון:**
+- הוסף prop `hideMainDimensions?: boolean` ל-`CabinetForm`. כשהוא true, שדות W/H/D מוסתרים.
+- `App.tsx` מעביר `hideMainDimensions` ל-Level 3 (kitchen unit editor) בלבד. ה-source of truth של המידות בגוף מטבח הוא `boxDimensionOverrides` דרך `BoxInteriorEditor`.
+- ה-defaults של W/H/D מ-`kitchenModuleInput()` ממשיכים לזרום ל-form state ול-`calculate()` — אין UI לעדכן אותם ישירות.
+- **בארון רגיל (single product) — ללא שינוי.** השדות מוצגים כרגיל.
+
+### תוקן — סנכרון חומרים בין dropdown לרשימת חיתוכים
+
+**שלושה באגים תוקנו:**
+
+1. **שינוי dropdown לא מעדכן את החישוב** — בעת שינוי `bodyMaterialId`/`frontMaterialId` ב-`CabinetForm`, ה-`onChange` רק עדכן את ה-form state, בלי לקרוא ל-`calculate()`. כתוצאה: ה-dropdown הציג חומר חדש אבל `result.cuts` (וה-saved input ב-project) השתמשו עדיין בחומר הישן. **תיקון:** ה-`onChange` מבצע recalculate מיידי עם הקלט המעודכן (live update, ללא צורך ללחוץ "חשב").
+
+2. **`CabinetSketch` לא הכיר custom materials** — קרא ל-`getEffectiveMaterial(materialId)` שמסתכל רק על קטלוג. כש-`bodyMaterialId` הוא `custom_xyz`, הפונקציה החזירה fallback לחומר ראשון בקטלוג, וה-board model צויר עם עובי שגוי. **תיקון:** הוסף prop `customMaterials?` ל-`CabinetSketch` ושימוש ב-`getMaterialWithCustom`. `CabinetForm` ו-`KitchenOverview/BodiesView` מעבירים את הרשימה.
+
+3. **useEffect דורס את החומר השמור** — useEffect שמסנכרן `form.bodyMaterialId` בדק מול `bodyEnabledMaterialIds`. אם החומר השמור לא היה checked ב-settings (למשל המשתמש הסיר checkbox אחרי שנשמר), ה-effect דרס אותו ל-first available. **תיקון:** ה-effect בודק מול `allMaterials` (קטלוג + custom) במקום מול ה-enabled list — דריסה רק אם החומר נמחק לחלוטין. בנוסף, ה-dropdown תמיד כולל את החומר הנוכחי גם אם הוא לא checked.
+
+### נוסף — תצוגת המטבח: ציור גופים מלא + טאבים לחיתוכים ופרזולים מאוחדים
+
+**שינוי גדול בקומפוננטה `KitchenOverview`:**
+- **4 טאבים במקום 2**: גופים | חזיתות | חיתוכים | פרזולים
+- **טאב "גופים"** — כל unit מצוייר ב-`CabinetSketch` (embedded mode) במקום rectangle פשוט. רואים boards עם עובי חומר, מדפים כ-boards, partitions, envelope, ו-sink basin.
+- **טאב "חיתוכים"** — `CutsList` עם cuts מכל ה-units יחד (מקובץ לפי חומר), שם unit כ-prefix בכל פריט.
+- **טאב "פרזולים"** — `HardwareList` עם hardware מצטבר מכל ה-units (items עם specId זהה מסוכמים).
+- **טאב "חזיתות"** — נשמר כפי שהיה (SVG קיים עם FrontPanels).
+
+**ארכיטקטורה:**
+- **`src/core/cabinetCompute.ts`** (חדש) — `computeUnitCutsAndHardware(input, savedState, customMaterials)` pure function שמחשבת cuts + hardware של unit בודד בלי React/refs. משכפלת את הלוגיקה מ-`useCabinet.calculate()` — מאפשרת חישוב באצווה על מספר units.
+- **`CabinetSketch`** קיבל props חדשים: `embedded?`, `topVariant?`, `sinkTraverseWidthCm?`. ב-embedded mode מחזיר רק `<svg>` (ללא wrapper div ו-title). תומך בציור sink basin אם `topVariant === 'sink-open'`.
+- **`KitchenEditor` ו-`App.tsx`** — מעבירים `settings` עד ל-`KitchenOverview` כדי לאפשר custom materials במחיר/עובי.
+
 ### שונה — דף חומרים בהגדרות: רשימה אחידה עם checkboxes
 
 **ארכיטקטורה חדשה (שינוי מהותי):**

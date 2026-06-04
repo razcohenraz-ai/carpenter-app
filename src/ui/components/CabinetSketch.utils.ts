@@ -47,7 +47,7 @@ export interface SketchGeometry {
   /** All decomposed boxes (including plinth) — for door fronts rendering */
   boxes: Box[];
   /** Outer envelope side panels (when hasShell) */
-  envelopePanels: { left: BoxSvgRect; right: BoxSvgRect } | null;
+  envelopePanels: { left: BoxSvgRect | null; right: BoxSvgRect | null } | null;
   /** Outer envelope ceiling panel (when hasShell && hasEnvelopeTop) */
   envelopeTopPanel: BoxSvgRect | null;
 }
@@ -107,23 +107,19 @@ export function computeSketchGeometry(
   tEnvelope?: number,
   hasEnvelopeTop = false,
   boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>,
+  shellSides?: { left: boolean; right: boolean },
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
-  const scale = Math.min(drawW / W, drawH / H);
 
-  const cabW = W * scale;
-  const cabH = H * scale;
-  const cabX = PAD_LEFT + (drawW - cabW) / 2;
-  const cabY = PAD_TOP + (drawH - cabH) / 2;
-  const bodyH = (H - plinth) * scale;
-
-  const plinthRect = plinth > 0
-    ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
-    : null;
-
-  const envelopePx = tEnvelope ? tEnvelope * scale : 0;
-  const innerW = computeInnerWidth(W, tEnvelope !== undefined, tEnvelope ?? 0);
+  // First pass: decompose boxes and apply overrides, then derive the EFFECTIVE
+  // outer cabinet width from the bottom row (so the cabinet outline + plinth
+  // follow a per-body W override — "צוקל מורחב יחד עם הגופים").
+  const envelopeCm = tEnvelope ?? 0;
+  // Per-side shell flags drive innerW and envelope panel emission asymmetrically.
+  // Default (when not passed): symmetric — both sides match tEnvelope presence.
+  const sides = shellSides ?? { left: tEnvelope !== undefined, right: tEnvelope !== undefined };
+  const innerW = computeInnerWidth(W, sides, envelopeCm);
 
   const rawBoxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
   const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
@@ -138,6 +134,39 @@ export function computeSketchGeometry(
         };
       })
     : rawBoxes;
+
+  // Effective outer cabinet width: sum of bottom-row box widths + envelope
+  // (only the sides that actually have a shell). Falls back to the input W
+  // when no body boxes exist.
+  const bottomRowBoxesForW = boxes.filter(b => b.level === 'bottom' || b.level === 'single');
+  const bottomRowTotalW = bottomRowBoxesForW.length > 0
+    ? bottomRowBoxesForW.reduce((s, b) => s + b.W, 0)
+    : innerW;
+  const effectiveCabW =
+    bottomRowTotalW +
+    (sides.left ? envelopeCm : 0) +
+    (sides.right ? envelopeCm : 0);
+
+  // Scale fits the actual cabinet (effectiveCabW × H). Using `max(W,
+  // effectiveCabW)` would mis-scale when overrides + shell make the
+  // cabinet wider than input W (height would shrink because scale drops).
+  const scale = Math.min(drawW / Math.max(1, effectiveCabW), drawH / Math.max(1, H));
+
+  const cabW = effectiveCabW * scale;
+  const cabH = H * scale;
+  const cabX = PAD_LEFT + (drawW - cabW) / 2;
+  const cabY = PAD_TOP + (drawH - cabH) / 2;
+  const bodyH = (H - plinth) * scale;
+
+  const plinthRect = plinth > 0
+    ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
+    : null;
+
+  const envelopePx = envelopeCm * scale;
+  // Per-side insets — boxes start after the left envelope (if present) and
+  // end before the right envelope (if present). Asymmetric in kitchen units.
+  const leftInsetPx = sides.left ? envelopePx : 0;
+  const rightInsetPx = sides.right ? envelopePx : 0;
 
   // ── Build level → H map (body boxes only) ────────────────────────────────────
   const levelHeightMap = new Map<BoxLevel, number>();
@@ -156,7 +185,7 @@ export function computeSketchGeometry(
   for (let i = 0; i < activeLevels.length - 1; i++) {
     cumH += levelHeightMap.get(activeLevels[i]!)!;
     const splitY = cabY + cumH * scale;
-    splitLines.push({ x1: cabX + envelopePx, y1: splitY, x2: cabX + cabW - envelopePx, y2: splitY });
+    splitLines.push({ x1: cabX + leftInsetPx, y1: splitY, x2: cabX + cabW - rightInsetPx, y2: splitY });
   }
 
   // ── Vertical split lines: use the bottom-most body level as column reference ──
@@ -168,7 +197,7 @@ export function computeSketchGeometry(
   let cumW = 0;
   for (let i = 0; i < colBoxes.length - 1; i++) {
     cumW += colBoxes[i]!.W;
-    const splitX = cabX + envelopePx + cumW * scale;
+    const splitX = cabX + leftInsetPx + cumW * scale;
     splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
   }
 
@@ -182,9 +211,9 @@ export function computeSketchGeometry(
     }
   }
   const internalShelfLines: SketchLine[] = [...internalShelfHeights].map(sh => ({
-    x1: cabX + envelopePx,
+    x1: cabX + leftInsetPx,
     y1: cabY + (H - sh) * scale,
-    x2: cabX + cabW - envelopePx,
+    x2: cabX + cabW - rightInsetPx,
     y2: cabY + (H - sh) * scale,
   }));
 
@@ -217,7 +246,7 @@ export function computeSketchGeometry(
       let cumW = 0;
       for (const box of levelBoxes) {
         boxSvgRects[box.id] = {
-          x: cabX + envelopePx + cumW * scale,
+          x: cabX + leftInsetPx + cumW * scale,
           y: cabY + yOff * scale,
           w: box.W * scale,
           h: box.H * scale,
@@ -229,13 +258,16 @@ export function computeSketchGeometry(
 
   const envelopePanels = envelopePx > 0
     ? {
-        left:  { x: cabX,                       y: cabY, w: envelopePx, h: cabH },
-        right: { x: cabX + cabW - envelopePx,   y: cabY, w: envelopePx, h: cabH },
+        left:  sides.left  ? { x: cabX,                       y: cabY, w: envelopePx, h: cabH } : null,
+        right: sides.right ? { x: cabX + cabW - envelopePx,   y: cabY, w: envelopePx, h: cabH } : null,
       }
     : null;
 
+  // Top envelope spans the inner width between whichever side panels are present.
+  const topInsetLeft = sides.left ? envelopePx : 0;
+  const topInsetRight = sides.right ? envelopePx : 0;
   const envelopeTopPanel = (hasEnvelopeTop && envelopePx > 0)
-    ? { x: cabX + envelopePx, y: cabY, w: cabW - 2 * envelopePx, h: envelopePx }
+    ? { x: cabX + topInsetLeft, y: cabY, w: cabW - topInsetLeft - topInsetRight, h: envelopePx }
     : null;
 
   return {
@@ -245,8 +277,16 @@ export function computeSketchGeometry(
     plinthRect,
     splitLines,
     internalShelfLines,
-    wLabel: { x: cabX + cabW / 2, y: cabY - 8, text: `${W}` },
-    hLabel: { x: PAD_LEFT / 2, y: cabY + cabH / 2, text: `${H}` },
+    // Labels reflect EFFECTIVE dimensions (after any per-body overrides).
+    // For W: use effectiveCabW (sum of bottom-row box widths + envelope).
+    // For H: sum of unique level heights (after overrides) + plinth + envelope-top.
+    // When no overrides exist these equal the input W / H exactly.
+    wLabel: { x: cabX + cabW / 2, y: cabY - 8, text: `${effectiveCabW}` },
+    hLabel: {
+      x: PAD_LEFT / 2,
+      y: cabY + cabH / 2,
+      text: `${[...levelHeightMap.values()].reduce((s, h) => s + h, 0) + plinth + (hasEnvelopeTop && tEnvelope ? tEnvelope : 0)}`,
+    },
     scale,
     bodyFloors,
     boxSvgRects,

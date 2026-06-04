@@ -36,6 +36,9 @@ interface FormState {
   lowerDoorH: string;
   middleDoorH: string;
   hasShell: boolean;
+  /** Per-side shell flags — used when `splitShellSides` is true (kitchen units). */
+  hasShellLeft: boolean;
+  hasShellRight: boolean;
   hasEnvelopeTop: boolean;
   doorCoversPlinth: boolean;
   bodyMaterialId: MaterialId;
@@ -93,6 +96,21 @@ interface CabinetFormProps {
     bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
   };
+  /** When true, hide the main W/H/D fields. Used for kitchen units where
+   *  dimensions are owned exclusively by per-body overrides via the
+   *  BoxInteriorEditor — no input-level W/H/D editing. The form's W/H/D
+   *  state values still flow from `initialInput` (kitchenModuleInput
+   *  defaults) so calculate() receives valid dimensions; users adjust them
+   *  via the per-body override sheet. */
+  hideMainDimensions?: boolean;
+  /** When true, hide the "doors per column" selector (kitchen units use auto). */
+  hideDoorsPerColumn?: boolean;
+  /** When true, hide the "envelope top" (top ceiling shell) checkbox. */
+  hideEnvelopeTop?: boolean;
+  /** When true, replace the single "מעטפת חיצונית" checkbox with two separate
+   *  checkboxes for left and right side. Used in kitchen units where a cabinet
+   *  might sit flush against a wall on one side only. */
+  splitShellSides?: boolean;
 }
 
 function inputToFormState(
@@ -108,7 +126,10 @@ function inputToFormState(
     plinth: String(inp.plinth), plinthRecess: String(inp.plinthRecess),
     lowerDoorH: inp.lowerDoorH !== undefined ? String(inp.lowerDoorH) : '110',
     middleDoorH: inp.middleDoorH !== undefined ? String(inp.middleDoorH) : '80',
-    hasShell: inp.hasShell, hasEnvelopeTop: inp.hasEnvelopeTop,
+    hasShell: inp.hasShell,
+    hasShellLeft: inp.hasShellLeft ?? inp.hasShell,
+    hasShellRight: inp.hasShellRight ?? inp.hasShell,
+    hasEnvelopeTop: inp.hasEnvelopeTop,
     doorCoversPlinth: inp.doorCoversPlinth,
     bodyMaterialId: inp.bodyMaterialId, frontMaterialId: inp.frontMaterialId,
     doorsPerColumn: dpc,
@@ -119,7 +140,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -163,7 +184,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       D: parseFloat(form.D) || initialInput.D,
       backThickness: backThicknessCm,
       hasShell: form.hasShell,
-      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
+      hasShellLeft: form.hasShellLeft,
+      hasShellRight: form.hasShellRight,
+      hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth: parseFloat(form.plinth) || 0,
@@ -205,18 +228,14 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     }
   }, [settings]);
 
-  // All materials: catalog first, then custom — filtered by enabled IDs per category
+  // All materials: catalog first, then custom — filtered by enabled IDs per category.
+  // Note: availableBodyMaterials/availableFrontMaterials are computed AFTER form is
+  // declared (below), so the current selection is always included in the dropdown.
   const allMaterials = [
     ...Object.values(MATERIALS).map(m => ({ ...m, isCustom: false as const })),
     ...(settings?.customMaterials ?? []).map(m => ({ ...m, isCustom: true as const })),
   ];
   const defaultIds = Object.keys(MATERIALS);  // fallback when no settings yet
-  const availableBodyMaterials = allMaterials.filter(
-    m => (settings?.bodyEnabledMaterialIds ?? defaultIds).includes(m.id)
-  );
-  const availableFrontMaterials = allMaterials.filter(
-    m => (settings?.frontEnabledMaterialIds ?? defaultIds).includes(m.id)
-  );
 
   // Unified editor state: one editor open at a time. The body/door/plinth
   // editors replace the main view; the drawer editor renders as an overlay
@@ -281,7 +300,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       W, H, D,
       backThickness: backThicknessCm,
       hasShell: form.hasShell,
-      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
+      hasShellLeft: form.hasShellLeft,
+      hasShellRight: form.hasShellRight,
+      hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth: effectivePlinth,
@@ -329,7 +350,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       backThicknessMm: '5',
       plinth: '10', plinthRecess: '0',
       lowerDoorH: '110', middleDoorH: '80',
-      hasShell: true, hasEnvelopeTop: false, doorCoversPlinth: false,
+      hasShell: true, hasShellLeft: true, hasShellRight: true,
+      hasEnvelopeTop: false, doorCoversPlinth: false,
       bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
       doorGap: '2', doorGapManuallySet: false,
       maxDoorWidth: '60',
@@ -339,19 +361,37 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
 
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
 
-  // When the enabled material list changes, reset bodyMaterialId/frontMaterialId
-  // to the first available option if the current selection was removed.
+  // Compute available materials AFTER form is declared so we can ALWAYS include
+  // the current selection (form.bodyMaterialId / form.frontMaterialId) — even
+  // if the user did not check that material in the settings. This prevents the
+  // dropdown from silently losing the saved material when settings filter it out.
+  const baseBodyMaterials = allMaterials.filter(
+    m => (settings?.bodyEnabledMaterialIds ?? defaultIds).includes(m.id)
+  );
+  const baseFrontMaterials = allMaterials.filter(
+    m => (settings?.frontEnabledMaterialIds ?? defaultIds).includes(m.id)
+  );
+  const availableBodyMaterials = baseBodyMaterials.some(m => m.id === form.bodyMaterialId)
+    ? baseBodyMaterials
+    : [...baseBodyMaterials, ...allMaterials.filter(m => m.id === form.bodyMaterialId)];
+  const availableFrontMaterials = baseFrontMaterials.some(m => m.id === form.frontMaterialId)
+    ? baseFrontMaterials
+    : [...baseFrontMaterials, ...allMaterials.filter(m => m.id === form.frontMaterialId)];
+
+  // When the enabled list changes, only reset bodyMaterialId if the CURRENT
+  // selection no longer exists in allMaterials (e.g. the custom material was
+  // deleted entirely). We do NOT reset just because it's unchecked in settings —
+  // that would silently lose the saved choice.
   React.useEffect(() => {
-    const bodyIds = availableBodyMaterials.map(m => m.id);
-    const frontIds = availableFrontMaterials.map(m => m.id);
+    const allIds = allMaterials.map(m => m.id);
     setForm(prev => {
-      const newBody = bodyIds.includes(prev.bodyMaterialId) ? prev.bodyMaterialId : (bodyIds[0] ?? prev.bodyMaterialId) as MaterialId;
-      const newFront = frontIds.includes(prev.frontMaterialId) ? prev.frontMaterialId : (frontIds[0] ?? prev.frontMaterialId) as MaterialId;
+      const newBody = allIds.includes(prev.bodyMaterialId) ? prev.bodyMaterialId : (allIds[0] ?? prev.bodyMaterialId) as MaterialId;
+      const newFront = allIds.includes(prev.frontMaterialId) ? prev.frontMaterialId : (allIds[0] ?? prev.frontMaterialId) as MaterialId;
       if (newBody === prev.bodyMaterialId && newFront === prev.frontMaterialId) return prev;
       return { ...prev, bodyMaterialId: newBody, frontMaterialId: newFront };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings?.bodyEnabledMaterialIds, settings?.frontEnabledMaterialIds, settings?.customMaterials]);
+  }, [settings?.customMaterials]);
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
@@ -436,7 +476,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       W, H, D,
       backThickness: backThicknessCm,
       hasShell: form.hasShell,
-      hasEnvelopeTop: form.hasEnvelopeTop && form.hasShell,
+      hasShellLeft: form.hasShellLeft,
+      hasShellRight: form.hasShellRight,
+      hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth,
@@ -665,32 +707,39 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
         <div className={styles.formCol}>
           <div className={styles.grid}>
 
-            {/* שורה 1: W, H, D */}
-            {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
-            {numInput('input-H', 'H', t.form.height, 0.1, 'height')}
-            {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
+            {/* שורה 1: W, H, D — hidden for kitchen units (dimensions edited
+                exclusively via per-body override in BoxInteriorEditor) */}
+            {!hideMainDimensions && (
+              <>
+                {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
+                {numInput('input-H', 'H', t.form.height, 0.1, 'height')}
+                {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
+              </>
+            )}
 
             {/* שורה 2: צוקל, דלתות לגובה, חומר */}
             {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height')}
 
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
-                {t.form.doorsPerColumn}
-              </label>
-              <select
-                id="input-doors-per-col"
-                className={styles.select}
-                value={form.doorsPerColumn}
-                onChange={e =>
-                  setForm(p => ({ ...p, doorsPerColumn: e.target.value as DoorsPerColumn }))
-                }
-              >
-                <option value="auto">{t.form.auto}</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
-            </div>
+            {!hideDoorsPerColumn && (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
+                  {t.form.doorsPerColumn}
+                </label>
+                <select
+                  id="input-doors-per-col"
+                  className={styles.select}
+                  value={form.doorsPerColumn}
+                  onChange={e =>
+                    setForm(p => ({ ...p, doorsPerColumn: e.target.value as DoorsPerColumn }))
+                  }
+                >
+                  <option value="auto">{t.form.auto}</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </div>
+            )}
 
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="input-body-material">
@@ -700,9 +749,15 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 id="input-body-material"
                 className={styles.select}
                 value={form.bodyMaterialId}
-                onChange={e =>
-                  setForm(p => ({ ...p, bodyMaterialId: e.target.value as MaterialId }))
-                }
+                onChange={e => {
+                  const newId = e.target.value as MaterialId;
+                  setForm(p => ({ ...p, bodyMaterialId: newId }));
+                  // Live-update: recalculate immediately so the saved cabinet input
+                  // (and therefore the kitchen overview's cuts/hardware) reflects
+                  // the new material right away — without requiring "חשב".
+                  const lastInput = getLastInput();
+                  if (lastInput) calculate({ ...lastInput, bodyMaterialId: newId });
+                }}
               >
                 {availableBodyMaterials.map(m => (
                   <option key={m.id} value={m.id}>
@@ -736,9 +791,12 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 id="input-front-material"
                 className={styles.select}
                 value={form.frontMaterialId}
-                onChange={e =>
-                  setForm(p => ({ ...p, frontMaterialId: e.target.value as MaterialId }))
-                }
+                onChange={e => {
+                  const newId = e.target.value as MaterialId;
+                  setForm(p => ({ ...p, frontMaterialId: newId }));
+                  const lastInput = getLastInput();
+                  if (lastInput) calculate({ ...lastInput, frontMaterialId: newId });
+                }}
               >
                 {availableFrontMaterials.map(m => (
                   <option key={m.id} value={m.id}>
@@ -789,22 +847,51 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
 
             {/* צ'קבוקסים — משתרעים על כל הרוחב */}
             <div className={styles.checkboxRow}>
-              <div className={styles.checkboxWithWarn}>
-                {checkbox(
-                  'input-shell',
-                  form.hasShell,
-                  t.form.hasShell,
-                  v => setForm(p => ({
-                    ...p,
-                    hasShell: v,
-                    ...(v ? {} : { hasEnvelopeTop: false }),
-                    ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
-                  })),
-                )}
-                {shellWidthWarning && (
-                  <span className={styles.warnMsg}>{shellWidthWarning}</span>
-                )}
-              </div>
+              {splitShellSides ? (
+                <>
+                  {checkbox(
+                    'input-shell-left',
+                    form.hasShellLeft,
+                    t.form.hasShellLeft,
+                    v => setForm(p => ({
+                      ...p,
+                      hasShellLeft: v,
+                      hasShell: v && p.hasShellRight,
+                      ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}),
+                    })),
+                  )}
+                  {checkbox(
+                    'input-shell-right',
+                    form.hasShellRight,
+                    t.form.hasShellRight,
+                    v => setForm(p => ({
+                      ...p,
+                      hasShellRight: v,
+                      hasShell: p.hasShellLeft && v,
+                      ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
+                    })),
+                  )}
+                </>
+              ) : (
+                <div className={styles.checkboxWithWarn}>
+                  {checkbox(
+                    'input-shell',
+                    form.hasShell,
+                    t.form.hasShell,
+                    v => setForm(p => ({
+                      ...p,
+                      hasShell: v,
+                      hasShellLeft: v,
+                      hasShellRight: v,
+                      ...(v ? {} : { hasEnvelopeTop: false }),
+                      ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
+                    })),
+                  )}
+                  {shellWidthWarning && (
+                    <span className={styles.warnMsg}>{shellWidthWarning}</span>
+                  )}
+                </div>
+              )}
               {checkbox(
                 'input-covers-plinth',
                 form.doorCoversPlinth,
@@ -815,18 +902,20 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 },
                 parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
               )}
-              <div className={styles.checkboxWithWarn}>
-                {checkbox(
-                  'input-envelope-top',
-                  form.hasEnvelopeTop,
-                  t.form.hasEnvelopeTop,
-                  v => setForm(p => ({ ...p, hasEnvelopeTop: v })),
-                  !form.hasShell,
-                )}
-                {envelopeTopWarning && (
-                  <span className={styles.warnMsg}>{envelopeTopWarning}</span>
-                )}
-              </div>
+              {!hideEnvelopeTop && (
+                <div className={styles.checkboxWithWarn}>
+                  {checkbox(
+                    'input-envelope-top',
+                    form.hasEnvelopeTop,
+                    t.form.hasEnvelopeTop,
+                    v => setForm(p => ({ ...p, hasEnvelopeTop: v })),
+                    !form.hasShellLeft && !form.hasShellRight,
+                  )}
+                  {envelopeTopWarning && (
+                    <span className={styles.warnMsg}>{envelopeTopWarning}</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* רווח בין דלתות */}
@@ -924,8 +1013,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               interiorById={result ? interiorById : undefined}
               {...(result ? { cellInteriorById, partitionsById } : {})}
               hasShell={form.hasShell}
+              hasShellLeft={form.hasShellLeft}
+              hasShellRight={form.hasShellRight}
               frontMaterialThickness={frontThicknessCm}
-              {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
+              {...(form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight) ? { hasEnvelopeTop: true } : {})}
               frontLayoutByRow={frontLayoutByRow}
               numFrontsPerBox={numFrontsPerBox}
               bodyMaterialId={form.bodyMaterialId}
@@ -934,6 +1025,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
               boardOverrides={boardOverridesByStableId}
               boxDimensionOverrides={boxDimensionOverrides}
+              {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})}
             />
           ) : (
             <CabinetFrontsSketch

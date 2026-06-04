@@ -25,6 +25,15 @@
   display: block;
 }
 
+/* Embedded mode — for inline use inside KitchenOverview where the
+   parent's sketchHolder controls aspect-ratio via inline style. No
+   hard-coded aspect-ratio here; the SVG fills its container exactly. */
+.svgEmbedded {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 /* ── SVG element styles ── */
 
 .cabinetRect {

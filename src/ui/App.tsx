@@ -127,6 +127,10 @@ export default function App(): React.JSX.Element {
               updateKitchenUnit(activeProduct.id, activeKitchenUnit.id, { input, state })
             }
             settings={settings}
+            hideMainDimensions
+            hideDoorsPerColumn
+            hideEnvelopeTop
+            splitShellSides
           />
         )}
 
@@ -138,6 +142,7 @@ export default function App(): React.JSX.Element {
             onRemoveUnit={unitId => removeKitchenUnit(activeProduct.id, unitId)}
             onOpenUnit={unitId => setActiveKitchenUnitId(unitId)}
             onReorderUnit={(unitId, dir) => reorderKitchenUnit(activeProduct.id, unitId, dir)}
+            settings={settings}
           />
         )}
 

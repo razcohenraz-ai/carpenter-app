@@ -46,6 +46,7 @@ import { getMaterialWithCustom } from '../../catalog';
 import type { Box, CutItem, DoorCalcResult, MaterialId } from '../../types';
 import type { HardwareLineItem } from '../../types/hardware';
 import type { CabinetInput } from '../../types/cabinet';
+import { getShellSides } from '../../types/cabinet';
 import { DEFAULT_EDGING, type Edging } from '../../types/edging';
 import type { InteriorItem, InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
 import type { Door, DoorById, DrawerFrontById, Hinge } from '../../types/doors';
@@ -779,14 +780,18 @@ export function useCabinet(settings?: {
   function calculate(input: CabinetInput): void {
     lastInputRef.current = input;
 
-    const { W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
+    const { W, H, D, backThickness, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
     // Use getMaterialWithCustom to support both catalog and custom materials
     const allCustomMaterials = settings?.customMaterials ?? [];
     const bodyMaterial  = getMaterialWithCustom(bodyMaterialId, allCustomMaterials);
     const frontMaterial = getMaterialWithCustom(frontMaterialId, allCustomMaterials);
     const tBody  = bodyMaterial.thickness / 10;   // cm
     const tFront = frontMaterial.thickness / 10;  // cm
-    const innerW = computeInnerWidth(W, hasShell, tFront);
+    // Per-side shell flags (kitchen units may disable a single side). Falls
+    // back to symmetric `hasShell` for legacy / non-kitchen cabinets.
+    const shellSides = getShellSides(input);
+    const hasAnyShell = shellSides.left || shellSides.right;
+    const innerW = computeInnerWidth(W, shellSides, tFront);
     // Carcass depth: sides/top/bottom/shelves/partition/back/plinth all stop
     // short of the cabinet's front+back faces. The full cabinet depth D
     // is preserved for the outer envelope only (see buildBoardModel call
@@ -794,7 +799,7 @@ export function useCabinet(settings?: {
     const carcassD = computeCarcassDepth(D, backThickness, HINGE_GAP_CM, tFront);
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const envelopeTopH = (hasEnvelopeTop && hasShell) ? tFront : 0;
+    const envelopeTopH = (hasEnvelopeTop && hasAnyShell) ? tFront : 0;
     const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
     // Apply per-body dimension overrides (W/H/D). Each override replaces only
     // the axes the carpenter explicitly set; unset axes keep the decomposed value.
@@ -955,7 +960,7 @@ export function useCabinet(settings?: {
       const totalFrontsInRow = getTotalFrontsInRow(rowBoxes, newNumFrontsMap);
       layoutByRow.set(level, computeRowFrontLayout({
         cabinetW: W,
-        hasOuterShell: hasShell,
+        hasOuterShell: hasAnyShell,
         shellThicknessCm: tFront,
         totalFrontsInRow,
         gapCm: cabinetGapCm,
@@ -1107,7 +1112,7 @@ export function useCabinet(settings?: {
     const cabinetJoint = resolveCabinetJointMethod(W, H);
     const boardCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
-      const envFlags = deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop);
+      const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop);
       const items = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
       const hasPartitionBox = newPartitionsMap.get(box.id) === true;

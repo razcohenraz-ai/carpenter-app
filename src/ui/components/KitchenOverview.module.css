@@ -112,3 +112,87 @@
     transform: translateY(0);
   }
 }
+
+/* ── BodiesView (flex of CabinetSketch per unit) ── */
+.unitsRow {
+  display: flex;
+  flex-direction: row-reverse;  /* RTL — units render right to left */
+  align-items: flex-end;
+  gap: 0;                       /* units sit flush against each other */
+  padding: var(--spacing-md);
+  background: var(--color-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  min-height: 320px;
+}
+
+.unitWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 0;                   /* no padding — units touch each other */
+  border: none;                 /* no border per unit */
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.unitWrapper:hover .sketchHolder {
+  outline: 1px solid var(--color-border);
+  outline-offset: -1px;
+}
+
+.unitSelected .sketchHolder {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.unitLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.unitNumber {
+  background: var(--color-surface-raised);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.unitName {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.unitDims {
+  color: var(--color-text-muted);
+}
+
+.sketchHolder {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  pointer-events: none;  /* clicks pass through to wrapper */
+}
+
+/* ── Aggregate tabs (cuts/hardware) ── */
+.aggregateTab {
+  padding: var(--spacing-md);
+  background: var(--color-bg);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}

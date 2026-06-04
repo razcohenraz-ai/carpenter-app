@@ -304,10 +304,17 @@ export function computeCarcassDepth(
   return Math.max(0, D - backThicknessCm - hingeGapCm - tFrontCm);
 }
 
-/** Inner cabinet width = W minus the shell's two front panels (when a shell
- *  is present), else W. */
-export function computeInnerWidth(W: number, hasShell: boolean, tFrontCm: number): number {
-  return hasShell ? W - 2 * tFrontCm : W;
+/** Inner cabinet width = W minus the shell's front panels (per side).
+ *  Accepts either a boolean (symmetric — both sides have shell or neither)
+ *  or an explicit `{ left, right }` object for kitchen units where the
+ *  carpenter may disable one side (cabinet flush against a wall). */
+export function computeInnerWidth(
+  W: number,
+  shell: boolean | { left: boolean; right: boolean },
+  tFrontCm: number,
+): number {
+  if (typeof shell === 'boolean') return shell ? W - 2 * tFrontCm : W;
+  return W - (shell.left ? tFrontCm : 0) - (shell.right ? tFrontCm : 0);
 }
 
 // ── Joint method ─────────────────────────────────────────────────────────────
@@ -350,10 +357,11 @@ export function resolveCabinetJointMethod(cabinetW: number, cabinetH: number): J
 
 export function deriveEnvelopeFlags(
   box: Box,
-  hasShell: boolean,
+  shell: boolean | { left: boolean; right: boolean },
   hasEnvelopeTop: boolean,
 ): { hasEnvelopeLeft: boolean; hasEnvelopeRight: boolean; hasEnvelopeTop: boolean } {
-  if (!hasShell) {
+  const sides = typeof shell === 'boolean' ? { left: shell, right: shell } : shell;
+  if (!sides.left && !sides.right) {
     return { hasEnvelopeLeft: false, hasEnvelopeRight: false, hasEnvelopeTop: false };
   }
   const isUnit = box.position.startsWith('unit_');
@@ -371,8 +379,8 @@ export function deriveEnvelopeFlags(
   const isBottomRow = box.level === 'bottom' || box.level === 'single';
   const isTopRow = box.level === 'top' || box.level === 'single';
   return {
-    hasEnvelopeLeft: isLeftEdge && isBottomRow,
-    hasEnvelopeRight: isRightEdge && isBottomRow,
+    hasEnvelopeLeft: sides.left && isLeftEdge && isBottomRow,
+    hasEnvelopeRight: sides.right && isRightEdge && isBottomRow,
     hasEnvelopeTop: hasEnvelopeTop && isTopRow,
   };
 }

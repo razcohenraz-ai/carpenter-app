@@ -14,11 +14,17 @@ interface Props {
   onRemoveUnit: (unitId: string) => void;
   onOpenUnit: (unitId: string) => void;
   onReorderUnit: (unitId: string, direction: 'left' | 'right') => void;
+  settings?: {
+    customMaterials?: import('../../types/materials').CustomMaterial[];
+    bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+    frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+  } | undefined;
 }
 
 export function KitchenEditor({
   units,
   onAddUnit, onRemoveUnit, onOpenUnit, onReorderUnit,
+  settings,
 }: Props) {
   const { t } = useTranslation();
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(
@@ -54,6 +60,7 @@ export function KitchenEditor({
         selectedUnitId={selectedUnitId}
         onSelect={id => { setSelectedUnitId(id); setShowAddForm(false); }}
         onOpenUnit={onOpenUnit}
+        settings={settings}
       />
 
       {/* Selected unit panel */}

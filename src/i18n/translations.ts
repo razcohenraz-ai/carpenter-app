@@ -36,6 +36,8 @@ export interface Translations {
     height: string;
     depth: string;
     hasShell: string;
+    hasShellLeft: string;
+    hasShellRight: string;
     bodyMaterial: string;
     frontMaterial: string;
     backThickness: string;
@@ -315,6 +317,8 @@ const he: Translations = {
     height: 'גובה (ס"מ)',
     depth: 'עומק (ס"מ)',
     hasShell: 'מעטפת חיצונית',
+    hasShellLeft: 'מעטפת שמאל',
+    hasShellRight: 'מעטפת ימין',
     bodyMaterial:  'חומר גופים',
     frontMaterial: 'חומר חזיתות',
     backThickness: 'עובי גב (מ"מ)',
@@ -573,6 +577,8 @@ const en: Translations = {
     height: 'Height (cm)',
     depth: 'Depth (cm)',
     hasShell: 'Outer shell',
+    hasShellLeft: 'Shell left',
+    hasShellRight: 'Shell right',
     bodyMaterial:  'Body Material',
     frontMaterial: 'Front Material',
     backThickness: 'Back Thickness (mm)',
