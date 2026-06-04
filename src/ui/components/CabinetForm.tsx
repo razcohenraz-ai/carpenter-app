@@ -635,6 +635,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             derivedW={result?.derivedBoxDims.get(editingBoxSlotId)?.W ?? editingBox.W}
             derivedH={result?.derivedBoxDims.get(editingBoxSlotId)?.H ?? editingBox.H}
             derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
+            {...(hideMainDimensions ? { hideRodOption: true } : {})}
           />
         </div>
       );

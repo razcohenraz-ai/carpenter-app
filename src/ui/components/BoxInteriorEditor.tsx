@@ -71,6 +71,9 @@ interface Props {
   derivedW: number;
   derivedH: number;
   derivedD: number;
+  /** When true, hide the "add hanging rod" button. Used for kitchen units
+   *  where hanging rods don't apply (only wardrobes use them). */
+  hideRodOption?: boolean;
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -88,6 +91,7 @@ export default function BoxInteriorEditor({
   cabinetEdging, bodyEdgingOverride, onSetBodyEdging,
   boxDimensionOverride, onSetBoxDimension, onResetBoxDimensions,
   derivedW, derivedH, derivedD,
+  hideRodOption,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -718,9 +722,11 @@ export default function BoxInteriorEditor({
                     <button className={styles.addBtn} onClick={() => addCellDrawer(ci)}>
                       {t.interior.addDrawer}
                     </button>
-                    <button className={styles.addBtn} onClick={() => addCellRod(ci)}>
-                      {t.interior.addRod}
-                    </button>
+                    {!hideRodOption && (
+                      <button className={styles.addBtn} onClick={() => addCellRod(ci)}>
+                        {t.interior.addRod}
+                      </button>
+                    )}
                   </div>
 
                   {renderShelfWarnings(
@@ -773,9 +779,11 @@ export default function BoxInteriorEditor({
               <button className={styles.addBtn} onClick={addDrawer}>
                 {t.interior.addDrawer}
               </button>
-              <button className={styles.addBtn} onClick={addRod}>
-                {t.interior.addRod}
-              </button>
+              {!hideRodOption && (
+                <button className={styles.addBtn} onClick={addRod}>
+                  {t.interior.addRod}
+                </button>
+              )}
               {numFronts > 1 && (
                 <button className={styles.addBtn} onClick={requestAddPartition}>
                   {t.interior.addPartition}
