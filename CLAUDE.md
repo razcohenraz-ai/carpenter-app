@@ -1,18 +1,19 @@
 # הוראות תפעוליות — Carpenter App
 
-## תחילת כל סשן — חובה
+## תחילת כל סשן — קריאת מסמכים
 
-לפני התחלת עבודה על קוד, קרא את הקבצים הבאים **בסדר הזה**:
+### א. חובה לכל שיחה (לפני כתיבת קוד או החלטה)
+1. **`docs/PROJECT_CONTEXT.md`** — **התחל ב-"Quick orientation"** בראש (state hooks, navigation flow, compute pathways, single source of truth). אחר כך שאר הקובץ: פיצ'רים פעילים + חובות טכניים.
+2. **`docs/DESIGN_PRINCIPLES.md`** — 7 עקרונות שקובעים איך להחליט (החופש בידי הנגר, single source of truth, JSON-driven, BoardModel וכו').
 
-1. `docs/PROJECT_CONTEXT.md` — מצב הפרויקט הנוכחי, פיצ'רים פעילים, חובות טכניים
-2. `docs/ARCHITECTURE.md` — מבנה הקוד, זרימת נתונים, ממשקים מרכזיים
-3. `docs/DESIGN_PRINCIPLES.md` — עקרונות העיצוב (חובה לפני כל החלטה)
-4. `docs/CARPENTRY_RULES.md` — הכללים הנגריים שמיושמים
-5. `docs/GLOSSARY.md` — מילון מונחים (כשנתקל במונח לא מוכר)
-6. `CHANGELOG.md` — שינויים אחרונים
-7. `docs/DECISIONS_LOG.md` — למה קיבלנו החלטות מסוימות
+### ב. קריאה לפי הקשר (רק כשרלוונטי לפיצ'ר)
+3. **`docs/ARCHITECTURE.md`** — לפני **שינוי מבני**: הוספת קובץ ב-types/core/ui, שינוי זרימת נתונים, הוספה ל-CabinetInput/SavedCabinetState.
+4. **`docs/CARPENTRY_RULES.md`** — לפני **שינוי לוגיקת חישוב**: boards, fronts, doors, drawers, shell, plinth, kitchen modules, shelves.
+5. **`docs/GLOSSARY.md`** — כשנתקל **במונח לא מוכר** בקוד או בשיחה.
+6. **`CHANGELOG.md`** סקציית `[Unreleased]` — כשהמשתמש **מתייחס לשינוי אחרון** ("הבאג שתיקנו"), או לפני commit כדי לעדכן.
+7. **`docs/DECISIONS_LOG.md`** — כשנתקל **בהחלטה לא ברורה** או לפני שינוי שעלול לסתור החלטה קיימת.
 
-**אל תתחיל לכתוב קוד לפני שקראת את כל אלה.**
+**הכלל**: למשימה קטנה (תיקון UI, טקסט) — די בקריאת קטגוריה א'. למשימה גדולה (פיצ'ר חדש שמשנה types) — קרא גם את הקבצים הרלוונטיים בקטגוריה ב'.
 
 ---
 
