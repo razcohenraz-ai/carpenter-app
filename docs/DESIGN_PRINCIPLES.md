@@ -71,6 +71,8 @@
 נתוני חומרים ופרזולים חיים ב-JSON, לא בקוד.
 לשינוי מחיר, עובי או הוספת חומר חדש — ערוך `catalog/materials.json` בלבד. אין צורך לנגוע בקוד TypeScript.
 
+בנוסף — המשתמש יכול להוסיף **חומרים מותאמים אישית** דרך `SettingsPage` (id `'custom_xyz'`). הם נשמרים ב-`localStorage` תחת `'carpenter-settings-v2'` יחד עם ה-checkboxים שקובעים אילו חומרים יופיעו ב-dropdowns של גוף/חזית. `getMaterialWithCustom(id, customMaterials)` ב-`catalog/materialCombiner.ts` הוא single source לחיפוש חומר ע"י id (קטלוג + custom).
+
 ---
 
 ## עיקרון שביעי: BoardModel כמקור-אמת יחיד למידות לוחות
@@ -83,8 +85,11 @@
 
 **helpers מרכזיים** (יוצאים מ-`core/boards/boardModel.ts`):
 - `computeCarcassDepth(D, backThickness, hingeGap, tFront)` — חישוב אחד למידה המופיעה בכל מקום (useCabinet + סקיצות + טופס).
-- `computeInnerWidth(W, hasShell, tFront)` — אותו עיקרון.
+- `computeInnerWidth(W, hasShell, tFront)` — תומך `boolean | { left, right }` ל-asymmetric shell.
+- `deriveEnvelopeFlags(box, hasShell, hasEnvelopeTop)` — תומך `boolean | { left, right }` כנ"ל.
 - `getDimension`, `getMaterial`, `boardStableId`, `BoardOverrides`, `BoardDimensionKey` — ה-API של שכבת ה-override.
+
+**Single source לפיצול per-side shell**: `getShellSides(input)` ב-`types/cabinet.ts` — קוראת `hasShellLeft ?? hasShell` ו-`hasShellRight ?? hasShell`. כל caller שצריך לדעת אם יש shell לצד מסוים מעביר את התוצאה ל-`computeInnerWidth` / `deriveEnvelopeFlags`.
 
 **אסור**:
 - חישוב inline של carcassD/innerW בקומפוננטות UI.

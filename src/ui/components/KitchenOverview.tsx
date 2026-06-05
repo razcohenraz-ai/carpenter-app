@@ -62,9 +62,110 @@ function computeScale(units: KitchenUnit[], availableW: number): number {
   return Math.min(sx, sy, 8);
 }
 
-/** Render a single unit's front panels in the fronts view.
- *  External drawers from SavedCabinetState take precedence over door panels
- *  in the area they occupy. */
+/** Standalone SVG of a single unit's front panels.
+ *  ViewBox is in cm — `0 0 outerCabW effH` — matching the CabinetSketch
+ *  (embedded) viewBox of the same unit, so overlaying the two SVGs on the
+ *  same wrapper div renders the fronts exactly on top of the cabinet body.
+ *  Used by UnitsView when viewMode === 'fronts'. */
+function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
+  unit: KitchenUnit;
+  viewBoxW: number;  // cm — outerCabW (effW + envelopes)
+  viewBoxH: number;  // cm — effH
+}): React.JSX.Element | null {
+  const inp = unit.cabinet.input;
+  const { W: effW, H: effH } = effectiveDims(unit);
+  const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
+  const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
+  const sides = getShellSides(inp);
+  const hasAnyShell = sides.left || sides.right;
+  const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
+                       inp.lowerDoorH, hasAnyShell, tFront, forceRows);
+  if (dl.n === 0) return null;
+
+  const bodyH = effH - inp.plinth;
+  const gapCm = inp.doorGapMm / 10;
+  // Left offset of the first front (cm from cabinet outer left edge):
+  // = left-envelope width (if present). Inside-the-box layout is symmetric
+  // around the box, so fronts span the box width (= effW).
+  const leftEnvCm = sides.left ? tFront : 0;
+  const frontLayout = computeRowFrontLayout({
+    cabinetW: effW,
+    hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
+    shellThicknessCm: 0,
+    totalFrontsInRow: dl.n,
+    gapCm,
+  });
+
+  const panels: React.ReactElement[] = [];
+
+  function pushFrontRow(key: string, heightCm: number, yFromBodyBottom: number) {
+    const panelY = bodyH - (yFromBodyBottom + heightCm);
+    for (let fi = 0; fi < dl.n; fi++) {
+      const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
+      panels.push(
+        <rect
+          key={`${key}-fi${fi}`}
+          x={leftEnvCm + frontLayout.cabinetLeftOffset + fp.x}
+          y={panelY}
+          width={Math.max(fp.width, 0)}
+          height={Math.max(heightCm, 0)}
+          fill="var(--color-fronts, #e8934a)"
+          stroke="var(--color-border, #ccc)"
+          strokeWidth={0.1}
+          opacity={0.9}
+        />
+      );
+    }
+  }
+
+  // External drawers from saved state
+  const slotKey = 'single:single';
+  const savedItems = unit.cabinet.state.interior[slotKey] ?? [];
+  const extDrawers = (savedItems as import('../../types/interior').InteriorItem[])
+    .filter((it): it is import('../../types/interior').DrawerItem =>
+      it.type === 'drawer' && it.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+
+  let totalDrawerH = 0;
+  extDrawers.forEach((d, di) => {
+    const gap = gapCm / 2;
+    pushFrontRow(`drw${di}`, d.drawerHeight - gap, d.heightFromFloor + gap / 2);
+    totalDrawerH = Math.max(totalDrawerH, d.heightFromFloor + d.drawerHeight);
+  });
+
+  const doorStartFromBodyBottom = dl.doorStart - inp.plinth;
+  const doorTopFromBodyBottom = doorStartFromBodyBottom + (dl.lowerH ?? 0);
+
+  if (extDrawers.length === 0) {
+    const rows: { h: number; yFromBodyBottom: number }[] = [];
+    if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
+    if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
+    if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
+    rows.forEach((r, ri) => pushFrontRow(`door${ri}`, r.h, r.yFromBodyBottom));
+  } else if (totalDrawerH < doorTopFromBodyBottom - 3) {
+    const remainH = doorTopFromBodyBottom - totalDrawerH;
+    pushFrontRow('doorAbove', remainH, totalDrawerH);
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
+      preserveAspectRatio="none"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    >
+      {panels}
+    </svg>
+  );
+}
+
+/** LEGACY: used by the old single-SVG fronts canvas (kept for reference but
+ *  no longer rendered after the unified UnitsView). */
 function FrontPanels({ unit, layout, scale }: {
   unit: KitchenUnit;
   layout: { x: number; y: number; w: number; h: number; plinthH: number };
@@ -291,17 +392,22 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
         <HardwareView units={units} settings={settings} />
       )}
 
-      {/* Bodies tab — flex layout of CabinetSketch per unit */}
-      {viewMode === 'bodies' && units.length > 0 && (
-        <BodiesView units={units} selectedUnitId={selectedUnitId}
-          onSelect={onSelect} onOpenUnit={onOpenUnit} settings={settings} />
+      {/* Unified bodies + fronts canvas — same layout, fronts adds an overlay */}
+      {(viewMode === 'bodies' || viewMode === 'fronts') && units.length > 0 && (
+        <UnitsView units={units} selectedUnitId={selectedUnitId}
+          onSelect={onSelect} onOpenUnit={onOpenUnit} settings={settings}
+          viewMode={viewMode} />
       )}
 
-      {/* SVG canvas — only for fronts view */}
-      <div ref={containerRef} className={styles.container}>
-        {units.length === 0 ? (
+      {/* Empty state */}
+      {units.length === 0 && (
+        <div ref={containerRef} className={styles.container}>
           <div className={styles.empty}>הוסף גופים כדי לראות את המטבח</div>
-        ) : viewMode === 'fronts' ? (
+        </div>
+      )}
+      {/* DEAD CODE — legacy single-SVG fronts canvas, kept compiled-out to
+          preserve TS reachability checks; will be cleaned up later. */}
+      {false as boolean && units.length > 0 && (
           <svg
             width={svgW}
             height={OVERVIEW_H}
@@ -531,26 +637,27 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
               );
             })}
           </svg>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }
 
-// ── BodiesView ──────────────────────────────────────────────────────────────
-// Flex layout of <CabinetSketch embedded /> — one per unit. Each unit shows
-// the full board model (top/bottom/sides with thickness, shelves as boards,
-// partitions, envelope, sink basin) just like the single-unit editor sketch.
+// ── UnitsView ───────────────────────────────────────────────────────────────
+// Single layout for both 'bodies' and 'fronts' tabs — flex of CabinetSketch
+// (embedded) per unit. In fronts mode, an SVG overlay of front panels is
+// stacked on top of each unit's sketch holder using the same viewBox so the
+// switch between modes feels like adding/removing a layer, not a relayout.
 
-interface BodiesViewProps {
+interface UnitsViewProps {
   units: KitchenUnit[];
   selectedUnitId: string | null;
   onSelect: (id: string) => void;
   onOpenUnit: (id: string) => void;
   settings?: AppSettingsSlice | undefined;
+  viewMode: 'bodies' | 'fronts';
 }
 
-function BodiesView({ units, selectedUnitId, onSelect, onOpenUnit, settings }: BodiesViewProps) {
+function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, settings, viewMode }: UnitsViewProps) {
   // Compute totalW and maxH to fit all units into the available canvas width.
   // PX_PER_CM is chosen so the union of all unit widths + label area fits.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -694,6 +801,13 @@ function BodiesView({ units, selectedUnitId, onSelect, onOpenUnit, settings }: B
                 {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
                 customMaterials={customMaterials}
               />
+              {viewMode === 'fronts' && (
+                <UnitFrontPanelsStandalone
+                  unit={unit}
+                  viewBoxW={outerCabW}
+                  viewBoxH={effH}
+                />
+              )}
             </div>
           </div>
         );

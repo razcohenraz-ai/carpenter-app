@@ -447,11 +447,9 @@
 ### מגבלה ידועה
 - בגוף עם `numFronts > 2` ועם מחיצה, ה-frontIndex האמצעי **אינו מקבל cell** ולכן לא יכול לקבל מגירה חיצונית (מקבל `items=[]` מ-`getItemsForFront` והדלת לא מתקצרת). תמיכה מורחבת תידרש בעת תמיכה ביותר ממחיצה אחת לגוף.
 
-### מצב כיום (שלב 2.1)
-- ליבה (שלב 1): `mount` בשדה, helpers ב-`doorUtils.ts`, חיתוכים ב-`externalDrawerCuts.ts`, 30 בדיקות יחידה.
-- חיווט (שלב 2.1): `useCabinet.calculate()` משתמש ב-`calcMainDoorHeight`; `coversSkirt` עובר לdrawer הנמוכה אם רלוונטי; חיתוכי `'front'` מצורפים לתוצאה.
-- UI (שלב 2.1): דיאלוג בחירה internal/external בעת הוספת מגירה (בגוף או בתא).
-- חסר (שלב 2.2): סקיצות ויזואליות, חשיפת `frontThicknessOverride`, תצוגת אזהרות `main_door_*`, refactor של חיתוכי הדלת ב-`calcCuts`.
+### מצב כיום
+- ליבה + חיווט + UI מלא: helpers, חיתוכים `'front'`, סקיצות, מודאל עריכה, `frontThicknessOverride`.
+- **חסר**: תצוגת אזהרות `main_door_absent` / `main_door_too_short` (פונקציה קיימת `validateMainDoorHeight`, לא מחוברת ל-UI), ו-edge case של partition + numFronts>2 (frontIndex אמצעי לא מקבל cell).
 
 ---
 
@@ -484,6 +482,63 @@
 
 ### מגבלה ידועה (TODO)
 - מדף רגיל בטווח 5 ס"מ ממיקום המדף הקבוע עלול לחפוף ויזואלית — נכון לעכשיו אין warning. דחוי לפיצ'ר נפרד.
+
+---
+
+## מודולי מטבח (Kitchen modules)
+
+מודולי מטבח מוגדרים ב-`core/product/kitchenModules.ts`: `kitchenModuleInput(type, w?)` ו-`kitchenModuleState(type)`.
+
+**שלושה סוגים** (`moduleType`):
+- **`drawers`** — 3 external drawers בגבהים 32/32/16, W default 60.
+- **`shelves`** — 2 מדפים פנימיים ב-25 ו-50 ס"מ, W default 60.
+- **`sink`** — `topVariant='sink-open'` (ראה למטה), W default 80.
+
+**defaults משותפים**: H=90, D=60, plinth=10, backThickness=0.6, hasShell=false (`hasShellLeft=false`, `hasShellRight=false`), bodyMaterialId='mdf18', frontMaterialId='oak18'.
+
+ב-UI: `KitchenEditor` מציע 3 כפתורים להוספת unit; `CabinetForm` עבור unit במצב kitchen מקבל flags `hideMainDimensions` / `hideDoorsPerColumn` / `hideEnvelopeTop` / `splitShellSides` (מ-`App.tsx` ב-Level 3).
+
+---
+
+## sink-open topVariant
+
+יחידת כיור: אין top board. במקומו, שני **traverse boards** קצרים בעומק קדמי ואחורי.
+
+- **שדות ב-CabinetInput**: `topVariant: 'standard' | 'sink-open'`, `sinkTraverseWidthCm: number` (ברירת מחדל **8 ס"מ**).
+- **roles ב-BoardRole**: `'sink-traverse-front'`, `'sink-traverse-back'` (מחליפים `'top'` כשה-flag פעיל).
+- **buildBoardModel** מטפל בזה: כשה-`topVariant === 'sink-open'`:
+  - ב-rabbet: שתי קורות `(W − 2t) × tw`.
+  - ב-butt: שתי קורות `W × tw`.
+  - edging pattern: `'front'` (כמו top רגיל).
+- **PairLabels** ב-`mergeCutItems`: זוג חדש "קורת רוחב קדמית / אחורית" מאחד את שתי הקורות לשורה אחת ברשימת החיתוכים.
+- **CabinetSketch overlay**: rect כחול־אפור `#b0c4d8` עם stroke `#7a9ab5` + עיגול drain — מצויר רק כש-`topVariant === 'sink-open'`.
+
+---
+
+## מעטפת אסימטרית (per-side shell)
+
+ביחידת מטבח לפעמים גוף נצמד לקיר רק בצד אחד — לא צריך מעטפת באותו צד.
+
+- **שדות אופציונליים ב-CabinetInput**: `hasShellLeft?: boolean`, `hasShellRight?: boolean`. אם `undefined` → fallback ל-`hasShell` (התנהגות תאימות).
+- **`getShellSides(input)`** ב-`types/cabinet.ts` — single source: מחזיר `{ left, right }`.
+- **`computeInnerWidth(W, shell, tFront)`** — מקבל `boolean | { left, right }`. אם asymmetric: `W − (left ? tFront : 0) − (right ? tFront : 0)`.
+- **`deriveEnvelopeFlags(box, shell, hasEnvelopeTop)`** — אותו signature; מוציא `hasEnvelopeLeft` רק אם `sides.left && box at left edge`.
+- **UI**:
+  - בעורך unit **מטבח** (`splitShellSides=true`): שני checkboxes נפרדים — "מעטפת שמאל" + "מעטפת ימין".
+  - בארון רגיל: checkbox יחיד "מעטפת חיצונית" (כתוצאה: מסונכרן `hasShellLeft = hasShellRight = hasShell`).
+- **CabinetSketch / KitchenOverview** — מציירים envelope panel רק לצד שבו `sides.left` (או `right`) הוא `true`.
+
+---
+
+## מגירה חיצונית — drawer box visualization
+
+ב-CabinetSketch במצב **bodies**, external drawers מצוירים כ-**drawer box** (קופסת המגירה הפנימית), לא כחזיתות. החזיתות מצוירות ב-overlay של מצב **fronts**.
+
+- **רוחב פנימי** = `innerW − 2.5` ס"מ (1.25 מכל צד — מרווח למסילות).
+- **גובה פנימי** = `drawerHeight − 5` ס"מ (2 מהתחתית + 3 מהעליון של החזית).
+- **סגנון**: `drawerRect` (לבן עם stroke), לא `externalDrawerRect` (כתום).
+
+**equalize on overflow** — כשמוסיפים drawer חיצוני שגורם ל-`totalStackH > bodyH` (ראה `equalizeExternalDrawersIfOverflow` ב-`interiorUtils.ts`): כל ה-drawers ב-stack מקבלים גובה אחיד `(bodyH − (n−1)·gap) / n` ועדכון `heightFromFloor` אוטומטי. אם ה-stack מתאים — לא שינוי.
 
 ---
 

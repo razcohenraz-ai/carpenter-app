@@ -2,65 +2,71 @@
 
 ## מה זה
 
-אפליקציית ווב לתכנון ארונות נגרות מותאמים אישית. הנגר מזין מידות ארון והגדרות (צוקל, מעטפת, חומרים, דלתות), והמערכת מחשבת אוטומטית:
-
-- פיצול לגופים פיזיים (קופסאות) לפי מגבלות רוחב וגובה
-- רשימת חיתוכים לנגר המסגר
-- מבנה חזיתות, צירים ופרזולים
-- פנים גוף: מדפים, מגירות, מוטות תליה
-- ספירת לוחות נדרשים
+אפליקציית ווב לתכנון רהיטים מותאמים אישית לנגרים. הנגר מזין מידות ובחירות; המערכת מחשבת אוטומטית פיצול לגופים, רשימות חיתוכים, חזיתות וצירים, פנים גוף, ופרזולים.
 
 ## למי
 
-נגרים מקצועיים שבונים ארונות מותאמים אישית ללקוחות. הנגר יודע את אומנותו — התוכנה משרתת, לא מכתיבה.
+נגרים מקצועיים. הנגר יודע את אומנותו — התוכנה משרתת, לא מכתיבה (ראה DESIGN_PRINCIPLES — עיקרון "החופש בידי הנגר").
 
-## איפה אנחנו עכשיו
+---
 
-### פיצ'רים פעילים ועובדים
+## Quick orientation (לסשן חדש)
 
-- **מחשבון חיתוכים**: חישוב מלא של כל לוחות הקורפוס, מדפים, מגירות, דלתות
-- **פיצול לגופים**: אוטומטי לפי MAX_BOX_W=100 ס"מ; 1/2/3 קומות; איחוד גופים קטנים מ-60 ס"מ
-- **מעטפת חיצונית** (shell): שני לוחות צד מחומר החזיתות + מעטפת תקרה אופציונלית
-- **שני חומרים נפרדים**: bodyMaterial לקורפוס, frontMaterial לחזיתות ומעטפת
-- **עורך חזיתות**: סגנון צירים, מספר צירים, מיקום ידני, coversSkirt
-- **עורך פנים גוף**: מדפים, מגירות, מוטות תליה — עם גרירה
-- **מחיצות פנימיות**: לגופים עם numFronts > 1 — toggle, עורך תאים עצמאי עם סקיצה ופריטים, תצוגה ב-CabinetSketch ובמיניאטורות
-- **חלוקת מדפים חכמה**: round-robin בין כל האזורים החופשיים (≥25 ס"מ); לוגיקת hanger (מדף 80 ס"מ מתחת למוט, או מתחת למגירה אם קיימת); הצבת מגירה/מוט חדשים מתחשבת בפריטים קיימים; אזהרות `small_zone`/`rod_low`/`rod_drawer_close` כבאנר ניתן להסתרה; מדף שנגרר/שונה ידנית נשאר קבוע
-- **מגירות חיצוניות (external drawers)**: לוגיקה + UI + תצוגה ויזואלית מלאה. דיאלוג בחירה internal/external בעת הוספה; הדלת מתקצרת אוטומטית; `coversSkirt` עובר למגירה התחתונה; חיתוכי חזיתות מצורפים תחת `CutGroup` `'front'`. הסקיצות (`BoxBodySketch`, `CabinetSketch`, `CabinetFrontsSketch`) מציגות חזיתות מגירה כפנלים בצבע fronts; `DoorsList` משלב חזיתות עם תיוג "(מגירה)". מודאל עריכה (`ExternalDrawerEditor`) חושף גובה מגירה, override עובי חזית, ומחיקה.
-- **תצוגה מקדימה**: סקיצת ארון חיה, מיניאטורות גופים פרופורציונליות
-- **דו-לשוני**: עברית ואנגלית
+**State hooks (כל אחד עומד בפני עצמו):**
+- `useCabinet` — state של cabinet יחיד פעיל: `calculate()`, interior, doors, overrides (board / boxDimension / bodyEdging).
+- `useProject` — Project כולל `products: ProductUnit[]`, kitchen units, שמירה ב-localStorage.
+- `useSettings` — AppSettings: `customMaterials[]`, `bodyEnabledMaterialIds[]`, `frontEnabledMaterialIds[]`, price overrides — localStorage key `'carpenter-settings-v2'`.
 
-### שלב נוכחי
+**Navigation ב-`App.tsx`** — 3 רמות:
+1. **Project** → `ProjectView` (רשימת products + ⚙️ → SettingsPage).
+2. **Product** → `CabinetForm` (single product) או `KitchenEditor` (kitchen).
+3. **Kitchen unit** → `CabinetForm` עם kitchen flags (`hideMainDimensions`, `hideDoorsPerColumn`, `hideEnvelopeTop`, `splitShellSides`).
 
-הממשק הבסיסי מלא ועובד. עכשיו מוסיפים פיצ'רים שהנגר צריך בפועל:
-פרטי חזיתות, מחיצות פנימיות, ייצוא.
+**Compute pathways:**
+- `useCabinet.calculate(input)` — cabinet יחיד פעיל; מעדכן refs ו-result.
+- `core/cabinetCompute.ts → computeUnitCutsAndHardware(input, savedState, customMaterials)` — pure compute (ללא React), משמש ב-`KitchenOverview` ל-loop על kitchen units והצגת cuts/hardware מאוגדים.
+
+**Single source of truth של חישובים:**
+- `core/boards/boardModel.ts` — `buildBoardModel`, `computeInnerWidth` (תומך `{ left, right }`), `getMaterial`, `getDimension`.
+- `core/geometry/frontGeometry.ts` — `computeRowFrontLayout`, `computeFrontGeometry`.
+- `types/cabinet.ts → getShellSides(input)` — single source לפיצול per-side shell.
+
+---
+
+## פיצ'רים פעילים
+
+- **מחשבון חיתוכים** — קורפוס, מדפים, מגירות, דלתות, מעטפת, צוקל, חיפוי, צוקל נסוג.
+- **פיצול לגופים** — אוטומטי לפי `MAX_BOX_W=100`; doorsPerColumn 1/2/3; איחוד גופים קטנים <60 ס"מ.
+- **שני חומרים נפרדים** — body + front; עובי חזית פר-דלת ופר-drawer חיצוני.
+- **עורך חזיתות + עורך פנים גוף** — צירים, מדפים, מגירות (internal/external), מוט תליה (לא ב-kitchen), מחיצות פנימיות.
+- **חלוקת מדפים חכמה** — round-robin בין אזורים ≥25 ס"מ, hanger logic, אזהרות `small_zone` / `rod_low` / `rod_drawer_close`.
+- **מגירות חיצוניות** — חזיתות עצמאיות, `coversSkirt` עובר לתחתונה, מדף קבוע (`syncFixedShelf`), drawer-box visualization (צר ב-2.5, נמוך ב-5), `equalizeExternalDrawersIfOverflow` כשהstack חורג.
+- **מעטפת** — `hasShell` (סימטרי) או `hasShellLeft`/`hasShellRight` (kitchen — `splitShellSides`); `getShellSides` מאחד.
+- **ניהול פרויקטים** — `useProject` שומר ב-localStorage; ייצוא/יבוא קבצים; ריבוי products במקביל.
+- **מטבחים** — מודולי `drawers`/`shelves`/`sink` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
+- **sink module** — `topVariant='sink-open'`: אין top board, שני traverse boards (front+back), sink basin overlay בסקיצה.
+- **חומרים מותאמים אישית** — `SettingsPage`: לכל חומר checkbox (כלול ב-dropdown), מחיר עריך, custom materials עם id מותאם.
+- **box dimension overrides** — עקיפת W/H/D פר-body דרך `BoxInteriorEditor`; effective dims מוחל בסקיצה ובחיתוכים.
+- **דו-לשוני** — עברית + אנגלית.
+
+---
 
 ## חובות טכניים ידועים
 
-### External drawers — שלב 2.3 פתוח (פריטים שנותרו)
-שלבים 1, 2.1 ו-2.2 השלימו: ליבה, חיווט `useCabinet`, דיאלוג בחירה ב-UI, חיתוכי `'front'`, תצוגה ויזואלית מלאה בסקיצות, רשימה משולבת, ומודאל עריכה. נשאר ל-2.3:
-- אזהרות `main_door_absent` / `main_door_too_short` עדיין לא מוצגות (`validateMainDoorHeight` קיימת אך לא נצרכת).
-- חיתוכי הדלת הראשית מ-`calcCuts` עדיין משקפים את הגוף המלא ולא את הדלת המקוצרת — refactor של `calcCuts` או ייצור חיתוכי דלת פר-`Door` ב-`useCabinet`.
-- מצב partition + numFronts > 2: ה-frontIndex האמצעי לא מקבל cell ולכן external drawers לא ניתנים להוספה שם.
+### External drawers — edge cases
+- `validateMainDoorHeight` (אזהרות `main_door_absent` / `main_door_too_short`) קיימת אבל לא מחוברת ל-UI.
+- בגוף עם `numFronts > 2` ומחיצה — ה-frontIndex האמצעי לא מקבל cell, ולא ניתן להוסיף שם external drawer.
 
 ### עומק גופים פנימיים
-הגופים מקבלים כרגע את עומק הארון המלא שהוזן. בפועל, העומק הפנימי הנגיש קטן יותר מ-3 סיבות:
-1. **הדלת** תופסת ~2 ס"מ מהעומק הקדמי
-2. **הצירים** דורשים רווח טכני ~1.5 ס"מ
-3. **הגב** גונב ~0.6 ס"מ מאחורה (גב 6mm)
+הגופים מקבלים את עומק הארון המלא. בפועל ה-עומק הנגיש קטן יותר עקב דלת (~2 ס"מ) + צירים (~1.5) + גב (~0.6). חישוב carcassD ב-`computeCarcassDepth` כבר מורידם — אבל הצגת ה-D במקומות מסוימים עדיין מציגה את ה-input. ידויק בהמשך.
 
-ידויק בהמשך, לאחר השלמת ממשק ה-shell.
+### Pricing — חיבור ל-UI
+`core/pricing/laborCalc.ts` ו-`core/hardware/calcHardware.ts` קיימים. `HardwareList` מציג פרזולים. אומדן עלויות-עבודה לא מחובר ל-UI עדיין.
 
-### תכולת הקטלוג
-מערכת פרזולים ומחירים קיימת בקוד (types/hardware.ts, catalog/hardware/, core/pricing/) אך **לא מחוברת לממשק** עדיין.
-
-### שמירת פרויקטים
-סוג `Project` ו-`CabinetUnit` מוגדרים ב-types/project.ts, אך **אין עדיין מנגנון שמירה/טעינה**.
+---
 
 ## כיוון עתידי
 
-- **ייצוא**: PDF של רשימת חיתוכים, CSV לנגר המסגר, DXF
-- **תלת ממד**: תצוגה 3D בסיסית
-- **ניהול פרויקטים**: שמירה, טעינה, ריבוי ארונות בפרויקט אחד
-- **חישוב עלויות**: חיבור קטלוג הפרזולים לממשק
-- **מכירות**: הצעת מחיר ללקוח
+- **ייצוא** — PDF של רשימת חיתוכים (קיים בסיסי דרך window.print), CSV, DXF.
+- **תלת ממד** — תצוגת 3D בסיסית.
+- **הצעת מחיר ללקוח** — חישוב עלויות כולל (חומרים + פרזולים + עבודה) + תבנית PDF.

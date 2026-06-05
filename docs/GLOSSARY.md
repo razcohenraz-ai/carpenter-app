@@ -201,10 +201,10 @@ toggle מחיצות פנימיות לגוף. מעדכן cuts מיד.
 פונקציה `(data: unknown) => unknown` שממירה `Project` מגרסה `n` לגרסה `n+1`. נרשמת ב-`migrations[n]`. `migrate()` מריץ אותן ב-order מ-`data.schemaVersion` עד `CURRENT_SCHEMA_VERSION`. כרגע ה-registry ריק (גרסה 1 היא ה-baseline).
 
 ### CabinetInput
-ה-16 ערכי הטופס שמזינים את `calculate()` — `W, H, D, backThickness, hasShell, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth`. מוגדר ב-`types/cabinet.ts`. Single source of truth להגדרה החיצונית של הארון.
+ערכי הטופס שמזינים את `calculate()` — `W, H, D, backThickness, hasShell, hasShellLeft?, hasShellRight?, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth, edging?, topVariant?, sinkTraverseWidthCm?`. מוגדר ב-`types/cabinet.ts`. Single source of truth להגדרה החיצונית של הארון.
 
 ### SavedCabinetState
-מבנה ה-state השמור של הארון — שש מפות מ-`Record<string, ...>` לבחירות המשתמש שצריכות לשרוד `calculate()` rebuilds: `interior`, `cellInterior`, `partitions`, `doors`, `plinthGableOverrides`, `boardOverrides`. כל אחת ממופתחת לפי identifier יציב.
+מבנה ה-state השמור של הארון — מפות `Record<string, ...>` לבחירות משתמש ששורדות `calculate()` rebuilds: `interior`, `cellInterior`, `partitions`, `doors`, `plinthGableOverrides`, `boardOverrides`, ואופציונליים `bodyEdgingOverrides?`, `doorEdgingOverrides?`, `boxDimensionOverrides?`. כל אחת ממופתחת לפי identifier יציב (`BoxSlotId` / `DoorSlotKey` / `Board.stableId`).
 
 ### BoxSlotId
 טיפוס יציב לזיהוי "slot" של גוף בארון — מפתח שורד `calculate()` rebuilds, ולא ייקשר ליחידה הלא נכונה כש-decomposition משתנה. כרגע alias של `string` (placeholder); ריפקטור ל-id יציב הוא משימה נפרדת בהמשך — ראה DECISIONS_LOG 2026-05-29.
@@ -235,3 +235,64 @@ toggle מחיצות פנימיות לגוף. מעדכן cuts מיד.
 | **inset** | דלת בתוך פתח הגוף (נדיר, לארונות כפריים) |
 | **cam-lock / קונפירמט** | חיבור ייחודי לנגרות פלטה |
 | **edge band / מסגרת ABS** | פס המכסה את חתך הלוח |
+
+---
+
+## פרויקטים, מטבחים והגדרות (Multi-product, Kitchen, Settings)
+
+### Project
+מבנה העטיפה ב-`types/project.ts`. שדות: `schemaVersion, projectName?, createdAt?, updatedAt?, products: ProductUnit[]`. **לא** ארון יחיד — מכיל רשימת products. נשמר ב-localStorage דרך `useProject`.
+
+### ProductUnit
+פריט אחד בפרויקט: `id, name, productType, cabinet, kitchenUnits?`. `productType ∈ 'wardrobe' | 'bookcase' | 'sideboard' | 'kitchen' | 'free-build'`. עבור kitchen — `kitchenUnits` רלוונטי (לא `cabinet`).
+
+### KitchenUnit
+גוף יחיד במטבח. שדות: `id, name, moduleType, cabinet`. נוצר דרך `kitchenModuleInput(type, W?)` ו-`kitchenModuleState(type)` ב-`core/product/kitchenModules.ts`.
+
+### kitchenModuleType
+`'drawers' | 'shelves' | 'sink'`. מגדיר defaults: drawers=3 external (32/32/16), shelves=2 פנימיים (25/50), sink=`topVariant: 'sink-open'`. W default 60 ל-drawers/shelves, 80 ל-sink.
+
+### topVariant
+שדה אופציונלי ב-`CabinetInput`: `'standard' | 'sink-open'`. כש-`'sink-open'` — `buildBoardModel` מחליף את ה-top board בשני **traverse boards** (front+back).
+
+### sinkTraverseWidthCm
+רוחב traverse בס"מ. ברירת מחדל **8**. רלוונטי רק כש-`topVariant === 'sink-open'`.
+
+### sink-traverse-front / sink-traverse-back
+שני roles חדשים ב-`BoardRole` שמחליפים את `'top'` במצב `sink-open`. ב-`mergeCutItems` הם מתמזגים לזוג "קורת רוחב קדמית / אחורית".
+
+### hasShellLeft / hasShellRight
+שדות אופציונליים ב-`CabinetInput`. כש-`undefined` — fallback ל-`hasShell` (התנהגות סימטרית legacy). מאפשרים asymmetric shell ביחידת מטבח שצמודה לקיר בצד אחד.
+
+### getShellSides(input)
+פונקציה ב-`types/cabinet.ts`. מחזירה `{ left, right }` — single source לפיצול per-side. כל caller שצריך לדעת אם יש shell לצד מסוים קורא דרכה ומעביר ל-`computeInnerWidth` או `deriveEnvelopeFlags` (שניהם תומכים `boolean | { left, right }`).
+
+### AppSettings (v2)
+מבנה הגדרות גלובלי ב-`useSettings`. שדות: `customMaterials: CustomMaterial[]`, `bodyEnabledMaterialIds: string[]`, `frontEnabledMaterialIds: string[]`, `bodyMaterialPriceOverrides`, `frontMaterialPriceOverrides`. נשמר ב-localStorage תחת `'carpenter-settings-v2'`.
+
+### CustomMaterial
+חומר מותאם אישית שמשתמש הוסיף דרך `SettingsPage`. שדות: `id: string` (`'custom_xyz'`), `name, thickness, pricePerSheet, sheetW, sheetH`. מוגדר ב-`types/materials.ts`.
+
+### getMaterialWithCustom(id, customMaterials)
+פונקציה ב-`catalog/materialCombiner.ts`. חיפוש חומר ע"י id ברשימת קטלוג + custom. אם לא נמצא — fallback לחומר ראשון בקטלוג. משמש בכל מקום שצריך thickness/price של חומר לפי id (כולל ids של custom).
+
+### computeUnitCutsAndHardware
+פונקציה pure ב-`core/cabinetCompute.ts`. חתימה: `(input, savedState, customMaterials?) → { cuts, hardwareItems }`. משכפלת את לוגיקת `useCabinet.calculate()` ללא React/refs. משמשת ב-`KitchenOverview` לחישוב מאוגד של cuts/hardware על מספר units.
+
+### bodyEdgingOverrides / doorEdgingOverrides / boxDimensionOverrides
+שלוש מפות אופציונליות ב-`SavedCabinetState`. `bodyEdgingOverrides: Record<BoxSlotId, Edging>` — עקיפת קנט פר-body. `doorEdgingOverrides: Record<DoorSlotKey, Edging>` — פר-door (אינה חשופה ב-UI עדיין; type infrastructure). `boxDimensionOverrides: Record<BoxSlotId, { W?, H?, D? }>` — עקיפת מידות פר-body דרך `BoxInteriorEditor`.
+
+### UnitFrontPanelsStandalone
+קומפוננטה ב-`KitchenOverview.tsx`. SVG overlay של חזיתות per-unit, viewBox במידות cm (`0 0 outerCabW effH`), `position: absolute` על ה-`sketchHolder`. מציירת חזיתות בלי לצייר shell panels (אלה מצוירים ע"י `CabinetSketch` שמתחת).
+
+### embedded mode (CabinetSketch)
+prop `embedded?: boolean` ב-`CabinetSketch`. כש-true: ה-`<svg>` מוחזר בלי `<div>` wrapper, בלי title, בלי `wLabel`/`hLabel`. ה-viewBox מצומצם ל-cabinet rect בלבד. משמש ב-`KitchenOverview` להצגת אותה סקיצה בכל unit.
+
+### equalizeExternalDrawersIfOverflow
+פונקציה ב-`core/interior/interiorUtils.ts`. אם ה-stack של external drawers חורג מ-`bodyH`, מחלקת את כולם שווה — `drawerHeight = (bodyH − (n−1)·gap) / n`, ועדכון `heightFromFloor` סדרתי. אחרת — מחזירה את ה-items ללא שינוי. נקראת בעת הוספת drawer ב-`BoxInteriorEditor`.
+
+### hideMainDimensions / hideDoorsPerColumn / hideEnvelopeTop / splitShellSides / hideRodOption
+Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEditor`). מועברים מ-`App.tsx` ל-Level 3 (kitchen unit editor) בלבד. מסתירים שדות שלא רלוונטיים למטבח: שדות W/H/D ראשיים, doorsPerColumn select, hasEnvelopeTop checkbox, מאחדים את "מעטפת חיצונית" לשני checkboxes (שמאל/ימין), מסתירים את "+ מוט תליה".
+
+### UnitsView (KitchenOverview)
+קומפוננטה ב-`KitchenOverview.tsx`. flex של unit-wrappers — כל אחד `<CabinetSketch embedded>` + overlay של חזיתות כש-`viewMode === 'fronts'`. הוחלפה את ה-svg הגדול הישן — `bodies` ו-`fronts` משתמשים באותו layout בדיוק, רק החזיתות מתווספות.

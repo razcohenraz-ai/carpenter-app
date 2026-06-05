@@ -273,6 +273,42 @@ function calcExternalStackHeightLocal(items: InteriorItem[], gapMm: number): num
   return sum + externals.length * gapCm;
 }
 
+/** When external drawers would overflow the body, distribute them evenly so
+ *  they all fit inside bodyH. Returns a new items array where every external
+ *  drawer gets `(bodyH - (n-1)*gap) / n` height (matching the carpenter
+ *  expectation that adding a 4th drawer re-balances the stack). Internal
+ *  drawers and other items are left unchanged. */
+export function equalizeExternalDrawersIfOverflow(
+  items: InteriorItem[],
+  bodyH: number,
+  gapMm = 2,
+): InteriorItem[] {
+  const externals = items
+    .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+  if (externals.length === 0) return items;
+
+  const gapCm = gapMm / 10;
+  const totalStackH = externals.reduce((s, d) => s + d.drawerHeight, 0)
+                    + (externals.length - 1) * gapCm;
+
+  // Tolerance to avoid re-equalizing on tiny float noise.
+  if (totalStackH <= bodyH + 0.01) return items;
+
+  const n = externals.length;
+  const newH = roundCm((bodyH - (n - 1) * gapCm) / n);
+
+  const updates = new Map<string, DrawerItem>();
+  externals.forEach((d, i) => {
+    updates.set(d.id, {
+      ...d,
+      drawerHeight: newH,
+      heightFromFloor: roundCm(i * (newH + gapCm)),
+    });
+  });
+  return items.map(it => updates.get(it.id) ?? it);
+}
+
 export function defaultRodPlacement(
   bodyH: number,
   existingItems: InteriorItem[] = [],

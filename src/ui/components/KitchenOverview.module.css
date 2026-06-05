@@ -182,6 +182,7 @@
 }
 
 .sketchHolder {
+  position: relative;       /* anchor for the absolute fronts overlay */
   display: flex;
   align-items: stretch;
   justify-content: center;

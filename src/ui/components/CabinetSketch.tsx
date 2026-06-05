@@ -393,25 +393,32 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                 gapCm: layout.gapCm,
               })
             : null;
-          // External drawer in cabinet view: clipped to inner width (between
-          // side boards), matching the inner-width convention for other
-          // interior items. The front-layout `drawerSpan` is no longer used
-          // for x positioning here — fronts have their own dedicated view
-          // (CabinetFrontsSketch).
+          // External drawer in CABINET view: render as the DRAWER BOX (the
+          // wooden tray inside), not the visible front panel. Carpenter rule:
+          //   • box inner width  = inner cabinet width − 2.5 cm (1.25 cm gap each side)
+          //   • box inner height = drawer face height − 5 cm (2 cm bottom, 3 cm top)
+          // The visible drawer front itself is shown in the fronts overlay.
           void drawerSpan;
+          const DRAWER_SIDE_GAP_CM = 1.25;   // each side
+          const DRAWER_BOTTOM_GAP_CM = 2;
+          const DRAWER_TOP_GAP_CM = 3;
           const externalNodes = externals.map(drawer => {
-            const yBottom = toSvgY(cumulative);
-            const yTop    = toSvgY(cumulative + drawer.drawerHeight);
             cumulative += drawer.drawerHeight + gapCm;
-            const fX = innerX;
-            const fW = innerW;
+            // Drawer box bounds in cm (from body floor + within inner cabinet width)
+            const drawerBoxBottomCm = (cumulative - drawer.drawerHeight) + DRAWER_BOTTOM_GAP_CM;
+            const drawerBoxTopCm = cumulative - gapCm - DRAWER_TOP_GAP_CM;
+            const yBottom = toSvgY(drawerBoxBottomCm);
+            const yTop = toSvgY(drawerBoxTopCm);
+            const sideGapPx = DRAWER_SIDE_GAP_CM * geo.scale;
+            const fX = innerX + sideGapPx;
+            const fW = innerW - 2 * sideGapPx;
             const interactive = onDrawerFrontClick !== undefined;
             return (
               <rect
                 key={`ext-${drawer.id}`}
                 x={fX} y={yTop}
-                width={fW} height={yBottom - yTop}
-                className={styles.externalDrawerRect}
+                width={Math.max(fW, 0)} height={Math.max(yBottom - yTop, 0)}
+                className={styles.drawerRect}
                 {...(interactive ? {
                   onClick: (e: React.MouseEvent) => {
                     e.stopPropagation();
@@ -500,24 +507,28 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                 const frontGeo = layout && boxFirstGlobalIndexInRow >= 0
                   ? computeFrontGeometry({ globalFrontIndexInRow: globalIndexInRow, layout, gapCm: layout.gapCm })
                   : null;
-                // Cell external drawer in cabinet view: same inner-width
-                // clipping as other cell items. Front-layout values are
-                // ignored here — front positioning is handled by
-                // CabinetFrontsSketch.
+                // Cell external drawer: same drawer-box rule as full-body
+                // externals — render as the inner box, not the front panel.
                 void layout; void frontGeo;
+                const DRAWER_SIDE_GAP_CM_CELL = 1.25;
+                const DRAWER_BOTTOM_GAP_CM_CELL = 2;
+                const DRAWER_TOP_GAP_CM_CELL = 3;
                 const externalNodes = externals.map(drawer => {
-                  const yBottom = toSvgY(cumulative);
-                  const yTop    = toSvgY(cumulative + drawer.drawerHeight);
                   cumulative += drawer.drawerHeight + gapCm;
-                  const fX = cellInnerX;
-                  const fW = cellInnerW;
+                  const drawerBoxBottomCm = (cumulative - drawer.drawerHeight) + DRAWER_BOTTOM_GAP_CM_CELL;
+                  const drawerBoxTopCm = cumulative - gapCm - DRAWER_TOP_GAP_CM_CELL;
+                  const yBottom = toSvgY(drawerBoxBottomCm);
+                  const yTop = toSvgY(drawerBoxTopCm);
+                  const sideGapPx = DRAWER_SIDE_GAP_CM_CELL * geo.scale;
+                  const fX = cellInnerX + sideGapPx;
+                  const fW = cellInnerW - 2 * sideGapPx;
                   const interactive = onDrawerFrontClick !== undefined;
                   return (
                     <rect
                       key={`ext-${drawer.id}`}
                       x={fX} y={yTop}
-                      width={fW} height={yBottom - yTop}
-                      className={styles.externalDrawerRect}
+                      width={Math.max(fW, 0)} height={Math.max(yBottom - yTop, 0)}
+                      className={styles.drawerRect}
                       {...(interactive ? {
                         onClick: (e: React.MouseEvent) => {
                           e.stopPropagation();

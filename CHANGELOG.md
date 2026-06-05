@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+### שונה — תצוגת המטבח: bodies + fronts באותו layout (overlay במקום מבנה כפול)
+
+ב-`KitchenOverview`, מצבי 'גופים' ו-'חזיתות' היו מבנים נפרדים (BodiesView flex + SVG גדול). תוצאה: גודל וקואורדינטות שונים. **אחוד מלא:**
+- `BodiesView` → `UnitsView` (תומך גם `viewMode='fronts'`).
+- כש-`fronts`: `<UnitFrontPanelsStandalone>` כ-SVG overlay על `sketchHolder` (אותו viewBox כמו `CabinetSketch embedded`). מעבר חלק — רק "מוסיפים" חזיתות על השרטוט הקיים.
+- ה-svg הגדול הישן הוסר (dead code עוטף ב-`{false && ...}`, לפינוי בעתיד).
+
+### שונה — תצוגת drawer box במצב גופים + equalize אוטומטי
+
+- ב-`CabinetSketch` במצב bodies, external drawers מצוירים כעת כ-**drawer box** (קופסת המגירה הפנימית), לא כחזית: רוחב = `innerW − 2.5` ס"מ, גובה = `drawerHeight − 5` ס"מ (2 תחתון + 3 עליון). חזית עצמה מוצגת ב-overlay של fronts בלבד.
+- **`equalizeExternalDrawersIfOverflow`** חדש ב-`core/interior/interiorUtils.ts`: כשמוסיפים drawer חיצוני שגורם ל-`totalStackH > bodyH`, כל ה-drawers ב-stack מקבלים גובה אחיד `(bodyH − (n−1)·gap) / n`. אם ה-stack מתאים — אין שינוי.
+
+### שונה — labels בסקיצה משקפים effective dimensions
+
+`wLabel.text` / `hLabel.text` ב-`CabinetSketch.utils.ts` הציגו את `W`/`H` המקוריים מ-input. **תוקן:** מציגים effective — סכום bottom row + envelope לרוחב, סכום `levelHeightMap.values()` + plinth + envelope-top לגובה. ב-embedded mode (KitchenOverview) ה-labels מוסתרים — המידות מוצגות מעל ה-unit בלבד (no duplicate display).
+
+### שונה — `widthForScale` ב-CabinetSketch.utils
+
+ה-scale נמדד עכשיו לפי `effectiveCabW` בלבד (לא `Math.max(W, effectiveCabW)`). תיקון בעיה שבה override של W ל-70 + מעטפת ימין הצמיח את ה-cabinet ל-71.8 אך scale הלך לפי 60, וקטן את הגובה.
+
+### שונה — הסר מוט תליה מעורך גוף מטבח
+
+`BoxInteriorEditor` קיבל prop `hideRodOption?: boolean`. כשטרו — שני כפתורי "+ מוט תליה" (בגוף הראשי ובתאים של מחיצה) מוסתרים. `CabinetForm` מעביר `hideRodOption=true` כש-`hideMainDimensions=true` (kitchen mode בלבד).
+
 ### שונה — UI מצומצם בעורך גוף מטבח + מעטפת לכל צד בנפרד
 
 **במטבח בלבד** (ארון רגיל ללא שינוי):

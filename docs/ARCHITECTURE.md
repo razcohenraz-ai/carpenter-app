@@ -13,68 +13,91 @@
 
 ```
 src/
-├── types/              הגדרות TypeScript (ממשקים, סוגים)
-│   ├── geometry.ts     Box, Dimensions, BoxPosition, BoxLevel
+├── types/
+│   ├── geometry.ts     Box, BoxPosition, BoxLevel
 │   ├── doors.ts        Door, Hinge, DoorById, DrawerFront, DrawerFrontById
-│   ├── interior.ts     InteriorItem, ShelfItem (+ isManuallyPositioned), DrawerItem, RodItem, CellInteriorById
-│   ├── cuts.ts         CutItem, CutGroup, SheetUsage
-│   ├── materials.ts    Material, MaterialId
+│   ├── interior.ts     InteriorItem (Shelf + isManuallyPositioned/isFixedAboveExternals, Drawer, Rod), CellInteriorById
+│   ├── cuts.ts         CutItem, CutGroup (כולל 'front' לחזיתות external drawers)
+│   ├── materials.ts    Material, MaterialId, CustomMaterial
 │   ├── hardware.ts     HardwareSpec, HardwareLineItem, FurnitureType
-│   ├── cabinet.ts      CabinetInput (16 form values שמזינים את calculate)
-│   ├── project.ts      Project, Cabinet, SavedCabinetState, SavedDoor, SavedHinge, SavedBoardOverride, BoxSlotId, DoorSlotKey, APP_DEFAULTS
-│   └── index.ts        re-exports מרכזי
+│   ├── cabinet.ts      CabinetInput + getShellSides() — single source לפיצול per-side shell
+│   ├── edging.ts       Edging interface, DEFAULT_EDGING
+│   ├── project.ts      Project (products[]) + ProductUnit + KitchenUnit + Cabinet + SavedCabinetState + SavedDoor/SavedHinge/SavedBoardOverride + BoxSlotId/DoorSlotKey
+│   └── index.ts        re-exports
 │
-├── core/               לוגיקה טהורה — ללא React, ניתנת לבדיקה
+├── core/               לוגיקה טהורה — ללא React
 │   ├── geometry/
-│   │   ├── boxDecomposition.ts   פיצול ארון לגופים פיזיים
-│   │   └── frontGeometry.ts      מקור יחיד לחישוב x ו-width של כל החזיתות (ברמת הארון)
+│   │   ├── boxDecomposition.ts   decomposeBoxes — פיצול לגופים
+│   │   └── frontGeometry.ts      computeRowFrontLayout / computeFrontGeometry — מקור יחיד לחישוב x+width של חזיתות
 │   ├── boards/
-│   │   └── boardModel.ts         מודל פיזי של לוחות הגוף; buildBoardModel, buildPlinthBoardModel, boardsToCutItems, deriveEnvelopeFlags, getDimension, getMaterial, boardStableId, computeCarcassDepth, computeInnerWidth
+│   │   └── boardModel.ts         buildBoardModel / buildPlinthBoardModel / boardsToCutItems / deriveEnvelopeFlags / getDimension / getMaterial / boardStableId / computeCarcassDepth / computeInnerWidth (תומך {left,right}) / resolveCabinetJointMethod
 │   ├── doors/
-│   │   ├── doorCalc.ts           חישוב מספר דלתות ושורות
-│   │   ├── doorUtils.ts          צירים, כיוון, coversSkirt, getDoorHeight, derivation helpers
-│   │   └── drawerFrontsCalc.ts   deriveDrawerFronts — בונה DrawerFront מ-frontGeometry layout
+│   │   ├── doorCalc.ts           חישוב מספר דלתות + שורות
+│   │   ├── doorUtils.ts          צירים, kindings, coversSkirt, calcMainDoorHeight, calcExternalStackHeight, getSkirtCoveringDrawer
+│   │   └── drawerFrontsCalc.ts   deriveDrawerFronts
 │   ├── cuts/
-│   │   ├── cuttingList.ts        חישוב רשימת חיתוכים (calcCuts) — משתמש ב-frontGeometry
-│   │   ├── externalDrawerCuts.ts חיתוכי חזיתות מגירות חיצוניות
-│   │   └── sheetCalculator.ts    ספירת לוחות (sheetsNeeded)
+│   │   ├── cuttingList.ts        calcCuts
+│   │   ├── externalDrawerCuts.ts calcExternalDrawerFrontCuts
+│   │   ├── mergeCutItems.ts      קיבוץ זוגות (top+bottom וכו') לפלט קומפקטי
+│   │   └── sheetCalculator.ts    ספירת לוחות
+│   ├── hardware/
+│   │   └── calcHardware.ts       חישוב פרזולים מ-doors + interior + cellInterior
 │   ├── interior/
-│   │   └── interiorUtils.ts      init/preserve/validate; redistributeShelves; addShelfRedistributed
+│   │   ├── interiorUtils.ts      init/preserve, redistributeShelves, defaultDrawerPlacement, defaultRodPlacement, equalizeExternalDrawersIfOverflow
+│   │   └── fixedShelfUtils.ts    syncFixedShelf — מדף קבוע מעל external drawers
+│   ├── product/
+│   │   └── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink
 │   ├── pricing/
-│   │   └── laborCalc.ts          אומדן שעות עבודה (לא מחובר לUI עדיין)
+│   │   └── laborCalc.ts          אומדן עבודה (לא מחובר ל-UI)
 │   ├── project/
-│   │   ├── migrations.ts         CURRENT_SCHEMA_VERSION, migrate(), Migration registry
+│   │   ├── migrations.ts         CURRENT_SCHEMA_VERSION + migrate()
 │   │   ├── serialize.ts          serializeProject + deserializeProject + validation
-│   │   └── serialize.test.ts     round-trip + migration + validation tests
-│   └── index.ts                  re-exports מ-core
+│   │   └── serialize.test.ts
+│   ├── utils/                    עזרי עיגול
+│   ├── cabinetCompute.ts         computeUnitCutsAndHardware — pure compute עבור unit; משמש ב-KitchenOverview לאגרגציה
+│   └── index.ts                  re-exports
 │
-├── catalog/            נתוני חומרים ופרזולים (JSON-driven)
-│   ├── materials.ts    getMaterial(), MATERIALS
-│   ├── materials.json  נתוני חומרי גלם (5 סוגים)
-│   └── hardware/       קטלוג פרזולים + presets.json
+├── catalog/
+│   ├── materials.ts              MATERIALS, getMaterial()
+│   ├── materials.json            5 חומרי קטלוג
+│   ├── materialCombiner.ts       getMaterialWithCustom / getCombinedMaterials / getEffectiveMaterial — שילוב catalog + custom
+│   └── hardware/                 קטלוג פרזולים + presets.json
 │
 ├── i18n/
-│   └── translations.ts עברית + אנגלית; ממשק Translations מוקלד
+│   ├── translations.ts           עברית + אנגלית
+│   └── LanguageContext.tsx
 │
 ├── styles/
-│   └── theme.css       משתני CSS גלובליים (צבעים, ריווח, פונטים)
+│   └── theme.css
 │
 └── ui/
     ├── hooks/
-    │   ├── useCabinet.ts     ה-hook המרכזי — כל state הארון (כולל cellInteriorById, addPartition/removePartition/setCellItems)
-    │   └── useTranslation.ts גישה לתרגומים
+    │   ├── useCabinet.ts         state יחיד של cabinet — calc + interior + doors + overrides (boxDimension/bodyEdging/board)
+    │   ├── useProject.ts         Project + products[] + kitchen units + localStorage save/load
+    │   ├── useSettings.ts        AppSettings (customMaterials, enabled IDs per body/front, price overrides) — localStorage 'carpenter-settings-v2'
+    │   └── useTranslation.ts
+    ├── pages/
+    │   └── SettingsPage.tsx      דף הגדרות מלא: לכל חומר checkbox (כלול/לא ב-dropdown) + מחיר + תוספת custom material
     └── components/
-        ├── CabinetForm.tsx         טופס קלט + תיאום ראשי
-        ├── BoxesList.tsx           רשימת פיצול לקופסאות
-        ├── BoxInteriorEditor.tsx   עורך פנים גוף
-        ├── BoxBodySketch.tsx       סקיצת SVG לפנים גוף
-        ├── CabinetSketch.tsx       סקיצת ארון חיה (תצוגת חתך: boards per body)
-        ├── CabinetCutSketch.tsx    רנדור per-body של boards (לוחות פיזיים) דרך SVG
-        ├── CabinetFrontsSketch.tsx סקיצת חזיתות
-        ├── DoorEditor.tsx          עורך חזית (צירים)
-        ├── DoorsList.tsx           רשימת חזיתות (כולל drawer fronts עם תיוג "(מגירה)")
-        ├── ExternalDrawerEditor.tsx מודאל עריכת מגירה חיצונית (גובה, override, מחיקה)
-        └── [*.module.css]          סגנונות מבודדים
+        ├── App.tsx               ניווט 3-רמתי: project → product → kitchen unit
+        ├── ProjectView.tsx       רשימת products + הוספה/מחיקה/פתיחה
+        ├── AddProductDialog.tsx  בחירת סוג מוצר (wardrobe / bookcase / sideboard / kitchen / free-build)
+        ├── KitchenEditor.tsx     ניהול kitchen units (הוסף/הסר/סדר)
+        ├── KitchenOverview.tsx   תצוגה מאוחדת של units עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); UnitsView + UnitFrontPanelsStandalone overlay
+        ├── CabinetForm.tsx       טופס cabinet יחיד; props אופציונליים hideMainDimensions/hideDoorsPerColumn/hideEnvelopeTop/splitShellSides ל-kitchen mode
+        ├── CabinetSketch.tsx     סקיצת ארון — boards per body; embedded mode מצמצם viewBox ל-cabinet rect (לKitchenOverview)
+        ├── CabinetCutSketch.tsx  per-body boards rendering
+        ├── CabinetFrontsSketch.tsx סקיצת חזיתות (בעורך unit יחיד)
+        ├── BoxBodySketch.tsx     סקיצת SVG לפנים גוף
+        ├── BoxesList.tsx         רשימת קופסאות
+        ├── BoxInteriorEditor.tsx עורך פנים גוף (overrides W/H/D פר-body, edging, פריטים); hideRodOption ב-kitchen
+        ├── DoorEditor.tsx        עורך חזית (צירים, hasDoor, thickness override)
+        ├── DoorsList.tsx         רשימת חזיתות
+        ├── ExternalDrawerEditor.tsx מודאל מגירה חיצונית
+        ├── PlinthEditor.tsx      עורך צוקל top-view (גרירת גיבלים, גובה, recess)
+        ├── CutsList.tsx          רשימת חיתוכים מקובצת לפי חומר (מודע ל-custom materials)
+        ├── HardwareList.tsx      רשימת פרזולים מצטברת
+        └── [*.module.css]
 ```
 
 ## זרימת נתונים
@@ -225,7 +248,7 @@ interface Project {
 }
 
 interface Cabinet {
-  input: CabinetInput;          // 16 ערכי הטופס שמזינים את calculate
+  input: CabinetInput;          // ערכי הטופס שמזינים את calculate
   state: SavedCabinetState;     // בחירות משתמש לאחסון יציב
 }
 
@@ -236,6 +259,41 @@ interface SavedCabinetState {
   doors:                  Record<DoorSlotKey, SavedDoor>;
   plinthGableOverrides:   Record<string, number>;          // by PlinthGable.id
   boardOverrides:         Record<string, SavedBoardOverride>; // by Board.stableId
+  bodyEdgingOverrides?:   Record<BoxSlotId, Edging>;       // per-body edging
+  doorEdgingOverrides?:   Record<DoorSlotKey, Edging>;     // per-door edging
+  boxDimensionOverrides?: Record<BoxSlotId, { W?: number; H?: number; D?: number }>;
+}
+```
+
+**`CabinetInput`** (`types/cabinet.ts`) — שדות עיקריים:
+`W, H, D, backThickness, hasShell, hasShellLeft?, hasShellRight?, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth, edging?, topVariant?, sinkTraverseWidthCm?`
+
+`getShellSides(input)` → `{ left, right }` — single source לפיצול per-side shell (fallback ל-`hasShell` אם השדות המפוצלים undefined).
+
+### Project → multiple products + kitchen units
+
+```typescript
+interface Project {
+  schemaVersion: number;
+  projectName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  products: ProductUnit[];        // ← לא cabinet יחיד; רשימת מוצרים
+}
+
+interface ProductUnit {
+  id: string;
+  name: string;
+  productType: 'wardrobe' | 'bookcase' | 'sideboard' | 'kitchen' | 'free-build';
+  cabinet: Cabinet;                              // ל-non-kitchen
+  kitchenUnits?: KitchenUnit[];                  // רק ל-productType='kitchen'
+}
+
+interface KitchenUnit {
+  id: string;
+  name: string;
+  moduleType: 'drawers' | 'shelves' | 'sink';
+  cabinet: Cabinet;
 }
 ```
 
