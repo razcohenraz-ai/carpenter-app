@@ -79,7 +79,7 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   const sides = getShellSides(inp);
   const hasAnyShell = sides.left || sides.right;
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
-                       inp.lowerDoorH, hasAnyShell, tFront, forceRows);
+                       inp.lowerDoorH, hasAnyShell, tFront, forceRows, inp.doorGapMm / 10);
   if (dl.n === 0) return null;
 
   const bodyH = effH - inp.plinth;
@@ -178,7 +178,7 @@ function FrontPanels({ unit, layout, scale }: {
   const sides = getShellSides(inp);
   const hasAnyShell = sides.left || sides.right;
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
-                       inp.lowerDoorH, hasAnyShell, tFront, forceRows);
+                       inp.lowerDoorH, hasAnyShell, tFront, forceRows, inp.doorGapMm / 10);
   if (dl.n === 0) return null;
 
   const bodyH = layout.h - layout.plinthH; // px — body rect height (without plinth)

@@ -7,6 +7,7 @@ import {
   redistributeShelves,
   defaultDrawerPlacement,
   defaultRodPlacement,
+  equalizeExternalDrawersIfOverflow,
   validateInterior,
 } from '../../core/interior/interiorUtils';
 import { MATERIALS } from '../../catalog';
@@ -150,14 +151,16 @@ export default function BoxInteriorEditor({
   function confirmDrawerType(mount: DrawerMount): void {
     if (!drawerTarget) return;
     if (drawerTarget.kind === 'box') {
-      const { drawer, warnings } = defaultDrawerPlacement(localItems, bodyH, undefined, mount);
-      update([...localItems, drawer]);
+      const { drawer, warnings } = defaultDrawerPlacement(localItems, bodyH, undefined, mount, doorGapMm);
+      const next = equalizeExternalDrawersIfOverflow([...localItems, drawer], bodyH, doorGapMm);
+      update(next);
       setBoxShelfWarnings(warnings);
     } else {
       const ci = drawerTarget.cellIndex;
       const c = localCellItems[ci] ?? [];
-      const { drawer, warnings } = defaultDrawerPlacement(c, bodyH, undefined, mount);
-      updateCell(ci, [...c, drawer]);
+      const { drawer, warnings } = defaultDrawerPlacement(c, bodyH, undefined, mount, doorGapMm);
+      const next = equalizeExternalDrawersIfOverflow([...c, drawer], bodyH, doorGapMm);
+      updateCell(ci, next);
       setCellWarnings(ci, warnings);
     }
     setDrawerTarget(null);

@@ -296,7 +296,9 @@ export function equalizeExternalDrawersIfOverflow(
   if (totalStackH <= bodyH + 0.01) return items;
 
   const n = externals.length;
-  const newH = roundCm((bodyH - (n - 1) * gapCm) / n);
+  // Reserve one extra gap for top clearance (countertop in kitchens). Floor (not
+  // round) so n*newH + n*gapCm ≤ bodyH always — never overflow, always a top gap.
+  const newH = Math.floor(((bodyH - n * gapCm) / n) * 10) / 10;
 
   const updates = new Map<string, DrawerItem>();
   externals.forEach((d, i) => {

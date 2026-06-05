@@ -832,7 +832,7 @@ export function useCabinet(settings?: {
     // plinth / back / shelves all come from the BoardModel loop below.
     // The drawer-box also sits inside the carcass, so it uses carcassD too.
     const cuts  = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging);
-    const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows);
+    const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows, doorGapMm / 10);
 
     // ── Stable maps from previous state ────────────────────────────────────
     const prevBoxes = prevBoxesRef.current;

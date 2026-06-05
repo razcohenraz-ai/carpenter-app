@@ -7,6 +7,27 @@
 
 ## [Unreleased]
 
+### תוקן — חיווט `equalizeExternalDrawersIfOverflow` ל-UI של הוספת מגירה
+
+הפונקציה הוגדרה ב-`core/interior/interiorUtils.ts` וגם תועדה כפעילה ב-CARPENTRY_RULES/PROJECT_CONTEXT/ARCHITECTURE — אבל מעולם **לא נקראה** מ-`BoxInteriorEditor.tsx`. תוצאה: הוספת מגירה חיצונית רביעית במודול מגירות מטבח (default 32/32/16 = 80 ס"מ ב-body שגובהו 80) הציבה את המגירה ב-`stackTop` וחרגה מגבולות הגוף. **תוקן:**
+- `confirmDrawerType` עוטף עכשיו את ה-items החדשים ב-`equalizeExternalDrawersIfOverflow(next, bodyH, doorGapMm)` לפני `update`/`updateCell`.
+- `defaultDrawerPlacement` נקרא עכשיו עם `doorGapMm` (במקום default 2) — חשוב במטבח שעובד ב-3 מ"מ.
+- `equalizeExternalDrawersIfOverflow` משתמש ב-`Math.floor` (במקום `roundCm`) לחישוב `newH` — מבטיח `n·newH + (n−1)·gap ≤ bodyH` תמיד, ללא overflow כלשהו מ-rounding.
+
+תוצאה במגירות מטבח 4 חיצוניות (body 80, gap 3 מ"מ): כל אחת 19.7 ס"מ, נערמות 0/20/40/60, top stack 79.7 ≤ 80.
+
+### תוקן — defaults של מודול מגירות מטבח (32/32/16) חרגו בגלל gap
+
+ב-`kitchenModuleState('drawers')`, ערכי ברירת המחדל היו 32+32+16=80 ס"מ — תואם גובה הגוף **בהנחת gap=0**. אבל `drawerFrontsCalc.ts` מעמיס gap=3 מ"מ בין כל זוג מגירות, כך שבפועל ה-stack תפס 80.6 ס"מ → חריגה של **6 מ"מ** למעלה כבר ב-load הראשון, ללא שום פעולת משתמש. **תוקן**: defaults הוחלפו ל-**31.7/31.7/15.7** — סכום עם 2 gaps + top gap מסתכם ל-79.7 ס"מ, נשאר 3 מ"מ למעלה לכיסוי שיש המטבח. שומר על יחס 2:2:1 הנגרי (שתי מגירות גדולות + מגירה קטנה למעלה).
+
+### שונה — `calcDoors` משתמש ב-`doorGapMm` עבור כל הרווחים האנכיים
+
+הקבועים `DOOR_TOP_GAP_CM`, `DOOR_PLINTH_GAP_CM` (שני 0.2 קבועים) ו-`DOOR_ROW_GAP_CM` (0.4 קבוע) הוחלפו בפרמטר `gapCm` חדש ל-`calcDoors`. ה-callers (`useCabinet`, `cuttingList`, `KitchenOverview` ×2) מעבירים `input.doorGapMm / 10`. row gap = `2 × gapCm`. ערך ברירת מחדל 0.2 לתאימות לאחור (טסטים + callers ישנים). תוצאה במטבח (`doorGapMm=3`): top gap = 3 מ"מ, plinth gap = 3 מ"מ, row gap = 6 מ"מ — עקבי עם הבחירה של הנגר. בארון רגיל (`doorGapMm=2`): התנהגות זהה לקודם.
+
+### שונה — `equalizeExternalDrawersIfOverflow` מקצה top gap עקבי
+
+הנוסחה השתנתה מ-`(bodyH − (n−1)·gap) / n` ל-`(bodyH − n·gap) / n` — מקצה רווח נוסף ל-top reserve. תוצאה: בכל מספר מגירות חיצוניות שמשתמש מוסיף ידנית, נשאר ~3 מ"מ עקבי בין המגירה העליונה לטופ הגוף (לכיסוי השיש במטבח).
+
 ### שונה — תצוגת המטבח: bodies + fronts באותו layout (overlay במקום מבנה כפול)
 
 ב-`KitchenOverview`, מצבי 'גופים' ו-'חזיתות' היו מבנים נפרדים (BodiesView flex + SVG גדול). תוצאה: גודל וקואורדינטות שונים. **אחוד מלא:**

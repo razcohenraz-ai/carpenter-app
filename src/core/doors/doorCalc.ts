@@ -5,17 +5,9 @@ import { roundInternal } from "../utils/round";
 // ── קבועים ───────────────────────────────────────────────────────────────────
 // שנה כאן אם כללי הרווחים השתנו; אין מספרי קסם בתוך הפונקציה.
 
-/** מרחק מהרצפה לתחתית הדלת כשהדלת מכסה את הצוקל, ס"מ */
+/** מרחק מהרצפה לתחתית הדלת כשהדלת מכסה את הצוקל, ס"מ.
+ *  זהו רווח רצפה פיזי (clearance להגבהות), לא תלוי ב-doorGapMm. */
 const DOOR_FLOOR_GAP_CM = 1;
-
-/** רווח בין תחתית הדלת לגובה הצוקל (כשהדלת לא מכסה), ס"מ */
-const DOOR_PLINTH_GAP_CM = 0.2;
-
-/** רווח בין ראש הדלת לתקרת הגוף, ס"מ */
-const DOOR_TOP_GAP_CM = 0.2;
-
-/** רווח בין שורת דלתות תחתונה לעליונה בארון גבוה, ס"מ */
-const DOOR_ROW_GAP_CM = 0.4;
 
 /** יחס ברירת מחדל לגובה שורת הדלתות התחתונה בארון גבוה */
 const DEFAULT_LOWER_DOOR_RATIO = 0.45;
@@ -44,6 +36,9 @@ export function calcDoors(
   hasShell: boolean,
   tShell: number,
   forceRows?: 1 | 2 | 3,
+  /** רווח אחיד בין הדלת לקצוות (טופ, צוקל) ובין שורות, ס"מ. ברירת מחדל 0.2
+   *  לתאימות לאחור; production callers מעבירים `input.doorGapMm / 10`. */
+  gapCm: number = 0.2,
 ): DoorCalcResult {
   const innerW = hasShell ? W - tShell * 2 : W;
   const n = Math.ceil(innerW / APP_DEFAULTS.maxDoorWidth);
@@ -52,10 +47,10 @@ export function calcDoors(
   const doorStart = doorCoversPlinth
     ? DOOR_FLOOR_GAP_CM
     : plinth > 0
-    ? plinth - DOOR_PLINTH_GAP_CM
-    : DOOR_PLINTH_GAP_CM;
+    ? plinth - gapCm
+    : gapCm;
 
-  const doorAreaH = H - doorStart - DOOR_TOP_GAP_CM;
+  const doorAreaH = H - doorStart - gapCm;
   const isTall = forceRows !== undefined
     ? forceRows > 1
     : doorAreaH > APP_DEFAULTS.tallThreshold;
@@ -73,15 +68,17 @@ export function calcDoors(
     };
   }
 
+  // Row gap = 2× the standard gap (top of lower door + bottom of upper door).
+  const rowGap = 2 * gapCm;
   if (forceRows === 3) {
     const lo = lowerH !== undefined ? lowerH : roundInternal(doorAreaH / 3);
-    const remaining = roundInternal(doorAreaH - lo - DOOR_ROW_GAP_CM * 2);
+    const remaining = roundInternal(doorAreaH - lo - rowGap * 2);
     const mid = roundInternal(remaining / 2);
     const top = roundInternal(remaining - mid);
     return { n, doorW, rows: 3, doorStart, lowerH: lo, upperH: mid, topH: top, total: n * 3 };
   }
 
   const lo = lowerH !== undefined ? lowerH : roundInternal(doorAreaH * DEFAULT_LOWER_DOOR_RATIO);
-  const up = roundInternal(doorAreaH - lo - DOOR_ROW_GAP_CM);
+  const up = roundInternal(doorAreaH - lo - rowGap);
   return { n, doorW, rows: 2, doorStart, lowerH: lo, upperH: up, topH: null, total: n * 2 };
 }

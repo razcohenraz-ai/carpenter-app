@@ -92,7 +92,7 @@ export function calcCuts(
   const perimMm = edging ? 2 * edging.thickness : 0;
 
   if (type === "cabinet") {
-    const d = calcDoors(W, H, plinth, doorCoversPlinth, lowerH, hasShell, tShell);
+    const d = calcDoors(W, H, plinth, doorCoversPlinth, lowerH, hasShell, tShell, undefined, doorGapMm / 10);
 
     // ── קורפוס + מעטפת + צוקל + גב + מדפים ─────────────────────────────────
     // הוסר. כל לוחות הקורפוס מגיעים כעת מ-`buildBoardModel` (קרא ב-useCabinet).

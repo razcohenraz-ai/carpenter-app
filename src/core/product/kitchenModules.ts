@@ -52,9 +52,9 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
       ...emptyBase,
       interior: {
         [slotKey]: [
-          { id: 'km-d1', type: 'drawer', heightFromFloor: 0,  drawerHeight: 32, mount: 'external' },
-          { id: 'km-d2', type: 'drawer', heightFromFloor: 32, drawerHeight: 32, mount: 'external' },
-          { id: 'km-d3', type: 'drawer', heightFromFloor: 64, drawerHeight: 16, mount: 'external' },
+          { id: 'km-d1', type: 'drawer', heightFromFloor: 0,  drawerHeight: 31.7, mount: 'external' },
+          { id: 'km-d2', type: 'drawer', heightFromFloor: 32, drawerHeight: 31.7, mount: 'external' },
+          { id: 'km-d3', type: 'drawer', heightFromFloor: 64, drawerHeight: 15.7, mount: 'external' },
         ],
       },
     };
