@@ -39,11 +39,14 @@ export interface CabinetInput {
   edging?: Edging;
   /** Top-panel structural variant.
    *  - `'standard'` (default): full-width top board.
-   *  - `'sink-open'`: no top board; two narrow traverse boards (front + back)
-   *    are added instead so the sink basin can drop in from above. */
+   *  - `'sink-open'`: no top board; two STANDING traverse boards (front + back)
+   *    are added instead — each `innerW × sinkTraverseWidthCm` (visible in
+   *    front view as a `sinkTraverseWidthCm`-tall strip at the top), thickness
+   *    = tBody. The sink basin drops into the open middle from the countertop above. */
   topVariant?: 'standard' | 'sink-open';
-  /** Width (depth direction) of each sink traverse in cm. Only used when
-   *  `topVariant === 'sink-open'`. Defaults to 8 cm. */
+  /** Standing height (vertical, cm) of each sink traverse — the dimension
+   *  visible in the front view. Only used when `topVariant === 'sink-open'`.
+   *  Defaults to 10 cm. */
   sinkTraverseWidthCm?: number;
 }
 

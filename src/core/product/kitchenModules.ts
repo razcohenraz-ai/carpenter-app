@@ -31,7 +31,7 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
   const base: CabinetInput = { ...KITCHEN_DEFAULTS, W: w ?? defaultW };
 
   if (type === 'sink') {
-    return { ...base, topVariant: 'sink-open', sinkTraverseWidthCm: 8 };
+    return { ...base, topVariant: 'sink-open', sinkTraverseWidthCm: 10 };
   }
   return base;
 }

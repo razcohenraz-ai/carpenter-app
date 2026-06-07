@@ -75,6 +75,11 @@ interface Props {
   /** When true, hide the "add hanging rod" button. Used for kitchen units
    *  where hanging rods don't apply (only wardrobes use them). */
   hideRodOption?: boolean;
+  /** Sink-open variant flags — passed through to BoxBodySketch so the
+   *  carcass background renders the standing sink traverses instead of a
+   *  top board. Both undefined for non-sink units. */
+  topVariant?: 'standard' | 'sink-open';
+  sinkTraverseWidthCm?: number;
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -93,6 +98,7 @@ export default function BoxInteriorEditor({
   boxDimensionOverride, onSetBoxDimension, onResetBoxDimensions,
   derivedW, derivedH, derivedD,
   hideRodOption,
+  topVariant, sinkTraverseWidthCm,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -770,6 +776,8 @@ export default function BoxInteriorEditor({
               frontMaterialId={frontMaterialId}
               hasOuterShell={hasOuterShell}
               hasEnvelopeTop={hasEnvelopeTop}
+              {...(topVariant ? { topVariant } : {})}
+              {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
             />
           </div>
 

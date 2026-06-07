@@ -198,6 +198,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
       edging: buildCabinetEdging(form),
+      // Preserve sink-open variant (kitchen sink module) — not editable in
+      // the form but must survive every calculate() call.
+      ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
+      ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
     });
     // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
@@ -314,6 +318,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
       edging: buildCabinetEdging(form),
+      // Preserve sink-open variant — see comment in the first calculate() call.
+      ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
+      ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
     });
   }
 
@@ -636,6 +643,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             derivedH={result?.derivedBoxDims.get(editingBoxSlotId)?.H ?? editingBox.H}
             derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
             {...(hideMainDimensions ? { hideRodOption: true } : {})}
+            {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
+            {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
           />
         </div>
       );
@@ -1027,6 +1036,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               boardOverrides={boardOverridesByStableId}
               boxDimensionOverrides={boxDimensionOverrides}
               {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})}
+              {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
+              {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
             />
           ) : (
             <CabinetFrontsSketch

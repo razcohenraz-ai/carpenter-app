@@ -33,6 +33,10 @@ interface Props {
   frontMaterialId?: MaterialId;
   hasOuterShell?: boolean;
   hasEnvelopeTop?: boolean;
+  /** Sink-open variant — when set, `buildBoardModel` emits two standing
+   *  traverse boards (front + back) instead of a top board. */
+  topVariant?: 'standard' | 'sink-open';
+  sinkTraverseWidthCm?: number;
 }
 
 interface DragState {
@@ -79,6 +83,7 @@ export default function BoxBodySketch({
   showLabels = false, showDimensions = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
   bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
+  topVariant, sinkTraverseWidthCm,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -149,6 +154,8 @@ export default function BoxBodySketch({
         hasEnvelopeTop: false,
         items,
         hasPartition: false,
+        ...(topVariant ? { topVariant } : {}),
+        ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
       })
     : [];
 

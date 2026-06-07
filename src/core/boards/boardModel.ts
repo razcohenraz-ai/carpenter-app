@@ -434,8 +434,10 @@ export interface BuildBoardModelArgs {
   /** Top-panel structural variant — forwarded from `CabinetInput.topVariant`.
    *  Defaults to `'standard'` when absent. */
   topVariant?: 'standard' | 'sink-open';
-  /** Width (depth direction, cm) of each sink traverse. Only relevant when
-   *  `topVariant === 'sink-open'`. Defaults to 8 cm. */
+  /** Standing height (vertical, cm) of each sink traverse — the dimension
+   *  visible in the front view. Boards are oriented vertically: length=innerW,
+   *  width=this value, thickness=t. Only relevant when `topVariant === 'sink-open'`.
+   *  Defaults to 10 cm. */
   sinkTraverseWidthCm?: number;
 }
 
@@ -450,7 +452,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     cabinetTotalH,
     joint: jointOverride,
     topVariant = 'standard',
-    sinkTraverseWidthCm = 8,
+    sinkTraverseWidthCm = 10,
   } = args;
 
   if (box.level === 'plinth') return [];
@@ -478,7 +480,11 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
 
   // ── Sides + top + bottom ──────────────────────────────────────────────────
   const sinkOpen = topVariant === 'sink-open';
-  const tw = sinkTraverseWidthCm; // traverse width (cm) — depth direction
+  // Standing boards (vertical): tw is the visible HEIGHT in the front view
+  // (10cm default). In 3D: length=innerW, width=tw (standing height),
+  // thickness=t. Front board occupies front depth, back board occupies back
+  // depth — but in the 2D front view they overlap at yFrom=0, yTo=tw.
+  const tw = sinkTraverseWidthCm;
 
   if (joint === 'rabbet') {
     out.push({
@@ -498,13 +504,13 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
         id: newItemId(), stableId: boardStableId('sink-traverse-front', boxKey),
         role: 'sink-traverse-front', materialId: matId,
         length: W - 2 * t, width: tw, thickness: t,
-        xFrom: t, xTo: W - t, yFrom: 0, yTo: t, visible: true,
+        xFrom: t, xTo: W - t, yFrom: 0, yTo: tw, visible: true,
       });
       out.push({
         id: newItemId(), stableId: boardStableId('sink-traverse-back', boxKey),
         role: 'sink-traverse-back', materialId: matId,
         length: W - 2 * t, width: tw, thickness: t,
-        xFrom: t, xTo: W - t, yFrom: 0, yTo: t, visible: true,
+        xFrom: t, xTo: W - t, yFrom: 0, yTo: tw, visible: true,
       });
     } else {
       out.push({
@@ -526,13 +532,13 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
         id: newItemId(), stableId: boardStableId('sink-traverse-front', boxKey),
         role: 'sink-traverse-front', materialId: matId,
         length: W, width: tw, thickness: t,
-        xFrom: 0, xTo: W, yFrom: 0, yTo: t, visible: true,
+        xFrom: 0, xTo: W, yFrom: 0, yTo: tw, visible: true,
       });
       out.push({
         id: newItemId(), stableId: boardStableId('sink-traverse-back', boxKey),
         role: 'sink-traverse-back', materialId: matId,
         length: W, width: tw, thickness: t,
-        xFrom: 0, xTo: W, yFrom: 0, yTo: t, visible: true,
+        xFrom: 0, xTo: W, yFrom: 0, yTo: tw, visible: true,
       });
     } else {
       out.push({

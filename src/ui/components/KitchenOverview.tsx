@@ -323,7 +323,7 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
       h: uh,
       plinthH: inp.plinth * scale,
       sinkOpen: inp.topVariant === 'sink-open',
-      tw: (inp.sinkTraverseWidthCm ?? 8) * scale,
+      tw: (inp.sinkTraverseWidthCm ?? 10) * scale,
     };
     xCursor += uw + GAP_CM * scale;
     return l;
@@ -569,20 +569,18 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
                     </>
                   )}
 
-                  {/* Sink-open indicator */}
+                  {/* Sink-open indicator: front standing board only (back is
+                       hidden behind it in front view). 10cm tall by default. */}
                   {l.sinkOpen && (
                     <>
-                      <line x1={l.x} y1={l.y} x2={l.x + l.w} y2={l.y}
-                        stroke="var(--color-text-secondary)" strokeWidth={1} strokeDasharray="4 4" />
                       <rect x={l.x} y={l.y} width={l.w} height={l.tw}
                         fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth={1} />
-                      <rect x={l.x} y={l.y + l.tw + 2} width={l.w} height={l.tw}
-                        fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth={1} />
 
-                      {/* Sink basin visualization */}
+                      {/* Sink basin visualization — overlay on top of standing
+                           board, aligned with top of body (4a). */}
                       <rect
                         x={l.x + (l.w - 60 * scale) / 2}
-                        y={l.y + l.tw * 2 + 2}
+                        y={l.y}
                         width={60 * scale}
                         height={25 * scale}
                         fill="#b0c4d8"
@@ -593,7 +591,7 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
                       {/* Drain hole */}
                       <circle
                         cx={l.x + l.w / 2}
-                        cy={l.y + l.tw * 2 + 2 + 12 * scale}
+                        cy={l.y + 12 * scale}
                         r={2 * scale}
                         fill="#7a9ab5"
                       />

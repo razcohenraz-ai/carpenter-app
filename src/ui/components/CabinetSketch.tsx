@@ -549,11 +549,12 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         {/* Sink basin overlay (sink-open units only) — drawn between sink
             traverses to show the kitchen sink visually. */}
         {topVariant === 'sink-open' && (() => {
-          const tw = (sinkTraverseWidthCm ?? 8) * geo.scale;
           const basinW = Math.min(60 * geo.scale, geo.cabinet.w - 20);
           const basinH = Math.min(25 * geo.scale, geo.cabinet.h * 0.3);
           const basinX = geo.cabinet.x + (geo.cabinet.w - basinW) / 2;
-          const basinY = geo.cabinet.y + tw * 2 + 2;
+          // Top of basin aligns with top of body — basin is recessed into the
+          // countertop from above, extending downward into the cabinet.
+          const basinY = geo.cabinet.y;
           return (
             <g key="sink-basin">
               <rect
