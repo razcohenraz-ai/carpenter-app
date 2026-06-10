@@ -48,6 +48,21 @@ export interface CabinetInput {
    *  visible in the front view. Only used when `topVariant === 'sink-open'`.
    *  Defaults to 10 cm. */
   sinkTraverseWidthCm?: number;
+  /** Emit door / front panel cuts. Defaults to true. When false, all front
+   *  panels are suppressed — no door CutItems, no hardware — used by appliance
+   *  bays (e.g. dishwasher) whose front face is the appliance itself. */
+  hasFronts?: boolean;
+  /** Include a back panel. Defaults to true. When false, the back board
+   *  is not emitted — used by appliance bays (e.g. dishwasher) that have
+   *  no rear panel. The `backThickness` value is still consumed by the
+   *  carcass-depth formula so the side panels keep their target depth even
+   *  when no back board is produced. */
+  hasBack?: boolean;
+  /** Include a bottom panel. Defaults to true. When false, the bottom
+   *  board is not emitted and the side panels span the full inner height
+   *  (minus the top board). Used by appliance bays (e.g. dishwasher) where
+   *  the appliance sits on the floor and the cabinet has no structural floor. */
+  hasBottom?: boolean;
 }
 
 /** Single source of truth for "which sides of the cabinet have a shell".

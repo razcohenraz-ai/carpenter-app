@@ -292,7 +292,7 @@ const he: Translations = {
     kitchenAddUnit: '+ הוסף גוף',
     kitchenModuleTitle: 'סוג גוף',
     kitchenModuleWidth: 'רוחב (ס"מ)',
-    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור' },
+    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור', dishwasher: 'מדיח' },
     kitchenNoUnits: 'אין גופים עדיין. לחץ על "הוסף גוף" כדי להתחיל.',
     kitchenEditUnit: 'עריכה →',
     productTypes: {
@@ -552,7 +552,7 @@ const en: Translations = {
     kitchenAddUnit: '+ Add Unit',
     kitchenModuleTitle: 'Unit type',
     kitchenModuleWidth: 'Width (cm)',
-    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink' },
+    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink', dishwasher: 'Dishwasher' },
     kitchenNoUnits: 'No units yet. Click "Add Unit" to start.',
     kitchenEditUnit: 'Edit →',
     productTypes: {

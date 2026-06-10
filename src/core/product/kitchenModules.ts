@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -25,13 +25,21 @@ const KITCHEN_DEFAULTS = {
 } satisfies Omit<CabinetInput, 'W'>;
 
 /** Returns a fresh CabinetInput for the given kitchen module type.
- *  `w` overrides the default width (60 cm for drawers/shelves, 80 cm for sink). */
+ *  `w` overrides the default width (60 cm for drawers/shelves, 80 cm for sink,
+ *  64 cm for dishwasher). */
 export function kitchenModuleInput(type: KitchenModuleType, w?: number): CabinetInput {
-  const defaultW = type === 'sink' ? 80 : 60;
+  const defaultW = type === 'sink' ? 80 : type === 'dishwasher' ? 64 : 60;
   const base: CabinetInput = { ...KITCHEN_DEFAULTS, W: w ?? defaultW };
 
   if (type === 'sink') {
     return { ...base, topVariant: 'sink-open', sinkTraverseWidthCm: 10 };
+  }
+  if (type === 'dishwasher') {
+    // Appliance bay: sits directly on the floor (no plinth → breaks the
+    // kitchen plinth run via groupKitchenUnitsForPlinth), no back, no bottom,
+    // no fronts (empty interior + undefined door heights → calcDoors returns 0).
+    // The body fills the full kitchen height (plinth=0 + H=90 → 90 cm body).
+    return { ...base, plinth: 0, hasFronts: false, hasBack: false, hasBottom: false };
   }
   return base;
 }
@@ -72,6 +80,6 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
     };
   }
 
-  // sink: no interior items — the unit is empty to accommodate the basin
+  // sink + dishwasher: no interior items — the unit is empty (basin / appliance).
   return emptyBase;
 }

@@ -426,6 +426,66 @@ describe('buildBoardModel — back panel', () => {
   });
 });
 
+// ── 9b. Bottom panel (appliance bay flag) ───────────────────────────────────
+
+describe('buildBoardModel — bottom panel (hasBottom flag)', () => {
+  // baseArgs uses hasBack=false and the default joint (butt below threshold).
+  // For a wide cabinet (W=120 → rabbet) the bottom is the second-row board;
+  // for a narrow cabinet (W=80 → butt) sides sit between top + bottom.
+
+  it('hasBottom defaults to true → 1 bottom board emitted', () => {
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    expect(byRole(boards, 'bottom')).toHaveLength(1);
+  });
+
+  it('hasBottom=false (butt joint, forced via joint override) → no bottom; sides extend to floor', () => {
+    // Force butt joint so the side-length adjustment is exercised. (Without
+    // the override, resolveJointMethod picks rabbet for W=80/H=100 since
+    // W ≤ 2·H — and in rabbet, sides span full H regardless of hasBottom.)
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBottom: false, joint: 'butt' });
+    expect(byRole(boards, 'bottom')).toHaveLength(0);
+    // Sides: length = H − t (only the top is subtracted, no bottom).
+    const left = byRole(boards, 'side-left')[0]!;
+    const right = byRole(boards, 'side-right')[0]!;
+    expect(left.length).toBeCloseTo(100 - t);
+    expect(right.length).toBeCloseTo(100 - t);
+    // yTo reaches the floor of the box (H), not H − t.
+    expect(left.yTo).toBeCloseTo(100);
+    expect(right.yTo).toBeCloseTo(100);
+  });
+
+  it('hasBottom=true (butt joint, baseline) → sides have BOTH top and bottom subtracted', () => {
+    // Regression: when hasBottom=true (the default) and the joint is butt,
+    // sides keep the old length H − 2·t (slot between top + bottom).
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, joint: 'butt' });
+    const left = byRole(boards, 'side-left')[0]!;
+    expect(left.length).toBeCloseTo(100 - 2 * t);
+    expect(left.yTo).toBeCloseTo(100 - t);
+  });
+
+  it('hasBottom=false (rabbet joint, W=80) → no bottom board; sides still span full H', () => {
+    // Rabbet's sides already span the full H regardless of bottom presence,
+    // so the only effect of hasBottom=false is removing the bottom board.
+    const b = box({ W: 80, H: 100 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBottom: false });
+    expect(byRole(boards, 'bottom')).toHaveLength(0);
+    const left = byRole(boards, 'side-left')[0]!;
+    expect(left.length).toBeCloseTo(100);
+    expect(left.yTo).toBeCloseTo(100);
+  });
+
+  it('hasBack=false + hasBottom=false → exactly 3 boards (2 sides + top)', () => {
+    // The dishwasher case: empty appliance bay, only the gables + top remain.
+    const b = box({ W: 64, H: 90 });
+    const boards = buildBoardModel({ ...baseArgs, box: b, hasBack: false, hasBottom: false });
+    expect(boards).toHaveLength(3);
+    expect(boards.map(x => x.role).sort()).toEqual(['side-left', 'side-right', 'top']);
+  });
+});
+
 // ── 10. Plinth board model (cabinet-level) ──────────────────────────────────
 
 describe('buildPlinthBoardModel — front + back', () => {

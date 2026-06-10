@@ -82,9 +82,16 @@ interface Props {
    *  horizontal line is drawn at the top of the plinth for the body/plinth
    *  boundary. Used by KitchenOverview. */
   unifiedPlinth?: boolean;
+  /** Forwarded to `buildBoardModel`. Defaults to true. False = no back
+   *  board (appliance bays like dishwasher). The visual outline is unaffected;
+   *  this only changes which boards land in the cut model. */
+  hasBack?: boolean;
+  /** Forwarded to `buildBoardModel`. Defaults to true. False = no bottom
+   *  board; sides extend to the floor of the box. */
+  hasBottom?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -180,7 +187,8 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         items,
         hasPartition,
         ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
-        hasBack: true,
+        hasBack: hasBack ?? true,
+        hasBottom: hasBottom ?? true,
         envelopeDepth: fullD,
         backThicknessCm,
         joint: cabinetJoint,

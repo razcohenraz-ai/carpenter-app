@@ -207,6 +207,11 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // the form but must survive every calculate() call.
       ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
       ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
+      // Preserve appliance-bay flags (kitchen dishwasher module) — same
+      // rationale: no form field, but every calculate() must keep them.
+      ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
+      ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
+      ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
     });
     // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
@@ -326,6 +331,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // Preserve sink-open variant — see comment in the first calculate() call.
       ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
       ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
+      // Preserve appliance-bay flags — same rationale.
+      ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
+      ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
+      ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
     });
   }
 
@@ -648,6 +657,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             derivedH={result?.derivedBoxDims.get(editingBoxSlotId)?.H ?? editingBox.H}
             derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
             {...(hideMainDimensions ? { hideRodOption: true } : {})}
+            {...(initialInput?.hasFronts === false ? { hideInteriorControls: true } : {})}
             {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
             {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
           />
@@ -1043,6 +1053,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})}
               {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
               {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
+              {...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {})}
+              {...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {})}
             />
           ) : (
             <CabinetFrontsSketch

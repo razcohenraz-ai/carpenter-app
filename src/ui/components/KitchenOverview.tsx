@@ -80,6 +80,9 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   viewBoxH: number;  // cm — effH
 }): React.JSX.Element | null {
   const inp = unit.cabinet.input;
+  // Appliance bays (dishwasher etc.) have no front panels — skip entirely.
+  if ((inp.hasFronts ?? true) === false) return null;
+
   const { W: effW, H: effH } = effectiveDims(unit);
   const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
   const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
@@ -915,6 +918,8 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
                 boxDimensionOverrides={boxDimensionOverrides}
                 {...(inp.topVariant ? { topVariant: inp.topVariant } : {})}
                 {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
+                {...(inp.hasBack !== undefined ? { hasBack: inp.hasBack } : {})}
+                {...(inp.hasBottom !== undefined ? { hasBottom: inp.hasBottom } : {})}
                 customMaterials={customMaterials}
                 {...((() => {
                   const splits = unitPlinthSplits.get(unit.id);

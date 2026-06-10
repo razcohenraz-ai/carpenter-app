@@ -410,6 +410,11 @@ export interface BuildBoardModelArgs {
   cellItems?: [InteriorItem[], InteriorItem[]];
   /** Include a back panel (visible:false). Defaults to true. */
   hasBack?: boolean;
+  /** Include a bottom panel. Defaults to true. When false, no bottom board
+   *  is emitted and the side panels span from the top board down to the
+   *  floor of the box (so the body sits directly on the ground — used by
+   *  appliance bays like a dishwasher). */
+  hasBottom?: boolean;
   /** Outer envelope depth in cm — used for envelope-* board `width`. The
    *  envelope spans the full cabinet depth, while box.D is the (smaller)
    *  carcass depth (= cabinetD − backThickness − HINGE_GAP − frontThickness).
@@ -447,6 +452,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     hasEnvelopeLeft, hasEnvelopeRight, hasEnvelopeTop,
     items, hasPartition, cellItems,
     hasBack = true,
+    hasBottom = true,
     envelopeDepth,
     backThicknessCm = BACK_THICKNESS_CM,
     cabinetTotalH,
@@ -487,6 +493,8 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   const tw = sinkTraverseWidthCm;
 
   if (joint === 'rabbet') {
+    // Rabbet style: sides span the full H regardless of top/bottom presence —
+    // their length is independent of whether a bottom board is emitted.
     out.push({
       id: newItemId(), stableId: boardStableId('side-left', boxKey),
       role: 'side-left', materialId: matId,
@@ -520,12 +528,14 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
         xFrom: t, xTo: W - t, yFrom: 0, yTo: t, visible: true,
       });
     }
-    out.push({
-      id: newItemId(), stableId: boardStableId('bottom', boxKey),
-      role: 'bottom', materialId: matId,
-      length: W - 2 * t, width: D, thickness: t,
-      xFrom: t, xTo: W - t, yFrom: H - t, yTo: H, visible: true,
-    });
+    if (hasBottom) {
+      out.push({
+        id: newItemId(), stableId: boardStableId('bottom', boxKey),
+        role: 'bottom', materialId: matId,
+        length: W - 2 * t, width: D, thickness: t,
+        xFrom: t, xTo: W - t, yFrom: H - t, yTo: H, visible: true,
+      });
+    }
   } else {
     if (sinkOpen) {
       out.push({
@@ -548,23 +558,31 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
         xFrom: 0, xTo: W, yFrom: 0, yTo: t, visible: true,
       });
     }
-    out.push({
-      id: newItemId(), stableId: boardStableId('bottom', boxKey),
-      role: 'bottom', materialId: matId,
-      length: W, width: D, thickness: t,
-      xFrom: 0, xTo: W, yFrom: H - t, yTo: H, visible: true,
-    });
+    if (hasBottom) {
+      out.push({
+        id: newItemId(), stableId: boardStableId('bottom', boxKey),
+        role: 'bottom', materialId: matId,
+        length: W, width: D, thickness: t,
+        xFrom: 0, xTo: W, yFrom: H - t, yTo: H, visible: true,
+      });
+    }
+    // Side length: in the default (butt) joint the sides sit BETWEEN the top
+    // and the bottom — so their length is H minus the top thickness minus the
+    // bottom thickness. When no bottom is emitted (appliance bay), the sides
+    // extend down to the floor: length = H − t (only the top is subtracted).
+    const sidesLen = H - t - (hasBottom ? t : 0);
+    const sidesYTo = hasBottom ? H - t : H;
     out.push({
       id: newItemId(), stableId: boardStableId('side-left', boxKey),
       role: 'side-left', materialId: matId,
-      length: H - 2 * t, width: D, thickness: t,
-      xFrom: 0, xTo: t, yFrom: t, yTo: H - t, visible: true,
+      length: sidesLen, width: D, thickness: t,
+      xFrom: 0, xTo: t, yFrom: t, yTo: sidesYTo, visible: true,
     });
     out.push({
       id: newItemId(), stableId: boardStableId('side-right', boxKey),
       role: 'side-right', materialId: matId,
-      length: H - 2 * t, width: D, thickness: t,
-      xFrom: W - t, xTo: W, yFrom: t, yTo: H - t, visible: true,
+      length: sidesLen, width: D, thickness: t,
+      xFrom: W - t, xTo: W, yFrom: t, yTo: sidesYTo, visible: true,
     });
   }
 

@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### נוסף — מודול "מדיח" לגופי המטבח
+
+מודול רביעי לבחירה בכפתורי "הוסף גוף" במטבח (ליד "מגירות"/"מדפים"/"כיור"). מדמה תא לאפליאנס (מדיח כלים): גוף ריק עם 2 דפנות + עליון בלבד — **בלי חזית, בלי גב, בלי תחתון, בלי צוקל**. יושב ישירות על הרצפה וקוטע את צוקל המטבח לקבוצות נפרדות מימינו ומשמאלו.
+
+- חדש ב-`src/core/product/kitchenModules.ts`: ערך `'dishwasher'` ב-`KitchenModuleType`, ענף ב-`kitchenModuleInput` שמעמיד W=64 (ניתן ל-override), plinth=0, hasBack=false, hasBottom=false, ושאר השדות יורשים מ-`KITCHEN_DEFAULTS` (H=90, D=60, חומרים, doorGap). ענף ב-`kitchenModuleState` שמחזיר `emptyBase` (אין מגירות/מדפים פנימיים).
+- שדות חדשים אופציונליים ב-`CabinetInput` (`src/types/cabinet.ts`): `hasFronts?: boolean` (ברירת מחדל `true`; כש-`false` — אין חזיתות: calcCuts לא מוציא `group:'door'`, כל הדלתות מקבלות `hasDoor:false`, ו-`UnitFrontPanelsStandalone` מחזיר `null`), `hasBack?: boolean` ו-`hasBottom?: boolean` (ברירת מחדל `true` בשניהם — אינוונטרי קיים לא משתנה).
+- `buildBoardModel` (`src/core/boards/boardModel.ts`) קיבל פרמטר חדש `hasBottom`. כש-`false`: לוח התחתון לא נפלט, והדפנות ב-butt joint נמשכות עד הרצפה (`length = H − t` במקום `H − 2·t`, `yTo = H` במקום `H − t`). ב-rabbet joint הדפנות תמיד באורך מלא — ההשפעה היחידה היא היעדר התחתון. הקיים `hasBack` כבר תמך בעקיפת לוח הגב.
+- חיווט הדגלים: `useCabinet`, `cabinetCompute` ו-`CabinetSketch` קוראים עכשיו את `input.hasBack` / `input.hasBottom` ומעבירים ל-`buildBoardModel`. `CabinetForm` שומר את הדגלים על-פני כל `calculate()`. `KitchenOverview` ו-`CabinetForm` מעבירים אותם לסקיצה המוטמעת.
+- הקיבוץ של הצוקל (`groupKitchenUnitsForPlinth`) כבר תומך בקטיעת קבוצות דרך `plinth === 0` שמחזיר `null` מ-`plinthKeyOf` — לא נדרש שינוי לוגי. נוספו בדיקות מפורשות לתרחיש המדיח (`kitchenPlinth.test.ts`).
+- כפתור "מדיח" ב-`KitchenEditor.tsx`: נוסף ל-`KITCHEN_MODULES` ול-`KITCHEN_DEFAULT_W`. תרגום: עברית "מדיח", אנגלית "Dishwasher".
+- עומק הדפנות: input.D=60 + הנוסחה הקיימת `carcassD = D − backThickness − HINGE_GAP − tFront = 57.3` נותנים אורך דופן זהה לעומק הגזרון של השכנים — הדפנות נסוגות ~2.1 ס"מ מקו החזיתות של השכנים, כפי שהוחלט.
+
+תוצאה ברשימת חיתוכים למדיח 64×90 עם materials ברירת המחדל: 3 לוחות בלבד — 2 דפנות (90 × 57.3) + עליון (60.4 × 57.3). ללא גב, ללא תחתון, ללא חזיתות, ללא צוקל. הצוקל של המטבח רץ משמאל ומימין למדיח כשתי קבוצות נפרדות.
+
 ### תוקן — חיווט `equalizeExternalDrawersIfOverflow` ל-UI של הוספת מגירה
 
 הפונקציה הוגדרה ב-`core/interior/interiorUtils.ts` וגם תועדה כפעילה ב-CARPENTRY_RULES/PROJECT_CONTEXT/ARCHITECTURE — אבל מעולם **לא נקראה** מ-`BoxInteriorEditor.tsx`. תוצאה: הוספת מגירה חיצונית רביעית במודול מגירות מטבח (default 32/32/16 = 80 ס"מ ב-body שגובהו 80) הציבה את המגירה ב-`stackTop` וחרגה מגבולות הגוף. **תוקן:**

@@ -5,8 +5,8 @@ import { useTranslation } from '../hooks/useTranslation';
 import { KitchenOverview } from './KitchenOverview';
 import styles from './KitchenEditor.module.css';
 
-const KITCHEN_MODULES: KitchenModuleType[] = ['drawers', 'shelves', 'sink'];
-const KITCHEN_DEFAULT_W: Record<KitchenModuleType, number> = { drawers: 60, shelves: 60, sink: 80 };
+const KITCHEN_MODULES: KitchenModuleType[] = ['drawers', 'shelves', 'sink', 'dishwasher'];
+const KITCHEN_DEFAULT_W: Record<KitchenModuleType, number> = { drawers: 60, shelves: 60, sink: 80, dishwasher: 64 };
 
 interface Props {
   units: KitchenUnit[];

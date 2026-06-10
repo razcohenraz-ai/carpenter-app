@@ -831,7 +831,12 @@ export function useCabinet(settings?: {
     // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
     // plinth / back / shelves all come from the BoardModel loop below.
     // The drawer-box also sits inside the carcass, so it uses carcassD too.
-    const cuts  = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging);
+    // When hasFronts=false (appliance bays), door cuts are filtered out.
+    const skipFronts = (input.hasFronts ?? true) === false;
+    const rawFrontCuts = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging);
+    const cuts  = skipFronts
+      ? rawFrontCuts.filter(c => c.group !== 'door' && c.group !== 'front')
+      : rawFrontCuts;
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows, doorGapMm / 10);
 
     // ── Stable maps from previous state ────────────────────────────────────
@@ -1009,7 +1014,7 @@ export function useCabinet(settings?: {
           newDoors[doorId] = {
             id: doorId, boxId: box.id, frontIndex: fi,
             height: panelH, width: frontW,
-            hingeSide, hingeCount: 'auto', hinges, hasDoor: true, coversSkirt, gapMm: doorGapMm,
+            hingeSide, hingeCount: 'auto', hinges, hasDoor: !skipFronts, coversSkirt, gapMm: doorGapMm,
           };
         } else {
           const recomputed = recomputeDoorHinges(
@@ -1128,7 +1133,8 @@ export function useCabinet(settings?: {
         ...(hasPartitionBox && cellItems
           ? { cellItems: [cellItems[0] ?? [], cellItems[1] ?? []] as [InteriorItem[], InteriorItem[]] }
           : {}),
-        hasBack: true,
+        hasBack: input.hasBack ?? true,
+        hasBottom: input.hasBottom ?? true,
         envelopeDepth: D,
         backThicknessCm: backThickness,
         // User's H input is the full external cabinet height (plinth + bodies

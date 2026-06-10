@@ -164,12 +164,19 @@ export function computeUnitCutsAndHardware(
     boardOverrides,
   };
 
-  // Door + drawer-box parts
-  const cuts = calcCuts(
+  // Door + drawer-box parts.
+  // When hasFronts=false (appliance bays), door CutItems are filtered out so
+  // they don't appear in the cut list. Drawer-box parts are always kept because
+  // they represent internal box construction, not visible fronts.
+  const skipFronts = (input.hasFronts ?? true) === false;
+  const rawFrontCuts = calcCuts(
     'cabinet', innerW, H, carcassD, 0, 0, true,
     plinth, doorCoversPlinth, lowerDoorH,
     false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging,
   );
+  const cuts = skipFronts
+    ? rawFrontCuts.filter(c => c.group !== 'door' && c.group !== 'front')
+    : rawFrontCuts;
 
   // ── Build interior/cells/partitions/doors maps from saved state ─────────────
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
@@ -269,7 +276,7 @@ export function computeUnitCutsAndHardware(
         newDoors[doorId] = {
           id: doorId, boxId: box.id, frontIndex: fi,
           height: panelH, width: frontW,
-          hingeSide, hingeCount: 'auto', hinges, hasDoor: true,
+          hingeSide, hingeCount: 'auto', hinges, hasDoor: !skipFronts,
           coversSkirt, gapMm: doorGapMm,
         };
       }
@@ -341,7 +348,8 @@ export function computeUnitCutsAndHardware(
       ...(hasPartitionBox && cellItems
         ? { cellItems: [cellItems[0] ?? [], cellItems[1] ?? []] as [InteriorItem[], InteriorItem[]] }
         : {}),
-      hasBack: true,
+      hasBack: input.hasBack ?? true,
+      hasBottom: input.hasBottom ?? true,
       envelopeDepth: D,
       backThicknessCm: backThickness,
       cabinetTotalH: H,
