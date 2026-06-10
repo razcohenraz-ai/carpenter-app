@@ -140,13 +140,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
   const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
 
-  // Plinth split lines — drawn ONLY between adjacent plinth units when the
-  // cabinet is wide enough that decomposeBoxes splits the plinth into
-  // multiple boxes (MAX_PLINTH_W=240). The plinth itself renders as a single
-  // full-width `geo.plinthRect`; these thin dashed lines mark the joints.
+  // Plinth split lines — drawn ONLY between adjacent plinth boxes in
+  // STANDALONE mode (single cabinet, unifiedPlinth=false). In kitchen mode
+  // (unifiedPlinth=true) the unit's own box-decomposition positions are
+  // meaningless for the kitchen plinth: the actual gable positions are
+  // determined by buildKitchenPlinthBoxes(group.totalW) and are NOT at the
+  // per-unit inner-box boundaries. Suppressing these lines in kitchen mode
+  // prevents dashed lines that appear "by body size" (one per box in the
+  // unit) but don't correspond to any real physical plinth joint.
   const plinthSegments = geo.boxes.filter(b => b.level === 'plinth');
   const plinthSplitLines: Array<{ x: number; y1: number; y2: number }> = [];
-  if (plinthSegments.length > 1 && geo.plinthRect) {
+  if (!unifiedPlinth && plinthSegments.length > 1 && geo.plinthRect) {
     let cumW = 0;
     for (let i = 0; i < plinthSegments.length - 1; i++) {
       cumW += plinthSegments[i]!.W;
@@ -155,8 +159,9 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
     }
   }
   // Kitchen-level extra splits: piece boundaries (in cm from the cabinet's
-  // left edge) coming from KitchenOverview's group aggregation. Drawn with
-  // the same style as the intra-cabinet split lines.
+  // left edge) coming from KitchenOverview's group aggregation. These ARE
+  // correct physical cut positions (where ≤240cm pieces are sawn) and are
+  // shown in both standalone and unified modes.
   if (extraPlinthSplits && extraPlinthSplits.length > 0 && geo.plinthRect) {
     for (const offsetCm of extraPlinthSplits) {
       const x = geo.plinthRect.x + offsetCm * geo.scale;
