@@ -70,9 +70,21 @@ interface Props {
    *  when bodyMaterialId/frontMaterialId reference a custom material (not in
    *  the catalog). Falls back to catalog-only if omitted. */
   customMaterials?: import('../../types/materials').CustomMaterial[];
+  /** Extra plinth split markers in cm, measured from the cabinet's LEFT edge.
+   *  Used by KitchenOverview to overlay the kitchen-level plinth split lines
+   *  (where the unified plinth gets sawn into ≤240cm pieces) on top of each
+   *  embedded unit sketch. Empty / undefined = no extra splits. */
+  extraPlinthSplits?: number[];
+  /** When true, render the plinth without side borders and slightly extend
+   *  the rect on both sides so it covers the cabinet rect's vertical strokes
+   *  in the plinth area. Adjacent units in the kitchen overlap at this 1px
+   *  margin, making the plinth look like one continuous strip. A separate
+   *  horizontal line is drawn at the top of the plinth for the body/plinth
+   *  boundary. Used by KitchenOverview. */
+  unifiedPlinth?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -132,6 +144,15 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
     for (let i = 0; i < plinthSegments.length - 1; i++) {
       cumW += plinthSegments[i]!.W;
       const x = geo.plinthRect.x + cumW * geo.scale;
+      plinthSplitLines.push({ x, y1: geo.plinthRect.y, y2: geo.plinthRect.y + geo.plinthRect.h });
+    }
+  }
+  // Kitchen-level extra splits: piece boundaries (in cm from the cabinet's
+  // left edge) coming from KitchenOverview's group aggregation. Drawn with
+  // the same style as the intra-cabinet split lines.
+  if (extraPlinthSplits && extraPlinthSplits.length > 0 && geo.plinthRect) {
+    for (const offsetCm of extraPlinthSplits) {
+      const x = geo.plinthRect.x + offsetCm * geo.scale;
       plinthSplitLines.push({ x, y1: geo.plinthRect.y, y2: geo.plinthRect.y + geo.plinthRect.h });
     }
   }
@@ -201,21 +222,36 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         {/* Plinth fill — one continuous rectangle across the full cabinet
             width. Per-body `plinth-front` boards are intentionally filtered
             out from CabinetCutSketch below (they would visually slice the
-            plinth into segments with gaps between body columns). */}
+            plinth into segments with gaps between body columns). In unified
+            mode (kitchen overview), the rect is widened by 1px on each side
+            and stroked with the fill color so it covers the cabinet rect's
+            vertical strokes — adjacent units overlap visually, producing one
+            continuous plinth strip. */}
         {geo.plinthRect && (
-          <rect
-            x={geo.plinthRect.x}
-            y={geo.plinthRect.y}
-            width={geo.plinthRect.w}
-            height={geo.plinthRect.h}
-            className={`${styles.plinthRect}${onPlinthClick ? ` ${styles.plinthClickable}` : ''}`}
-            {...(onPlinthClick ? {
-              onClick: (e: React.MouseEvent) => {
-                e.stopPropagation();
-                onPlinthClick();
-              },
-            } : {})}
-          />
+          <>
+            <rect
+              x={unifiedPlinth ? geo.plinthRect.x - 1 : geo.plinthRect.x}
+              y={geo.plinthRect.y}
+              width={unifiedPlinth ? geo.plinthRect.w + 2 : geo.plinthRect.w}
+              height={geo.plinthRect.h}
+              className={`${unifiedPlinth ? styles.plinthRectFill : styles.plinthRect}${onPlinthClick ? ` ${styles.plinthClickable}` : ''}`}
+              {...(onPlinthClick ? {
+                onClick: (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onPlinthClick();
+                },
+              } : {})}
+            />
+            {unifiedPlinth && (
+              <line
+                x1={geo.plinthRect.x}
+                y1={geo.plinthRect.y}
+                x2={geo.plinthRect.x + geo.plinthRect.w}
+                y2={geo.plinthRect.y}
+                className={styles.plinthTopLine}
+              />
+            )}
+          </>
         )}
 
         {/* Plinth unit splits — only when the plinth itself decomposes into

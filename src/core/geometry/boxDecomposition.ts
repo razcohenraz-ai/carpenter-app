@@ -4,13 +4,13 @@ import { roundInternal } from "../utils/round";
 // ── קבועים ───────────────────────────────────────────────────────────────────
 
 /** רוחב מקסימלי לקופסה בודדת, ס"מ */
-const MAX_BOX_W = 100;
+export const MAX_BOX_W = 100;
 
 /** גובה שמעליו מפצלים לקופסה עליונה ותחתונה (במצב auto), ס"מ */
 const MAX_BOX_H = 200;
 
 /** רוחב מקסימלי ליחידת צוקל בודדת, ס"מ */
-const MAX_PLINTH_W = 240;
+export const MAX_PLINTH_W = 240;
 
 /** יחס ברירת מחדל לגובה הקופסה התחתונה בפיצול גובה */
 const DEFAULT_HEIGHT_SPLIT_RATIO = 0.45;
@@ -20,7 +20,7 @@ const MIN_BODY_HEIGHT = 60;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface BoxProto {
+export interface BoxProto {
   W: number;
   H: number;
   D: number;
@@ -31,7 +31,7 @@ interface BoxProto {
   internalShelves?: number[];
 }
 
-function splitWidth(
+export function splitWidth(
   W: number,
   H: number,
   D: number,

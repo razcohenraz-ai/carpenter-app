@@ -111,6 +111,11 @@ interface CabinetFormProps {
    *  checkboxes for left and right side. Used in kitchen units where a cabinet
    *  might sit flush against a wall on one side only. */
   splitShellSides?: boolean;
+  /** When true, suppress the plinth UI in the form: the "גובה צוקל" input,
+   *  the "דלת מכסה צוקל" checkbox, and the plinth click-to-edit on the sketch.
+   *  Used for kitchen units — plinth is edited at the kitchen level
+   *  (KitchenOverview), not per-unit. */
+  hidePlinthEditor?: boolean;
 }
 
 function inputToFormState(
@@ -140,7 +145,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides, hidePlinthEditor }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -728,7 +733,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             )}
 
             {/* שורה 2: צוקל, דלתות לגובה, חומר */}
-            {numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height')}
+            {!hidePlinthEditor && numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height')}
 
             {!hideDoorsPerColumn && (
               <div className={styles.field}>
@@ -902,7 +907,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   )}
                 </div>
               )}
-              {checkbox(
+              {!hidePlinthEditor && checkbox(
                 'input-covers-plinth',
                 form.doorCoversPlinth,
                 t.form.doorCoversPlinth,
@@ -1031,7 +1036,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               numFrontsPerBox={numFrontsPerBox}
               bodyMaterialId={form.bodyMaterialId}
               frontMaterialId={form.frontMaterialId}
-              {...(result && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
+              {...(!hidePlinthEditor && result && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
               boardOverrides={boardOverridesByStableId}
               boxDimensionOverrides={boxDimensionOverrides}

@@ -131,6 +131,7 @@ export default function App(): React.JSX.Element {
             hideDoorsPerColumn
             hideEnvelopeTop
             splitShellSides
+            hidePlinthEditor
           />
         )}
 
@@ -142,6 +143,7 @@ export default function App(): React.JSX.Element {
             onRemoveUnit={unitId => removeKitchenUnit(activeProduct.id, unitId)}
             onOpenUnit={unitId => setActiveKitchenUnitId(unitId)}
             onReorderUnit={(unitId, dir) => reorderKitchenUnit(activeProduct.id, unitId, dir)}
+            onUpdateUnit={(unitId, cabinet) => updateKitchenUnit(activeProduct.id, unitId, cabinet)}
             settings={settings}
           />
         )}

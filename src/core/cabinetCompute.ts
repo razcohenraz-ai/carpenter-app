@@ -112,6 +112,11 @@ export function computeUnitCutsAndHardware(
   input: CabinetInput,
   savedState: SavedCabinetState,
   customMaterials: CustomMaterial[] = [],
+  /** When true, skip emitting plinth boards (front/back/cladding/gables).
+   *  Used by KitchenOverview to aggregate plinths at the kitchen level —
+   *  adjacent units sharing plinth attributes get a single unified plinth
+   *  instead of one per unit. */
+  options?: { skipPlinth?: boolean },
 ): UnitComputeResult {
   const {
     W, H, D, backThickness, hasEnvelopeTop,
@@ -349,20 +354,23 @@ export function computeUnitCutsAndHardware(
     ));
   }
 
-  // Plinth boards
-  const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
-  const plinthGableOverrides = new Map(Object.entries(savedState.plinthGableOverrides ?? {}));
-  const plinthBoards = buildPlinthBoardModel({
-    cabinetW: W,
-    cabinetD: carcassD,
-    plinthHeight: plinth,
-    bodyMaterial,
-    frontMaterial,
-    boxes: bottomRowBoxes,
-    ...(plinthGableOverrides.size > 0 ? { gableOverrides: plinthGableOverrides } : {}),
-    ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
-  });
-  boardCuts.push(...boardsToCutItems(plinthBoards, '', boardOverrides, edgingCtx));
+  // Plinth boards — skipped when the caller (KitchenOverview) aggregates
+  // plinths at the kitchen level across adjacent units.
+  if (!options?.skipPlinth) {
+    const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    const plinthGableOverrides = new Map(Object.entries(savedState.plinthGableOverrides ?? {}));
+    const plinthBoards = buildPlinthBoardModel({
+      cabinetW: W,
+      cabinetD: carcassD,
+      plinthHeight: plinth,
+      bodyMaterial,
+      frontMaterial,
+      boxes: bottomRowBoxes,
+      ...(plinthGableOverrides.size > 0 ? { gableOverrides: plinthGableOverrides } : {}),
+      ...(plinthRecess > 0 ? { recessCm: plinthRecess } : {}),
+    });
+    boardCuts.push(...boardsToCutItems(plinthBoards, '', boardOverrides, edgingCtx));
+  }
 
   // ── Enrich cuts with materialId ────────────────────────────────────────────
   function materialForGroup(group: CutItem['group']): MaterialId | undefined {

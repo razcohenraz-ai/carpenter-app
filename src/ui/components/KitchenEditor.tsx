@@ -14,6 +14,9 @@ interface Props {
   onRemoveUnit: (unitId: string) => void;
   onOpenUnit: (unitId: string) => void;
   onReorderUnit: (unitId: string, direction: 'left' | 'right') => void;
+  /** Called when KitchenOverview's kitchen-level editors (plinth, etc.)
+   *  commit a change that must propagate to a unit's cabinet. */
+  onUpdateUnit?: (unitId: string, cabinet: import('../../types').Cabinet) => void;
   settings?: {
     customMaterials?: import('../../types/materials').CustomMaterial[];
     bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
@@ -24,6 +27,7 @@ interface Props {
 export function KitchenEditor({
   units,
   onAddUnit, onRemoveUnit, onOpenUnit, onReorderUnit,
+  onUpdateUnit,
   settings,
 }: Props) {
   const { t } = useTranslation();
@@ -60,6 +64,7 @@ export function KitchenEditor({
         selectedUnitId={selectedUnitId}
         onSelect={id => { setSelectedUnitId(id); setShowAddForm(false); }}
         onOpenUnit={onOpenUnit}
+        {...(onUpdateUnit ? { onUpdateUnit } : {})}
         settings={settings}
       />
 

@@ -48,9 +48,28 @@
   stroke-width: 1;
 }
 
+/* Kitchen view: fill only, stroke matches the fill so adjacent units' rects
+   visually overlap into one continuous strip and cover the cabinet rect's
+   vertical strokes underneath. */
+.plinthRectFill {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-surface-raised);
+  stroke-width: 1;
+}
+
+/* Kitchen view: the body/plinth boundary line, drawn once per unit at the
+   same y so the segments meet end-to-end across all kitchen units. */
+.plinthTopLine {
+  stroke: var(--color-primary);
+  stroke-width: 1;
+}
+
 .plinthClickable {
   cursor: pointer;
   transition: fill 0.12s ease;
+  /* Override the parent sketchHolder's `pointer-events: none` so the
+     plinth rect itself can catch clicks (kitchen overview). */
+  pointer-events: auto;
 }
 
 .plinthClickable:hover {

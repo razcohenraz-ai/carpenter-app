@@ -9,6 +9,7 @@ import { decomposeBoxes } from '../../core/geometry/boxDecomposition';
 import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
 import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
 import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
+import { groupKitchenUnitsForPlinth, buildKitchenPlinthCuts, plinthPieceWidths, buildKitchenPlinthBoxes } from '../../core/product/kitchenPlinth';
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import type { BoxLevel } from '../../types/geometry';
@@ -17,6 +18,8 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import CabinetSketch from './CabinetSketch';
 import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
+import PlinthEditor from './PlinthEditor';
+import type { Box } from '../../types/geometry';
 import styles from './KitchenOverview.module.css';
 
 interface AppSettingsSlice {
@@ -30,6 +33,10 @@ interface Props {
   selectedUnitId: string | null;
   onSelect: (id: string) => void;
   onOpenUnit: (id: string) => void;
+  /** When provided, the kitchen plinth becomes editable: clicking the plinth
+   *  bar opens PlinthEditor for the corresponding plinth group, and changes
+   *  propagate to every unit in that group through this callback. */
+  onUpdateUnit?: (unitId: string, cabinet: import('../../types').Cabinet) => void;
   settings?: AppSettingsSlice | undefined;
 }
 
@@ -283,11 +290,51 @@ function FrontPanels({ unit, layout, scale }: {
   );
 }
 
-export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, settings }: Props) {
+export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, onUpdateUnit, settings }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableW, setAvailableW] = useState(800);
   const [viewMode, setViewMode] = useState<ViewMode>('bodies');
+  // Index into `groupKitchenUnitsForPlinth(units)` of the group currently
+  // being edited via PlinthEditor; null = no editor open.
+  const [editingPlinthGroupIdx, setEditingPlinthGroupIdx] = useState<number | null>(null);
+
+  // Precompute plinth groups once per units array — used for click-to-edit
+  // routing and for rendering PlinthEditor when active.
+  const plinthGroups = useMemo(() => groupKitchenUnitsForPlinth(units), [units]);
+
+  // unit.id → group index in plinthGroups (or undefined if unit has no plinth).
+  const unitIdToGroupIdx = useMemo(() => {
+    const m = new Map<string, number>();
+    plinthGroups.forEach((g, gi) => g.units.forEach(u => m.set(u.id, gi)));
+    return m;
+  }, [plinthGroups]);
+
+  // Open the plinth editor for the group containing this unit. No-op if the
+  // parent didn't wire `onUpdateUnit` (no way to commit changes).
+  function openPlinthEditorForUnit(unitId: string): void {
+    if (!onUpdateUnit) return;
+    const gi = unitIdToGroupIdx.get(unitId);
+    if (gi === undefined) return;
+    setEditingPlinthGroupIdx(gi);
+  }
+
+  // Apply a kitchen-level plinth attribute change to every unit in the active
+  // group. Each unit's CabinetInput gets a patched plinth field; state is
+  // preserved as-is.
+  function patchActiveGroupPlinth(patch: { plinth?: number; plinthRecess?: number }): void {
+    if (!onUpdateUnit || editingPlinthGroupIdx === null) return;
+    const group = plinthGroups[editingPlinthGroupIdx];
+    if (!group) return;
+    for (const u of group.units) {
+      const input = {
+        ...u.cabinet.input,
+        ...(patch.plinth !== undefined ? { plinth: patch.plinth } : {}),
+        ...(patch.plinthRecess !== undefined ? { plinthRecess: patch.plinthRecess } : {}),
+      };
+      onUpdateUnit(u.id, { input, state: u.cabinet.state });
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -330,6 +377,42 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
   });
 
   const svgW = xCursor > 0 ? xCursor - GAP_CM * scale : 10;
+
+  // ── Plinth editor (kitchen-level) ─────────────────────────────────────────
+  // When a plinth group is selected for editing, render the full-screen
+  // PlinthEditor instead of the overview. Changes propagate to every unit
+  // in the active group via `patchActiveGroupPlinth`.
+  if (editingPlinthGroupIdx !== null && plinthGroups[editingPlinthGroupIdx]) {
+    const group = plinthGroups[editingPlinthGroupIdx]!;
+    const customMaterials = settings?.customMaterials ?? [];
+    const bodyMaterial = getMaterialWithCustom(group.key.bodyMaterialId, customMaterials);
+    const frontMaterial = getMaterialWithCustom(group.key.frontMaterialId, customMaterials);
+    const tFront = frontMaterial.thickness / 10;
+    const carcassD = computeCarcassDepth(group.key.D, group.key.backThickness, HINGE_GAP_CM, tFront);
+    // Same cabinet-style gable distribution used by the cut list: split the
+    // group's total width by MAX_BOX_W (100 cm). For totalW ≤ 100 the result
+    // is a single 'single' box (edges + maybe a mid-body if > 80); for wider
+    // groups it's N boxes of ≤ 100 each (edges + joints + mid-bodies).
+    const syntheticBoxes: Box[] = buildKitchenPlinthBoxes(group.totalW, group.key.plinthH, group.key.D);
+    return (
+      <PlinthEditor
+        cabinetW={group.totalW}
+        cabinetD={carcassD}
+        plinthHeight={group.key.plinthH}
+        plinthRecess={group.key.plinthRecess}
+        boxes={syntheticBoxes}
+        bodyMaterial={bodyMaterial}
+        frontMaterial={frontMaterial}
+        gableOverrides={new Map()}
+        boardOverrides={new Map()}
+        onSetGableOverride={() => {}}
+        onResetGables={() => {}}
+        onPlinthHeightChange={h => patchActiveGroupPlinth({ plinth: h })}
+        onPlinthRecessChange={r => patchActiveGroupPlinth({ plinthRecess: r })}
+        onBack={() => setEditingPlinthGroupIdx(null)}
+      />
+    );
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -396,7 +479,8 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, s
       {(viewMode === 'bodies' || viewMode === 'fronts') && units.length > 0 && (
         <UnitsView units={units} selectedUnitId={selectedUnitId}
           onSelect={onSelect} onOpenUnit={onOpenUnit} settings={settings}
-          viewMode={viewMode} />
+          viewMode={viewMode}
+          {...(onUpdateUnit ? { onPlinthClickForUnit: openPlinthEditorForUnit } : {})} />
       )}
 
       {/* Empty state */}
@@ -651,11 +735,15 @@ interface UnitsViewProps {
   selectedUnitId: string | null;
   onSelect: (id: string) => void;
   onOpenUnit: (id: string) => void;
+  /** Called when the user clicks the plinth area of a specific unit. Used
+   *  by the parent (KitchenOverview) to open the kitchen-level PlinthEditor
+   *  for the plinth group containing that unit. */
+  onPlinthClickForUnit?: (unitId: string) => void;
   settings?: AppSettingsSlice | undefined;
   viewMode: 'bodies' | 'fronts';
 }
 
-function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, settings, viewMode }: UnitsViewProps) {
+function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickForUnit, settings, viewMode }: UnitsViewProps) {
   // Compute totalW and maxH to fit all units into the available canvas width.
   // PX_PER_CM is chosen so the union of all unit widths + label area fits.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -669,6 +757,36 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, settings, view
     obs.observe(containerRef.current);
     return () => obs.disconnect();
   }, []);
+
+  // Kitchen-level plinth splits — for each unit, which piece-boundary
+  // offsets (in cm, measured from the unit's left edge) fall within its
+  // width. Built once per units array and looked up by unit.id.
+  const unitPlinthSplits = useMemo<Map<string, number[]>>(() => {
+    const map = new Map<string, number[]>();
+    const groups = groupKitchenUnitsForPlinth(units);
+    for (const group of groups) {
+      const pieces = plinthPieceWidths(group.totalW);
+      if (pieces.length <= 1) continue;
+      // Piece boundaries within the group (cumulative widths at end of each piece).
+      const boundaries: number[] = [];
+      let cumPiece = 0;
+      for (let i = 0; i < pieces.length - 1; i++) {
+        cumPiece += pieces[i]!;
+        boundaries.push(cumPiece);
+      }
+      // For each unit in the group, find which boundaries fall in its x-range.
+      let cumUnit = 0;
+      for (const u of group.units) {
+        const uw = u.cabinet.input.W;
+        const inRange = boundaries
+          .filter(b => b > cumUnit && b <= cumUnit + uw)
+          .map(b => b - cumUnit);
+        if (inRange.length > 0) map.set(u.id, inRange);
+        cumUnit += uw;
+      }
+    }
+    return map;
+  }, [units]);
 
   const maxH = Math.max(...units.map(u => effectiveDims(u).H));
   // Total width includes per-unit envelope panels (so the scale calculation
@@ -798,6 +916,14 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, settings, view
                 {...(inp.topVariant ? { topVariant: inp.topVariant } : {})}
                 {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
                 customMaterials={customMaterials}
+                {...((() => {
+                  const splits = unitPlinthSplits.get(unit.id);
+                  return splits && splits.length > 0 ? { extraPlinthSplits: splits } : {};
+                })())}
+                unifiedPlinth
+                {...(onPlinthClickForUnit && (inp.plinth ?? 0) > 0
+                  ? { onPlinthClick: () => onPlinthClickForUnit(unit.id) }
+                  : {})}
               />
               {viewMode === 'fronts' && (
                 <UnitFrontPanelsStandalone
@@ -819,16 +945,32 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, settings, view
 function CutsView({ units, settings }: { units: KitchenUnit[]; settings?: AppSettingsSlice | undefined }) {
   const allCuts = useMemo<CutItem[]>(() => {
     const out: CutItem[] = [];
+    // Per-unit cuts WITHOUT plinth — plinth is aggregated at the kitchen
+    // level so adjacent units sharing plinth attributes share a single
+    // physical plinth that spans them.
     for (const unit of units) {
       const { cuts } = computeUnitCutsAndHardware(
         unit.cabinet.input,
         unit.cabinet.state,
         settings?.customMaterials ?? [],
+        { skipPlinth: true },
       );
       // Prefix each cut name with the unit name so the user can tell which
       // unit each piece belongs to.
       for (const c of cuts) {
         out.push({ ...c, name: `${unit.name}: ${c.name}` });
+      }
+    }
+    // Kitchen-level plinth: one group per run of adjacent units with the same
+    // plinth attributes; pieces split at 240 cm boundaries.
+    const groups = groupKitchenUnitsForPlinth(units);
+    for (const group of groups) {
+      const plinthCuts = buildKitchenPlinthCuts(group, settings?.customMaterials ?? []);
+      // Label with the joined unit names so the saw operator can see which
+      // run the plinth piece belongs to. Use just "צוקל" prefix for clarity.
+      const label = `צוקל (${group.units.map(u => u.name).join(' + ')})`;
+      for (const c of plinthCuts) {
+        out.push({ ...c, name: `${label}: ${c.name}` });
       }
     }
     return out;

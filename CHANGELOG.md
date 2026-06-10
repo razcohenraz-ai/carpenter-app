@@ -32,6 +32,41 @@
 
 ב-`CabinetForm`, כל קריאה ל-`calculate({...})` בנתה מחדש את ה-`CabinetInput` משדות הטופס — אבל `topVariant` ו-`sinkTraverseWidthCm` אינם שדות טופס, אז הם **נמחקו בכניסה הראשונה לעורך** של יחידת כיור. תוצאה: סקיצת הגוף ועורך הגוף ציירו top board רגיל, ורשימת החיתוכים הציגה "עליון" במקום "קורת רוחב". **תוקן**: שתי קריאות ה-`calculate()` ב-CabinetForm שומרות עכשיו את `topVariant`/`sinkTraverseWidthCm` מ-`initialInput`. בנוסף — `CabinetSketch` ו-`BoxInteriorEditor` (→ `BoxBodySketch`) מקבלים עכשיו את הדגלים האלה כ-props ומציירים את ה-traverses העומדים.
 
+### שונה — צוקל המטבח מאוחד ברמת הקבוצה (לא per-unit)
+
+עד עכשיו: כל יחידת מטבח (KitchenUnit) הפיקה את הצוקל שלה בנפרד דרך `buildPlinthBoardModel`. תוצאה: רשימת החיתוכים הציגה N צוקלים נפרדים שלכל אחד plinth-front/back/cladding משלו, גם אם כל היחידות חולקות גובה/חומר/recess זהים. נוצרו מספר רב של רכיבי צוקל קטנים במקום אחד גדול. **שונה**:
+
+- חדש: `src/core/product/kitchenPlinth.ts` עם `groupKitchenUnitsForPlinth(units)` ו-`buildKitchenPlinthCuts(group)`. הפונקציה מקבצת יחידות **סמוכות** עם אותם מאפייני צוקל (plinthH, plinthRecess, bodyMaterialId, frontMaterialId, D, backThickness). יחידה עם plinth=0 שוברת קבוצה.
+- חישוב חלוקה לחתיכות: `pieceCount = ceil(groupW / 240)`, כל חתיכה ≤ MAX_PLINTH_W. ה-plinth-front/back/cladding מתפצלים ל-N חתיכות שוות; הגיבלים נשארים ברמת הקבוצה (אחד לכל joint בין יחידות + edges + mid-bodies > 80 ס"מ).
+- `computeUnitCutsAndHardware` קיבל פרמטר אופציונלי `{ skipPlinth: true }` כדי לדכא הפקת צוקל ברמת היחידה. `MAX_PLINTH_W` הוצא מ-`boxDecomposition.ts` ל-`export`.
+- `CutsView` במטבח: מחשב את ה-cuts ה-per-unit עם `skipPlinth: true`, ואז מוסיף את ה-cuts המאוחדים לפי הקבוצות. כל קבוצה מקבלת label שמציג את שמות היחידות שלה.
+
+תוצאה ל-4 יחידות של 60 ס"מ (אותו צוקל 10): שורה אחת "צוקל קדמי" בגודל 2400 × 94 × 18 מ"מ במקום 4 שורות של 600 × 94 × 18. ל-5 יחידות (300 ס"מ): 2 חתיכות של 1500 × 94 × 18.
+
+### נוסף — קווי פיצול בויזואליזציה של המטבח
+
+הוסף prop חדש ל-CabinetSketch: `extraPlinthSplits?: number[]` — מערך של offsets ב-ס"מ מקצה הארון השמאלי, שבהם יצוירו קווים מקווקווים בתוך אזור הצוקל. `UnitsView` מחשב את ה-offsets לכל יחידה לפי החלוקה לקבוצות + pieces ומעביר ל-CabinetSketch המוטמע. תוצאה: ב-5×60 = 300 (2 חתיכות של 150) — קו פיצול בודד יצויר באמצע יחידה 3, מסמן איפה ה-saw חותך. ל-4×60 = 240 (1 חתיכה) — אין קווי פיצול נוספים.
+
+### שונה — עורך הצוקל ביחידת מטבח עבר ל-KitchenOverview
+
+עד עכשיו: כל יחידת מטבח אפשרה עריכה ידנית של גובה צוקל / נסיגה / `doorCoversPlinth` ב-CabinetForm, ולחיצה על הצוקל בסקיצה פתחה PlinthEditor פר-יחידה. תוצאה: שינוי גובה צוקל ביחידה אחת פיצל את הקבוצה ה-unified ל-2 קבוצות נפרדות, סיבוך מיותר.
+
+**שונה**:
+- **CabinetForm**: התווסף flag חדש `hidePlinthEditor?: boolean`. כשמופעל — שדה "גובה צוקל", checkbox "דלת מכסה צוקל", ו-`onPlinthClick` של ה-CabinetSketch מוסתרים. App.tsx מעביר `hidePlinthEditor` ליחידת מטבח.
+- **KitchenOverview**: התווסף prop `onUpdateUnit`. לחיצה על אזור הצוקל המאוחד בתצוגת bodies → פותחת PlinthEditor ברמת המטבח עבור **הקבוצה** שאליה שייכת היחידה (סך רוחב היחידות הסמוכות שמשתפות את אותם plinth attributes).
+- שינויים ב-PlinthEditor (גובה, נסיגה) → מתפשטים לכל יחידות הקבוצה דרך `onUpdateUnit`.
+- `KitchenEditor` ו-App.tsx מחווטים להעביר את `updateKitchenUnit` ל-KitchenOverview.
+- ארון בודד (לא מטבח): התנהגות לא משתנה — PlinthEditor נשאר ב-CabinetForm כפי שהיה.
+
+### שונה — צוקל המטבח מצויר כפס רציף (unified) בתצוגה הראשית
+
+עד עכשיו: כל יחידה ציירה את הצוקל שלה ב-CabinetSketch עם stroke (גבול) משלה. תוצאה: בין יחידות סמוכות נראו קווים אנכיים כפולים (גם הגבול של ה-cabinet rect וגם הגבול של ה-plinth rect), והצוקל לא נראה אחיד. **שונה**: הוסף prop חדש ל-CabinetSketch: `unifiedPlinth?: boolean`. כשמופעל (מ-KitchenOverview UnitsView):
+- ה-plinth rect מתרחב ב-1px מכל צד, ומקבל stroke באותו צבע ה-fill — כך הוא מכסה את ה-vertical strokes של ה-cabinet rect מתחתיו.
+- יחידות סמוכות עם plinth rects מורחבים חופפות ויזואלית, ויוצרות פס רציף.
+- קו אופקי נפרד (`<line>`) מצויר בראש הצוקל לגבול body/plinth — בכל יחידה הקו נמתח מקצה לקצה ויוצר רצף אופקי חלק.
+
+תוצאה: הצוקל בתצוגת המטבח נראה כיחידה רציפה אחת, עם רק קווים מקווקווים במקומות החיתוך (מ-`extraPlinthSplits`).
+
 ### שונה — מודל ה-sink traverses: לוחות עומדים בגובה 10 ס"מ במקום שוכבים 8 ס"מ
 
 לפי בקשת המשתמש, ה-traverses של יחידת כיור הם **לוחות עומדים** (אנכיים), לא שוכבים:
