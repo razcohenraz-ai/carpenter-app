@@ -493,19 +493,22 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   const tw = sinkTraverseWidthCm;
 
   if (joint === 'rabbet') {
-    // Rabbet style: sides span the full H regardless of top/bottom presence —
-    // their length is independent of whether a bottom board is emitted.
+    // Rabbet style: sides normally span the full H. When hasBottom=false
+    // (appliance bay on floor) the cabinet rests on leveler feet — apply the
+    // same LEVELER_GAP_CM clearance used by plinth/envelope panels.
+    const rabSideLen = hasBottom ? H : H - LEVELER_GAP_CM;
+    const rabSideYTo = hasBottom ? H : H - LEVELER_GAP_CM;
     out.push({
       id: newItemId(), stableId: boardStableId('side-left', boxKey),
       role: 'side-left', materialId: matId,
-      length: H, width: D, thickness: t,
-      xFrom: 0, xTo: t, yFrom: 0, yTo: H, visible: true,
+      length: rabSideLen, width: D, thickness: t,
+      xFrom: 0, xTo: t, yFrom: 0, yTo: rabSideYTo, visible: true,
     });
     out.push({
       id: newItemId(), stableId: boardStableId('side-right', boxKey),
       role: 'side-right', materialId: matId,
-      length: H, width: D, thickness: t,
-      xFrom: W - t, xTo: W, yFrom: 0, yTo: H, visible: true,
+      length: rabSideLen, width: D, thickness: t,
+      xFrom: W - t, xTo: W, yFrom: 0, yTo: rabSideYTo, visible: true,
     });
     if (sinkOpen) {
       out.push({
@@ -569,9 +572,11 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
     // Side length: in the default (butt) joint the sides sit BETWEEN the top
     // and the bottom — so their length is H minus the top thickness minus the
     // bottom thickness. When no bottom is emitted (appliance bay), the sides
-    // extend down to the floor: length = H − t (only the top is subtracted).
-    const sidesLen = H - t - (hasBottom ? t : 0);
-    const sidesYTo = hasBottom ? H - t : H;
+    // extend down to just above the leveler feet: length = H − t − LEVELER_GAP_CM.
+    // The 0.6 cm gap matches the plinth/envelope rule — the cabinet rests on
+    // the same plastic leveler feet, so the same floor clearance applies.
+    const sidesLen = H - t - (hasBottom ? t : LEVELER_GAP_CM);
+    const sidesYTo = hasBottom ? H - t : H - LEVELER_GAP_CM;
     out.push({
       id: newItemId(), stableId: boardStableId('side-left', boxKey),
       role: 'side-left', materialId: matId,

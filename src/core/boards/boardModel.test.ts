@@ -439,21 +439,21 @@ describe('buildBoardModel — bottom panel (hasBottom flag)', () => {
     expect(byRole(boards, 'bottom')).toHaveLength(1);
   });
 
-  it('hasBottom=false (butt joint, forced via joint override) → no bottom; sides extend to floor', () => {
+  it('hasBottom=false (butt joint, forced via joint override) → no bottom; sides shortened by LEVELER_GAP_CM', () => {
     // Force butt joint so the side-length adjustment is exercised. (Without
     // the override, resolveJointMethod picks rabbet for W=80/H=100 since
-    // W ≤ 2·H — and in rabbet, sides span full H regardless of hasBottom.)
+    // W ≤ 2·H — and in rabbet, sides also apply the leveler-gap reduction.)
     const b = box({ W: 80, H: 100 });
     const boards = buildBoardModel({ ...baseArgs, box: b, hasBottom: false, joint: 'butt' });
     expect(byRole(boards, 'bottom')).toHaveLength(0);
-    // Sides: length = H − t (only the top is subtracted, no bottom).
+    // Sides: length = H − t − LEVELER_GAP_CM (leveler feet at the bottom).
     const left = byRole(boards, 'side-left')[0]!;
     const right = byRole(boards, 'side-right')[0]!;
-    expect(left.length).toBeCloseTo(100 - t);
-    expect(right.length).toBeCloseTo(100 - t);
-    // yTo reaches the floor of the box (H), not H − t.
-    expect(left.yTo).toBeCloseTo(100);
-    expect(right.yTo).toBeCloseTo(100);
+    expect(left.length).toBeCloseTo(100 - t - LEVELER_GAP_CM);
+    expect(right.length).toBeCloseTo(100 - t - LEVELER_GAP_CM);
+    // yTo = H − LEVELER_GAP_CM (visual gap at the bottom).
+    expect(left.yTo).toBeCloseTo(100 - LEVELER_GAP_CM);
+    expect(right.yTo).toBeCloseTo(100 - LEVELER_GAP_CM);
   });
 
   it('hasBottom=true (butt joint, baseline) → sides have BOTH top and bottom subtracted', () => {
@@ -466,15 +466,15 @@ describe('buildBoardModel — bottom panel (hasBottom flag)', () => {
     expect(left.yTo).toBeCloseTo(100 - t);
   });
 
-  it('hasBottom=false (rabbet joint, W=80) → no bottom board; sides still span full H', () => {
-    // Rabbet's sides already span the full H regardless of bottom presence,
-    // so the only effect of hasBottom=false is removing the bottom board.
+  it('hasBottom=false (rabbet joint, W=80) → no bottom board; sides shortened by LEVELER_GAP_CM', () => {
+    // Appliance bays on the floor use leveler feet — same 0.6 cm clearance as
+    // plinth/envelope panels. Rabbet sides are now H − LEVELER_GAP_CM.
     const b = box({ W: 80, H: 100 });
     const boards = buildBoardModel({ ...baseArgs, box: b, hasBottom: false });
     expect(byRole(boards, 'bottom')).toHaveLength(0);
     const left = byRole(boards, 'side-left')[0]!;
-    expect(left.length).toBeCloseTo(100);
-    expect(left.yTo).toBeCloseTo(100);
+    expect(left.length).toBeCloseTo(100 - LEVELER_GAP_CM);
+    expect(left.yTo).toBeCloseTo(100 - LEVELER_GAP_CM);
   });
 
   it('hasBack=false + hasBottom=false → exactly 3 boards (2 sides + top)', () => {
