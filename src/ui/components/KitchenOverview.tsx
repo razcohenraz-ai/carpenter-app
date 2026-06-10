@@ -80,8 +80,20 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   viewBoxH: number;  // cm — effH
 }): React.JSX.Element | null {
   const inp = unit.cabinet.input;
-  // Appliance bays (dishwasher etc.) have no front panels — skip entirely.
-  if ((inp.hasFronts ?? true) === false) return null;
+  // hasFronts=false means no door panel (dishwasher, oven). External-drawer
+  // fronts are still shown — so we only bail out when there are no drawers either.
+  const noFronts = (inp.hasFronts ?? true) === false;
+
+  // Extract external drawers early so the early-return can check them.
+  const slotKey = 'single:single';
+  const savedItems = unit.cabinet.state.interior[slotKey] ?? [];
+  const extDrawers = (savedItems as import('../../types/interior').InteriorItem[])
+    .filter((it): it is import('../../types/interior').DrawerItem =>
+      it.type === 'drawer' && it.mount === 'external')
+    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+
+  // Appliance bays with no external drawers (dishwasher) → nothing to show.
+  if (noFronts && extDrawers.length === 0) return null;
 
   const { W: effW, H: effH } = effectiveDims(unit);
   const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
@@ -90,7 +102,8 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   const hasAnyShell = sides.left || sides.right;
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, hasAnyShell, tFront, forceRows, inp.doorGapMm / 10);
-  if (dl.n === 0) return null;
+  // No computed door rows AND no external drawers → nothing to render.
+  if (dl.n === 0 && extDrawers.length === 0) return null;
 
   const bodyH = effH - inp.plinth;
   const gapCm = inp.doorGapMm / 10;
@@ -102,7 +115,7 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
     cabinetW: effW,
     hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
     shellThicknessCm: 0,
-    totalFrontsInRow: dl.n,
+    totalFrontsInRow: Math.max(dl.n, 1),
     gapCm,
   });
 
@@ -110,7 +123,8 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
 
   function pushFrontRow(key: string, heightCm: number, yFromBodyBottom: number) {
     const panelY = bodyH - (yFromBodyBottom + heightCm);
-    for (let fi = 0; fi < dl.n; fi++) {
+    const nFronts = Math.max(dl.n, 1);
+    for (let fi = 0; fi < nFronts; fi++) {
       const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
       panels.push(
         <rect
@@ -128,14 +142,6 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
     }
   }
 
-  // External drawers from saved state
-  const slotKey = 'single:single';
-  const savedItems = unit.cabinet.state.interior[slotKey] ?? [];
-  const extDrawers = (savedItems as import('../../types/interior').InteriorItem[])
-    .filter((it): it is import('../../types/interior').DrawerItem =>
-      it.type === 'drawer' && it.mount === 'external')
-    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
-
   let totalDrawerH = 0;
   extDrawers.forEach((d, di) => {
     const gap = gapCm / 2;
@@ -146,13 +152,14 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   const doorStartFromBodyBottom = dl.doorStart - inp.plinth;
   const doorTopFromBodyBottom = doorStartFromBodyBottom + (dl.lowerH ?? 0);
 
-  if (extDrawers.length === 0) {
+  // Door panels: only when hasFronts is not suppressed.
+  if (!noFronts && extDrawers.length === 0) {
     const rows: { h: number; yFromBodyBottom: number }[] = [];
     if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
     if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
     if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
     rows.forEach((r, ri) => pushFrontRow(`door${ri}`, r.h, r.yFromBodyBottom));
-  } else if (totalDrawerH < doorTopFromBodyBottom - 3) {
+  } else if (!noFronts && totalDrawerH < doorTopFromBodyBottom - 3) {
     const remainH = doorTopFromBodyBottom - totalDrawerH;
     pushFrontRow('doorAbove', remainH, totalDrawerH);
   }

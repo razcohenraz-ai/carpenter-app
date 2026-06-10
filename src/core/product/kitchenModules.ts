@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -41,6 +41,14 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
     // The body fills the full kitchen height (plinth=0 + H=90 → 90 cm body).
     return { ...base, plinth: 0, hasFronts: false, hasBack: false, hasBottom: false };
   }
+  if (type === 'oven') {
+    // Oven bay: standard cabinet (plinth, back, bottom) with a drawer at the
+    // bottom and an open cavity above it for the oven appliance.
+    // hasFronts=false: the oven cavity has no door panel — the appliance's own
+    // front fills it. External-drawer front cuts are NOT suppressed (they come
+    // from calcExternalDrawerFrontCuts, independent of hasFronts).
+    return { ...base, hasFronts: false };
+  }
   return base;
 }
 
@@ -75,6 +83,30 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
         [slotKey]: [
           { id: 'km-s1', type: 'shelf', heightFromFloor: 25 },
           { id: 'km-s2', type: 'shelf', heightFromFloor: 50 },
+        ],
+      },
+    };
+  }
+
+  if (type === 'oven') {
+    // Oven bay: external drawer at the bottom + the fixed shelf that caps it.
+    //
+    // Geometry (bodyH = 90 − plinth10 = 80 cm, t_body = 1.8 cm, doorGapMm = 3):
+    //   drawerHeight = 19.2 cm
+    //   topOfDrawer  = 19.2 cm  (single drawer → (N−1)×gap = 0)
+    //   shelf.hff    = roundCm(19.2 − 1.8) = 17.4 cm (bottom of shelf)
+    //   top of shelf = 17.4 + 1.8 = 19.2 cm
+    //   bottom of top board = 80 − 1.8 = 78.2 cm
+    //   oven cavity  = 78.2 − 19.2 = 59.0 cm ✓
+    //
+    // The fixed shelf is included in the initial state so the cut list is
+    // correct without requiring the user to first open the body editor.
+    return {
+      ...emptyBase,
+      interior: {
+        [slotKey]: [
+          { id: 'km-ov-d1', type: 'drawer', heightFromFloor: 0,    drawerHeight: 19.2, mount: 'external' },
+          { id: 'km-ov-sh1', type: 'shelf',  heightFromFloor: 17.4, isFixedAboveExternals: true },
         ],
       },
     };
