@@ -21,6 +21,10 @@ src/
 │   ├── materials.ts    Material, MaterialId, CustomMaterial
 │   ├── hardware.ts     HardwareSpec, HardwareLineItem, FurnitureType
 │   ├── cabinet.ts      CabinetInput + getShellSides() — single source לפיצול per-side shell
+│   │                   שדות appliance-bay: hasFronts? hasBack? hasBottom? (ברירת מחדל true)
+│   │                   כש-hasFronts=false: אין cuts מ-calcCuts, hasDoor:false לכל הדלתות
+│   │                   כש-hasBottom=false: דפנות מתארכות ל-H−t−LEVELER_GAP_CM (רגלי בונד)
+│   │                   כש-hasBack=false: אין לוח גב (אבל backThickness עדיין משמש ב-carcassD)
 │   ├── edging.ts       Edging interface, DEFAULT_EDGING
 │   ├── project.ts      Project (products[]) + ProductUnit + KitchenUnit + Cabinet + SavedCabinetState + SavedDoor/SavedHinge/SavedBoardOverride + BoxSlotId/DoorSlotKey
 │   └── index.ts        re-exports
@@ -46,7 +50,8 @@ src/
 │   │   ├── interiorUtils.ts      init/preserve, redistributeShelves, defaultDrawerPlacement, defaultRodPlacement, equalizeExternalDrawersIfOverflow
 │   │   └── fixedShelfUtils.ts    syncFixedShelf — מדף קבוע מעל external drawers
 │   ├── product/
-│   │   └── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink
+│   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven
+│   │   └── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן עבודה (לא מחובר ל-UI)
 │   ├── project/

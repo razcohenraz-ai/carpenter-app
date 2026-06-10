@@ -296,3 +296,18 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 
 ### UnitsView (KitchenOverview)
 קומפוננטה ב-`KitchenOverview.tsx`. flex של unit-wrappers — כל אחד `<CabinetSketch embedded>` + overlay של חזיתות כש-`viewMode === 'fronts'`. הוחלפה את ה-svg הגדול הישן — `bodies` ו-`fronts` משתמשים באותו layout בדיוק, רק החזיתות מתווספות.
+
+### Appliance bay / תא אפליאנס
+גוף מטבח שמארח מכשיר חשמלי (מדיח, תנור). מאופיין ב-`hasFronts: false` ב-`CabinetInput`. ראה גם: **dishwasher module**, **oven module**.
+
+### dishwasher module / מודול מדיח
+`KitchenModuleType = 'dishwasher'`. תא ריק לחלוטין: `plinth=0, hasFronts=false, hasBack=false, hasBottom=false`. 3 לוחות בלבד (2 דפנות + עליון). יושב ישירות על רצפה על רגלי בונד (`LEVELER_GAP_CM = 0.6`). קוטע את צוקל המטבח. רוחב ברירת מחדל: 64 ס"מ.
+
+### oven module / מודול תנור
+`KitchenModuleType = 'oven'`. גוף סטנדרטי (plinth=10, גב, תחתון) עם `hasFronts=false`. מגירה חיצונית (h=19.2) + מדף קבוע (hff=17.4) בתחתית; חלל 59 ס"מ לתנור מעל. רוחב ברירת מחדל: 60 ס"מ.
+
+### hasFronts / hasBack / hasBottom
+שדות אופציונליים ב-`CabinetInput` (ברירת מחדל `true`):
+- `hasFronts=false`: מדכא cuts מ-`calcCuts` (group:'door'), מעמיד `hasDoor:false` לכל הדלתות, מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).
+- `hasBack=false`: לא נפלט לוח גב. `backThickness` עדיין משמש בנוסחת `carcassD`.
+- `hasBottom=false`: לא נפלט לוח תחתון. הדפנות מתארכות ל-`H − t − LEVELER_GAP_CM` (רגלי בונד). ב-`CabinetForm` גם מחביא כפתורי עריכה פנימית.

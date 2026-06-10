@@ -43,8 +43,10 @@
 - **מגירות חיצוניות** — חזיתות עצמאיות, `coversSkirt` עובר לתחתונה, מדף קבוע (`syncFixedShelf`), drawer-box visualization (צר ב-2.5, נמוך ב-5), `equalizeExternalDrawersIfOverflow` כשהstack חורג.
 - **מעטפת** — `hasShell` (סימטרי) או `hasShellLeft`/`hasShellRight` (kitchen — `splitShellSides`); `getShellSides` מאחד.
 - **ניהול פרויקטים** — `useProject` שומר ב-localStorage; ייצוא/יבוא קבצים; ריבוי products במקביל.
-- **מטבחים** — מודולי `drawers`/`shelves`/`sink` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
+- **מטבחים** — מודולי `drawers`/`shelves`/`sink`/`dishwasher`/`oven` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
 - **sink module** — `topVariant='sink-open'`: אין top board, שני traverse boards (front+back), sink basin overlay בסקיצה.
+- **dishwasher module** — `plinth=0, hasFronts=false, hasBack=false, hasBottom=false`: תא ריק, W=64, יושב ישירות על הרצפה (LEVELER_GAP_CM), קוטע צוקל. 3 לוחות בלבד: 2 דפנות + עליון.
+- **oven module** — `hasFronts=false`: גוף סטנדרטי (W=60, plinth=10) עם מגירה חיצונית (h=19.2) + מדף קבוע (hff=17.4) בתחתית, וחלל פתוח של 59 ס"מ לתנור. אין דלת לחלל התנור.
 - **חומרים מותאמים אישית** — `SettingsPage`: לכל חומר checkbox (כלול ב-dropdown), מחיר עריך, custom materials עם id מותאם.
 - **box dimension overrides** — עקיפת W/H/D פר-body דרך `BoxInteriorEditor`; effective dims מוחל בסקיצה ובחיתוכים.
 - **דו-לשוני** — עברית + אנגלית.
