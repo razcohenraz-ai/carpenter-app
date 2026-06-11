@@ -160,11 +160,14 @@ export function KitchenEditor({
             </span>
           </div>
           <div className={styles.selectedActions}>
+            {/* RTL elevation: index 0 renders right-most, so moving the unit
+                visually LEFT means a higher array index ('right'), and visually
+                RIGHT means a lower index ('left'). */}
             <button
               type="button"
               className={styles.reorderBtn}
-              disabled={selectedIndex <= 0}
-              onClick={() => onReorderUnit(selectedUnit.id, 'left')}
+              disabled={selectedIndex >= units.length - 1}
+              onClick={() => onReorderUnit(selectedUnit.id, 'right')}
               title="הזז שמאלה"
             >
               ←
@@ -172,8 +175,8 @@ export function KitchenEditor({
             <button
               type="button"
               className={styles.reorderBtn}
-              disabled={selectedIndex >= units.length - 1}
-              onClick={() => onReorderUnit(selectedUnit.id, 'right')}
+              disabled={selectedIndex <= 0}
+              onClick={() => onReorderUnit(selectedUnit.id, 'left')}
               title="הזז ימינה"
             >
               →

@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### תוקן — 5 באגים במודול קלפה
+
+1. **חיצי הזזה הפוכים (RTL)**: `←` קרא `'left'` (= idx−1 = זז ימינה בתצוגה RTL). תוקן: `←` → `'right'`, `→` → `'left'`, תנאי `disabled` מתאים.
+2. **חפיפה עם מזווה**: גוף גבוה (מזווה H=180 ≥ 152) חודר לאזור הקיר; קלפה הוצבה מעליו. תוקן: גוף שמגיע לאזור הקיר שומר את **כל רוחבו** ב-`wallCursor` כך שקלפות יושבות לידו.
+3. **2 מדפים במקום 1**: `kitchenModuleState('wall')` החזיר 2 ShelfItems. תוקן: מדף אחד ממורכז (hff=24.1).
+4. **צירים בקלפה**: `cabinetCompute` + `useCabinet` (post-loop) מנקים `hinges:[]`/`hingeCount:0` לכל דלתות הקלפה. `DoorEditor` קיבל prop `noHinges` שמסתיר את בקרות הציר ומציג "מנגנון קלפה".
+5. **2 דלתות בתצוגה ראשית**: `UnitFrontPanelsStandalone` השתמש ב-`dl.n` (שמבוסס על `APP_DEFAULTS.maxDoorWidth=60`) במקום `inp.maxDoorWidth`. תוקן: `numFronts = ceil(effW / inp.maxDoorWidth)`.
+
 ### נוסף — מודול "קלפה" (ארון קיר עליון) + תצוגת elevation במטבח
 
 מודול שביעי (`'wall'`): ארון קיר התלוי **מעל השיש**, שונה מהותית משאר הגופים.

@@ -717,6 +717,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onHasDoor={v => setDoorHasDoor(editing.doorId, v)}
             onThickness={matId => setDoorThickness(editing.doorId, matId)}
             onBack={closeEditor}
+            {...(initialInput?.mount === 'wall' ? { noHinges: true } : {})}
           />
         </div>
       );

@@ -111,11 +111,16 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   // = left-envelope width (if present). Inside-the-box layout is symmetric
   // around the box, so fronts span the box width (= effW).
   const leftEnvCm = sides.left ? tFront : 0;
+  // Front COLUMN count comes from the unit's OWN maxDoorWidth — calcDoors uses
+  // the global APP_DEFAULTS.maxDoorWidth (60) and would over-split a wide
+  // single-front unit like the wall cabinet (W=100, maxDoorWidth=120 → 1).
+  // `dl` is still used below for the door-ROW heights.
+  const numFronts = Math.max(1, Math.ceil(effW / inp.maxDoorWidth));
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
     hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
     shellThicknessCm: 0,
-    totalFrontsInRow: Math.max(dl.n, 1),
+    totalFrontsInRow: numFronts,
     gapCm,
   });
 
@@ -123,7 +128,7 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
 
   function pushFrontRow(key: string, heightCm: number, yFromBodyBottom: number) {
     const panelY = bodyH - (yFromBodyBottom + heightCm);
-    const nFronts = Math.max(dl.n, 1);
+    const nFronts = numFronts;
     for (let fi = 0; fi < nFronts; fi++) {
       const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
       panels.push(
@@ -834,7 +839,11 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
         wallCursor += w;
       } else {
         positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
-        wallCursor = Math.max(wallCursor, baseX);
+        // A tall base unit (e.g. pantry, top ≥ 152) reaches into the wall zone,
+        // so reserve its FULL width in the wall row — wall cabinets sit beside
+        // it, not overlapping it. A standard base only blocks the left edge.
+        const reachesWallZone = effectiveDims(u).H >= WALL_BOTTOM_CM;
+        wallCursor = Math.max(wallCursor, reachesWallZone ? baseX + w : baseX);
         baseX += w;
       }
     }

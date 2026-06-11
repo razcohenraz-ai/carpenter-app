@@ -245,13 +245,16 @@ export function computeUnitCutsAndHardware(
         ? salonHingeSide(fi, numFronts)
         : defaultHingeSide(box.position, allPositions);
 
-      // For pure compute (no preservation of user-edited hinges), use defaults
+      // For pure compute (no preservation of user-edited hinges), use defaults.
+      // Wall cabinets (קלפה) open with a lift-up mechanism, not hinges → emit
+      // none (no markers in any sketch; hardware uses the lift-mechanism preset).
+      const isWall = input.mount === 'wall';
       const slotKey = boxStableKey(box);
       const savedDoor = savedState.doors[`${slotKey}:${fi}`];
 
       if (savedDoor) {
         // Reconstruct from saved state — use saved hinges
-        const hinges: Hinge[] = savedDoor.hinges.map(h => ({
+        const hinges: Hinge[] = isWall ? [] : savedDoor.hinges.map(h => ({
           id: newItemId(),
           positionFromBottom: h.positionFromBottom,
           isManual: h.isManual,
@@ -260,7 +263,7 @@ export function computeUnitCutsAndHardware(
           id: doorId, boxId: box.id, frontIndex: fi,
           height: panelH, width: frontW,
           hingeSide: savedDoor.hingeSide,
-          hingeCount: savedDoor.hingeCount,
+          hingeCount: isWall ? 0 : savedDoor.hingeCount,
           hinges,
           hasDoor: savedDoor.hasDoor,
           coversSkirt,
@@ -268,15 +271,18 @@ export function computeUnitCutsAndHardware(
           ...(savedDoor.thicknessOverride ? { thicknessOverride: savedDoor.thicknessOverride } : {}),
         };
       } else {
-        const defaults = computeDefaultHingePositions(panelH);
-        const rawHinges: Hinge[] = defaults.map(p => ({
-          id: newItemId(), positionFromBottom: p, isManual: false,
-        }));
-        const { hinges } = adjustHingesForInterior(rawHinges, itemsForFront, doorGapMm, panelH);
+        let hinges: Hinge[] = [];
+        if (!isWall) {
+          const defaults = computeDefaultHingePositions(panelH);
+          const rawHinges: Hinge[] = defaults.map(p => ({
+            id: newItemId(), positionFromBottom: p, isManual: false,
+          }));
+          hinges = adjustHingesForInterior(rawHinges, itemsForFront, doorGapMm, panelH).hinges;
+        }
         newDoors[doorId] = {
           id: doorId, boxId: box.id, frontIndex: fi,
           height: panelH, width: frontW,
-          hingeSide, hingeCount: 'auto', hinges, hasDoor: !skipFronts,
+          hingeSide, hingeCount: isWall ? 0 : 'auto', hinges, hasDoor: !skipFronts,
           coversSkirt, gapMm: doorGapMm,
         };
       }

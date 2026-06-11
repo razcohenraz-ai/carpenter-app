@@ -147,12 +147,12 @@ describe('kitchenModuleState — interior shape', () => {
     expect(Object.keys(st.partitions).length).toBe(0);
   });
 
-  it('wall → 2 shelves (single-door wall cabinet)', () => {
+  it('wall → 1 centred shelf (single-door wall cabinet)', () => {
     const st = kitchenModuleState('wall');
     const items = st.interior['single:single'];
     expect(items).toBeDefined();
-    expect(items!.length).toBe(2);
-    expect(items!.every(i => i.type === 'shelf')).toBe(true);
+    expect(items!.length).toBe(1);
+    expect(items![0]!.type).toBe('shelf');
   });
 
   it('pantry → 6 internal drawers, bottom 30 + 5×28, filling bodyH=170 exactly', () => {

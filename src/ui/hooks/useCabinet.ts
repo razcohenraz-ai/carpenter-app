@@ -1026,6 +1026,15 @@ export function useCabinet(settings?: {
       }
     }
 
+    // ── Wall cabinet (קלפה): suppress hinges ─────────────────────────────
+    // Wall cabinets open with a lift-up mechanism, not cup hinges. Clear all
+    // auto-computed hinges so no hinge markers appear in any sketch or editor.
+    if (input.mount === 'wall') {
+      for (const doorId of Object.keys(newDoors)) {
+        newDoors[doorId] = { ...newDoors[doorId]!, hinges: [], hingeCount: 0 };
+      }
+    }
+
     // ── External-drawer front cuts ────────────────────────────────────────
     // Width comes from the cabinet-level layout (same source as the doors):
     //   cell drawer (partition):  one column   → layout.frontWidth

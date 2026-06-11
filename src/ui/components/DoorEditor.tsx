@@ -21,6 +21,9 @@ interface Props {
   onHasDoor: (hasDoor: boolean) => void;
   onThickness: (materialId: string) => void;
   onBack: () => void;
+  /** When true, hinge controls (side, count, manual positions) are hidden and
+   *  replaced with a "מנגנון קלפה" note. Used by wall cabinets. */
+  noHinges?: boolean;
 }
 
 // Larger door sketch — gives a clearer view of the panel + hinge positions.
@@ -32,6 +35,7 @@ const materialsArray = Object.values(MATERIALS);
 export default function DoorEditor({
   door, interiorItems, displayNumber, globalMaterialId, plinthHeight,
   onHingeSide, onHingeCount, onHingeManual, onResetAuto, onHasDoor, onThickness, onBack,
+  noHinges,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const interiorWarnings  = computeHingeWarnings(door, interiorItems, door.gapMm ?? 0);
@@ -114,63 +118,70 @@ export default function DoorEditor({
               {warnThickLow  && <p className={styles.warning}>⚠ {t.doors.warnThicknessLow(+(thicknessCm!).toFixed(1))}</p>}
               {warnThickHigh && <p className={styles.warning}>⚠ {t.doors.warnThicknessHigh(+(thicknessCm!).toFixed(1))}</p>}
 
-              <div className={styles.field}>
-                <span className={styles.fieldLabel}>{t.doors.hingeSide}</span>
-                <div className={styles.radioGroup}>
-                  <label>
-                    <input
-                      type="radio"
-                      name={`hingeSide-${door.id}`}
-                      value="right"
-                      checked={door.hingeSide === 'right'}
-                      onChange={() => onHingeSide('right')}
-                    />
-                    {t.doors.hingeRight}
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name={`hingeSide-${door.id}`}
-                      value="left"
-                      checked={door.hingeSide === 'left'}
-                      onChange={() => onHingeSide('left')}
-                    />
-                    {t.doors.hingeLeft}
-                  </label>
-                </div>
-              </div>
+              {noHinges ? (
+                /* Wall cabinet: lift-up mechanism, no cup hinges */
+                <p className={styles.warning}>מנגנון קלפה (דלת נפתחת למעלה)</p>
+              ) : (
+                <>
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>{t.doors.hingeSide}</span>
+                    <div className={styles.radioGroup}>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`hingeSide-${door.id}`}
+                          value="right"
+                          checked={door.hingeSide === 'right'}
+                          onChange={() => onHingeSide('right')}
+                        />
+                        {t.doors.hingeRight}
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name={`hingeSide-${door.id}`}
+                          value="left"
+                          checked={door.hingeSide === 'left'}
+                          onChange={() => onHingeSide('left')}
+                        />
+                        {t.doors.hingeLeft}
+                      </label>
+                    </div>
+                  </div>
 
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor={`hinge-count-${door.id}`}>
-                  {t.doors.hingeCount}
-                </label>
-                <select
-                  id={`hinge-count-${door.id}`}
-                  className={styles.select}
-                  value={door.hingeCount}
-                  disabled={isSmallDoor}
-                  onChange={e => {
-                    const v = e.target.value;
-                    onHingeCount(v === 'auto' ? 'auto' : Number(v) as 2 | 3 | 4);
-                  }}
-                >
-                  {isSmallDoor && <option value="1">1</option>}
-                  <option value="auto">{t.doors.hingeCountAuto}</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                </select>
-              </div>
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor={`hinge-count-${door.id}`}>
+                      {t.doors.hingeCount}
+                    </label>
+                    <select
+                      id={`hinge-count-${door.id}`}
+                      className={styles.select}
+                      value={door.hingeCount}
+                      disabled={isSmallDoor}
+                      onChange={e => {
+                        const v = e.target.value;
+                        onHingeCount(v === 'auto' ? 'auto' : Number(v) as 2 | 3 | 4);
+                      }}
+                    >
+                      {isSmallDoor && <option value="1">1</option>}
+                      <option value="auto">{t.doors.hingeCountAuto}</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </div>
 
-              {isSmallDoor && (
-                <p className={styles.warning}>⚠ {t.doors.hingeWarnSmallDoor(door.height)}</p>
+                  {isSmallDoor && (
+                    <p className={styles.warning}>⚠ {t.doors.hingeWarnSmallDoor(door.height)}</p>
+                  )}
+                  {interiorWarnings.size > 0 && (
+                    <p className={styles.warning}>⚠ {t.doors.hingeWarnNoPos}</p>
+                  )}
+                  {gapWarnings.map((gap, i) => (
+                    <p key={i} className={styles.warning}>⚠ {t.doors.hingeWarnTooClose(gap)}</p>
+                  ))}
+                </>
               )}
-              {interiorWarnings.size > 0 && (
-                <p className={styles.warning}>⚠ {t.doors.hingeWarnNoPos}</p>
-              )}
-              {gapWarnings.map((gap, i) => (
-                <p key={i} className={styles.warning}>⚠ {t.doors.hingeWarnTooClose(gap)}</p>
-              ))}
 
               <ul className={styles.list}>
                 {sortedHinges.map(hinge => (

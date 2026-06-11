@@ -155,16 +155,15 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
   }
 
   if (type === 'wall') {
-    // קלפה: a wall cabinet with a single door and shelves. Two shelves divide
-    // the bodyH (= H50 − plinth0 = 50) into ~3 equal compartments. The body
-    // editor exposes only the shelf control, so the carpenter adds/removes
-    // shelves freely; every position is overridable.
+    // קלפה: a wall cabinet with a single door and ONE centred shelf, splitting
+    // bodyH (= H50 − plinth0 = 50) into two compartments: hff = (50 − 1.8)/2 ≈
+    // 24.1. The body editor is shelf-only, so the carpenter adds/removes shelves
+    // freely; every position is overridable.
     return {
       ...emptyBase,
       interior: {
         [slotKey]: [
-          { id: 'km-wl-s1', type: 'shelf', heightFromFloor: 16.7 },
-          { id: 'km-wl-s2', type: 'shelf', heightFromFloor: 33.3 },
+          { id: 'km-wl-s1', type: 'shelf', heightFromFloor: 24.1 },
         ],
       },
     };
