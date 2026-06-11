@@ -311,7 +311,10 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, o
 
   // Precompute plinth groups once per units array — used for click-to-edit
   // routing and for rendering PlinthEditor when active.
-  const plinthGroups = useMemo(() => groupKitchenUnitsForPlinth(units), [units]);
+  const plinthGroups = useMemo(
+    () => groupKitchenUnitsForPlinth(units.filter(u => (u.cabinet.input.mount ?? 'base') !== 'wall')),
+    [units],
+  );
 
   // unit.id → group index in plinthGroups (or undefined if unit has no plinth).
   const unitIdToGroupIdx = useMemo(() => {
@@ -768,12 +771,29 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
     return () => obs.disconnect();
   }, []);
 
+  // Wall (קלפה) vs base units. Wall cabinets hang above the countertop, so they
+  // render in an upper row and never participate in the floor plinth.
+  const isWall = (u: KitchenUnit): boolean => (u.cabinet.input.mount ?? 'base') === 'wall';
+  const hasWall = units.some(isWall);
+  // Kitchen elevation reference heights (cm): a wall cabinet hangs
+  // WALL_BOTTOM_CM above the floor = base height + countertop + clearance.
+  const COUNTERTOP_CM = 2;
+  const BASE_REF_H_CM = 90;
+  const WALL_CLEARANCE_CM = 60;
+  const WALL_BOTTOM_CM = BASE_REF_H_CM + COUNTERTOP_CM + WALL_CLEARANCE_CM; // 152
+  function unitOuterW(u: KitchenUnit): number {
+    const sides = getShellSides(u.cabinet.input);
+    const tFront = getEffectiveMaterial(u.cabinet.input.frontMaterialId).thickness / 10;
+    return effectiveDims(u).W + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+  }
+
   // Kitchen-level plinth splits — for each unit, which piece-boundary
   // offsets (in cm, measured from the unit's left edge) fall within its
-  // width. Built once per units array and looked up by unit.id.
+  // width. Built once per units array and looked up by unit.id. Wall units
+  // are excluded (no plinth) so adjacent base units form one continuous run.
   const unitPlinthSplits = useMemo<Map<string, number[]>>(() => {
     const map = new Map<string, number[]>();
-    const groups = groupKitchenUnitsForPlinth(units);
+    const groups = groupKitchenUnitsForPlinth(units.filter(u => (u.cabinet.input.mount ?? 'base') !== 'wall'));
     for (const group of groups) {
       const pieces = plinthPieceWidths(group.totalW);
       if (pieces.length <= 1) continue;
@@ -798,27 +818,63 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
     return map;
   }, [units]);
 
-  const maxH = Math.max(...units.map(u => effectiveDims(u).H));
-  // Total width includes per-unit envelope panels (so the scale calculation
-  // matches the per-unit outerCabW used below for the wrapper div width).
-  const totalW = units.reduce((s, u) => {
-    const sides = getShellSides(u.cabinet.input);
-    const inp = u.cabinet.input;
-    const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
-    const env = (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
-    return s + effectiveDims(u).W + env;
-  }, 0);
-  // Pixels-per-cm: derive a single scale so all units fit horizontally
-  // (with some padding) and vertically (cap at 360px tall).
+  // ── Elevation layout ────────────────────────────────────────────────────────
+  // Single horizontal axis in cm, measured from the RIGHT edge (the row is RTL).
+  // Base units tile the floor; each wall cabinet is anchored above the base unit
+  // that precedes it in the array (consecutive walls tile sideways from there).
+  // `yBottomCm` = the unit's bottom above the floor: 0 for base, 152 for wall.
+  const positions = new Map<string, { xCm: number; yBottomCm: number }>();
+  {
+    let baseX = 0;
+    let wallCursor = 0;
+    for (const u of units) {
+      const w = unitOuterW(u);
+      if (isWall(u)) {
+        positions.set(u.id, { xCm: wallCursor, yBottomCm: WALL_BOTTOM_CM });
+        wallCursor += w;
+      } else {
+        positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
+        wallCursor = Math.max(wallCursor, baseX);
+        baseX += w;
+      }
+    }
+  }
+  const baseRunW = units.filter(u => !isWall(u)).reduce((s, u) => s + unitOuterW(u), 0);
+  const elevationW = Math.max(1, ...units.map(u => (positions.get(u.id)?.xCm ?? 0) + unitOuterW(u)));
+  const elevationTopCm = Math.max(
+    1,
+    hasWall ? BASE_REF_H_CM + COUNTERTOP_CM : 0,
+    ...units.map(u => (positions.get(u.id)?.yBottomCm ?? 0) + effectiveDims(u).H),
+  );
+  // Pixels-per-cm: one scale fitting the elevation horizontally (with padding)
+  // and vertically (taller cap when wall cabinets add an upper row).
   const PADDING = 32;
-  const MAX_H_PX = 360;
-  const sx = (availW - PADDING) / Math.max(1, totalW);
-  const sy = MAX_H_PX / Math.max(1, maxH);
+  const LABEL_RESERVE_PX = 24;
+  const MAX_H_PX = hasWall ? 460 : 360;
+  const sx = (availW - PADDING) / elevationW;
+  const sy = MAX_H_PX / elevationTopCm;
   const scale = Math.max(2, Math.min(sx, sy, 8));
 
   return (
-    <div ref={containerRef} className={styles.unitsRow}>
-      {units.map((unit, i) => {
+    <div ref={containerRef} className={styles.elevation}>
+      <div
+        className={styles.elevationCanvas}
+        style={{ width: `${elevationW * scale}px`, height: `${elevationTopCm * scale + LABEL_RESERVE_PX}px` }}
+      >
+        {/* Countertop (שיש) — a 2 cm strip on top of the base run, drawn only
+            when wall cabinets are present so it marks the wall-mount reference. */}
+        {hasWall && (
+          <div
+            className={styles.countertop}
+            style={{
+              right: 0,
+              bottom: `${BASE_REF_H_CM * scale}px`,
+              width: `${baseRunW * scale}px`,
+              height: `${Math.max(COUNTERTOP_CM * scale, 1.5)}px`,
+            }}
+          />
+        )}
+        {units.map((unit, i) => {
         const inp = unit.cabinet.input;
         const { W: effW, H: effH } = effectiveDims(unit);
         const st = unit.cabinet.state;
@@ -891,7 +947,12 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
             className={`${styles.unitWrapper} ${isSelected ? styles.unitSelected : ''}`}
             onClick={() => onSelect(unit.id)}
             onDoubleClick={() => onOpenUnit(unit.id)}
-            style={{ width: `${unitWpx}px` }}
+            style={{
+              position: 'absolute',
+              right: `${(positions.get(unit.id)?.xCm ?? 0) * scale}px`,
+              bottom: `${(positions.get(unit.id)?.yBottomCm ?? 0) * scale}px`,
+              width: `${unitWpx}px`,
+            }}
           >
             <div className={styles.unitLabel}>
               <span className={styles.unitNumber}>{i + 1}</span>
@@ -948,6 +1009,7 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -974,8 +1036,9 @@ function CutsView({ units, settings }: { units: KitchenUnit[]; settings?: AppSet
       }
     }
     // Kitchen-level plinth: one group per run of adjacent units with the same
-    // plinth attributes; pieces split at 240 cm boundaries.
-    const groups = groupKitchenUnitsForPlinth(units);
+    // plinth attributes; pieces split at 240 cm boundaries. Wall cabinets
+    // (mount='wall') have no plinth and are excluded so they don't break runs.
+    const groups = groupKitchenUnitsForPlinth(units.filter(u => (u.cabinet.input.mount ?? 'base') !== 'wall'));
     for (const group of groups) {
       const plinthCuts = buildKitchenPlinthCuts(group, settings?.customMaterials ?? []);
       // Label with the joined unit names so the saw operator can see which

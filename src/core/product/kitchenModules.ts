@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry' | 'wall';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -28,7 +28,7 @@ const KITCHEN_DEFAULTS = {
  *  `w` overrides the default width (60 cm for drawers/shelves, 80 cm for sink,
  *  64 cm for dishwasher). */
 export function kitchenModuleInput(type: KitchenModuleType, w?: number): CabinetInput {
-  const defaultW = type === 'sink' ? 80 : type === 'dishwasher' ? 64 : 60;
+  const defaultW = type === 'sink' ? 80 : type === 'dishwasher' ? 64 : type === 'wall' ? 100 : 60;
   const base: CabinetInput = { ...KITCHEN_DEFAULTS, W: w ?? defaultW };
 
   if (type === 'sink') {
@@ -56,6 +56,13 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
     // (see kitchenModuleState — internal drawers emit hardware + sketch, not
     // cut parts, matching bought drawer systems).
     return { ...base, H: 180 };
+  }
+  if (type === 'wall') {
+    // קלפה (wall/upper cabinet): hung on the wall above the countertop, NOT on
+    // the floor. W=100, H=50, D=35, no plinth. A single front: maxDoorWidth=120
+    // (> W) forces one door column. `mount:'wall'` drives the kitchen elevation
+    // (upper row, aligned above its base unit) and the shelf-only body editor.
+    return { ...base, W: w ?? 100, H: 50, D: 35, plinth: 0, maxDoorWidth: 120, mount: 'wall' };
   }
   return base;
 }
@@ -142,6 +149,22 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
           { id: 'km-pn-d4', type: 'drawer', heightFromFloor: 86,  drawerHeight: 28, mount: 'internal' },
           { id: 'km-pn-d5', type: 'drawer', heightFromFloor: 114, drawerHeight: 28, mount: 'internal' },
           { id: 'km-pn-d6', type: 'drawer', heightFromFloor: 142, drawerHeight: 28, mount: 'internal' },
+        ],
+      },
+    };
+  }
+
+  if (type === 'wall') {
+    // קלפה: a wall cabinet with a single door and shelves. Two shelves divide
+    // the bodyH (= H50 − plinth0 = 50) into ~3 equal compartments. The body
+    // editor exposes only the shelf control, so the carpenter adds/removes
+    // shelves freely; every position is overridable.
+    return {
+      ...emptyBase,
+      interior: {
+        [slotKey]: [
+          { id: 'km-wl-s1', type: 'shelf', heightFromFloor: 16.7 },
+          { id: 'km-wl-s2', type: 'shelf', heightFromFloor: 33.3 },
         ],
       },
     };

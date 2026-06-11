@@ -26,5 +26,10 @@
   "custom": [
     { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15, "fixed": 2    },
     { "specId": "cam-lock",        "name": "פלטות הרכבה",     "unit": "קופסה", "unitPrice": 22, "fixed": 1    }
+  ],
+  "wall_cabinet": [
+    { "specId": "lift-mechanism",  "name": "מנגנון קלפה",     "unit": "יח'",   "unitPrice": 200, "byDoor": 1 },
+    { "specId": "handle",          "name": "ידית דלת",        "unit": "יח'",   "unitPrice": 18,  "byDoor": 1 },
+    { "specId": "screw-4x40",      "name": "בורג עץ 4×40",    "unit": "קופסה", "unitPrice": 15,  "fixed": 2  }
   ]
 }

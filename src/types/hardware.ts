@@ -71,6 +71,6 @@ export interface HardwareRule {
   byRod?: number;          // multiplied by hanging-rod count
 }
 
-export type FurnitureType = "cabinet" | "shelf" | "table" | "drawer_unit" | "custom";
+export type FurnitureType = "cabinet" | "shelf" | "table" | "drawer_unit" | "custom" | "wall_cabinet";
 
 export type HardwarePresets = Record<FurnitureType, HardwareRule[]>;

@@ -63,6 +63,13 @@ export interface CabinetInput {
    *  (minus the top board). Used by appliance bays (e.g. dishwasher) where
    *  the appliance sits on the floor and the cabinet has no structural floor. */
   hasBottom?: boolean;
+  /** Mounting position within a kitchen. `'base'` (default) = stands on the
+   *  floor; `'wall'` = hung on the wall above the countertop (the `'wall'`
+   *  module — קלפה). Drives the kitchen elevation (wall units render in an
+   *  upper row, aligned above their base unit) and the body editor (wall units
+   *  expose only the shelf control). Pure UI/positioning metadata — it does NOT
+   *  affect board or cut computation. */
+  mount?: 'base' | 'wall';
 }
 
 /** Single source of truth for "which sides of the cabinet have a shell".

@@ -232,6 +232,10 @@ export interface Translations {
   kitchen: {
     /** Warning shown when units in a kitchen have different heights. */
     mixedHeightsWarning: string;
+    /** Title of the kitchen-wide (global) material selectors. */
+    materialsTitle: string;
+    /** Selector value shown when units have different materials. */
+    mixed: string;
   };
 
   settings: {
@@ -292,7 +296,7 @@ const he: Translations = {
     kitchenAddUnit: '+ הוסף גוף',
     kitchenModuleTitle: 'סוג גוף',
     kitchenModuleWidth: 'רוחב (ס"מ)',
-    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור', dishwasher: 'מדיח', oven: 'תנור', pantry: 'מזווה' },
+    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור', dishwasher: 'מדיח', oven: 'תנור', pantry: 'מזווה', wall: 'קלפה' },
     kitchenNoUnits: 'אין גופים עדיין. לחץ על "הוסף גוף" כדי להתחיל.',
     kitchenEditUnit: 'עריכה →',
     productTypes: {
@@ -479,7 +483,7 @@ const he: Translations = {
     description: 'תיאור',
     dimensions: 'מידות (ס"מ)',
     quantity: 'כמות',
-    area: 'שטח (ס"מ²)',
+    area: 'שטח (מ"ר)',
     totalPieces: 'סה"כ לוחות',
     totalArea: 'סה"כ שטח',
     exportPdf: 'ייצוא PDF',
@@ -501,6 +505,8 @@ const he: Translations = {
 
   kitchen: {
     mixedHeightsWarning: 'גופים בגבהים שונים — בדוק יישור לפני ייצור',
+    materialsTitle: 'חומרים — כל המטבח',
+    mixed: 'מעורב',
   },
 
   settings: {
@@ -552,7 +558,7 @@ const en: Translations = {
     kitchenAddUnit: '+ Add Unit',
     kitchenModuleTitle: 'Unit type',
     kitchenModuleWidth: 'Width (cm)',
-    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink', dishwasher: 'Dishwasher', oven: 'Oven', pantry: 'Pantry' },
+    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink', dishwasher: 'Dishwasher', oven: 'Oven', pantry: 'Pantry', wall: 'Wall cabinet' },
     kitchenNoUnits: 'No units yet. Click "Add Unit" to start.',
     kitchenEditUnit: 'Edit →',
     productTypes: {
@@ -739,7 +745,7 @@ const en: Translations = {
     description: 'Description',
     dimensions: 'Dimensions (cm)',
     quantity: 'Qty',
-    area: 'Area (cm²)',
+    area: 'Area (m²)',
     totalPieces: 'Total pieces',
     totalArea: 'Total area',
     exportPdf: 'Export PDF',
@@ -761,6 +767,8 @@ const en: Translations = {
 
   kitchen: {
     mixedHeightsWarning: 'Units with different heights — verify alignment before manufacturing',
+    materialsTitle: 'Materials — whole kitchen',
+    mixed: 'Mixed',
   },
 
   settings: {

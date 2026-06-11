@@ -5,6 +5,17 @@ import { buildHW } from "./hardwareCalc";
 const byId = (items: ReturnType<typeof buildHW>, id: string) =>
   items.find((h) => h.specId === id);
 
+describe("buildHW — wall_cabinet (קלפה)", () => {
+  it("דלת אחת — מנגנון קלפה אחד ב-200, ללא צירים", () => {
+    const hw = buildHW("wall_cabinet", 1, 0, 2);
+    expect(byId(hw, "lift-mechanism")!.qty).toBe(1);        // byDoor: 1 × 1
+    expect(byId(hw, "lift-mechanism")!.unitPrice).toBe(200);
+    expect(byId(hw, "lift-mechanism")!.total).toBe(200);
+    expect(byId(hw, "hinge-35mm")).toBeUndefined();          // אין צירים בקלפה
+    expect(byId(hw, "handle")!.qty).toBe(1);                 // ידית נשמרת
+  });
+});
+
 describe("buildHW — cabinet", () => {
   it("2 דלתות, 0 מגירות — 4 צירים, 2 ידיות, ללא מסילות", () => {
     const hw = buildHW("cabinet", 2, 0, 0);

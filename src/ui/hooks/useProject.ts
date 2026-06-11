@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Cabinet, Project, ProductUnit } from '../../types';
+import type { Cabinet, Project, ProductUnit, MaterialId } from '../../types';
 import type { ProductType } from '../../types/project';
 import { serializeProject, deserializeProject } from '../../core/project/serialize';
 import { CURRENT_SCHEMA_VERSION } from '../../core/project/migrations';
@@ -39,7 +39,7 @@ export interface UseProjectReturn {
   setActiveProduct: (id: string) => void;
   clearActiveProduct: () => void;
   addProduct: (type: ProductType, name: string) => string;
-  addKitchenUnit: (productId: string, moduleType: KitchenModuleType, name: string, W?: number) => string;
+  addKitchenUnit: (productId: string, moduleType: KitchenModuleType, name: string, W?: number, materials?: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId }) => string;
   removeKitchenUnit: (productId: string, unitId: string) => void;
   updateKitchenUnit: (productId: string, unitId: string, cabinet: import('../../types').Cabinet) => void;
   renameKitchenUnit: (productId: string, unitId: string, name: string) => void;
@@ -89,11 +89,16 @@ export function useProject(): UseProjectReturn {
 
   const addKitchenUnit = useCallback((
     productId: string, moduleType: KitchenModuleType, name: string, W?: number,
+    materials?: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId },
   ): string => {
     const unitId = generateId();
+    // New units inherit the kitchen-wide material (passed by KitchenEditor when
+    // all existing units share one) so adding a unit keeps the kitchen uniform.
+    const baseInput = kitchenModuleInput(moduleType, W);
+    const input = materials ? { ...baseInput, ...materials } : baseInput;
     const newUnit: KitchenUnit = {
       id: unitId, name, moduleType,
-      cabinet: { input: kitchenModuleInput(moduleType, W), state: kitchenModuleState(moduleType) },
+      cabinet: { input, state: kitchenModuleState(moduleType) },
     };
     setProject(prev => ({
       ...prev,

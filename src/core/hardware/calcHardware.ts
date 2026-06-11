@@ -1,5 +1,5 @@
 import { buildHW } from './hardwareCalc';
-import type { HardwareLineItem } from '../../types/hardware';
+import type { HardwareLineItem, FurnitureType } from '../../types/hardware';
 import type { DoorById } from '../../types/doors';
 import type { InteriorById, CellInteriorById } from '../../types/interior';
 
@@ -28,10 +28,13 @@ export function calcHardware(
   doorsById: DoorById,
   interiorById: InteriorById,
   cellInteriorById: CellInteriorById,
+  /** Hardware preset to use. Wall cabinets (קלפה) pass `'wall_cabinet'`:
+   *  a lift-up flap mechanism (מנגנון קלפה) replaces the hinges. */
+  type: FurnitureType = 'cabinet',
 ): HardwareLineItem[] {
   const numDoors = Object.values(doorsById).filter(d => d.hasDoor).length;
   const drawers  = countItemsOfType(interiorById, cellInteriorById, 'drawer');
   const shelves  = countItemsOfType(interiorById, cellInteriorById, 'shelf');
   const rods     = countItemsOfType(interiorById, cellInteriorById, 'rod');
-  return buildHW('cabinet', numDoors, drawers, shelves, rods);
+  return buildHW(type, numDoors, drawers, shelves, rods);
 }

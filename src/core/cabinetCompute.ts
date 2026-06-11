@@ -410,7 +410,10 @@ export function computeUnitCutsAndHardware(
     ...enrich(externalDrawerCuts),
   ];
 
-  const hardwareItems = calcHardware(newDoors, newInterior, newCellInteriorById);
+  const hardwareItems = calcHardware(
+    newDoors, newInterior, newCellInteriorById,
+    input.mount === 'wall' ? 'wall_cabinet' : 'cabinet',
+  );
 
   return { cuts: allCuts, hardwareItems };
 }

@@ -1218,7 +1218,10 @@ export function useCabinet(settings?: {
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),
     ];
-    const hardwareItems = calcHardware(newDoors, newInterior, newCellInteriorById);
+    const hardwareItems = calcHardware(
+      newDoors, newInterior, newCellInteriorById,
+      input.mount === 'wall' ? 'wall_cabinet' : 'cabinet',
+    );
     const derivedBoxDims = new Map(
       rawBoxes
         .filter(b => b.level !== 'plinth')

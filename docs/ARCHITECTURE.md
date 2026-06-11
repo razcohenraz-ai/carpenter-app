@@ -24,6 +24,8 @@ src/
 │   │                   שדות appliance-bay: hasFronts? hasBack? hasBottom? (ברירת מחדל true)
 │   │                   כש-hasFronts=false: אין cuts מ-calcCuts, hasDoor:false לכל הדלתות
 │   │                   כש-hasBottom=false: דפנות מתארכות ל-H−t−LEVELER_GAP_CM (רגלי בונד)
+│   │                   mount? ('base'|'wall', ברירת מחדל base): wall=קלפה → elevation + shelf-only.
+│   │                   מטא-דאטה UI בלבד; לא משפיע על חישוב לוחות/חיתוכים
 │   │                   כש-hasBack=false: אין לוח גב (אבל backThickness עדיין משמש ב-carcassD)
 │   ├── edging.ts       Edging interface, DEFAULT_EDGING
 │   ├── project.ts      Project (products[]) + ProductUnit + KitchenUnit + Cabinet + SavedCabinetState + SavedDoor/SavedHinge/SavedBoardOverride + BoxSlotId/DoorSlotKey

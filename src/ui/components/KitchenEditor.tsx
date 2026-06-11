@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import type { KitchenUnit } from '../../types/project';
 import type { KitchenModuleType } from '../../core/product/kitchenModules';
+import type { MaterialId } from '../../types/materials';
+import { MATERIALS } from '../../catalog';
 import { useTranslation } from '../hooks/useTranslation';
 import { KitchenOverview } from './KitchenOverview';
 import styles from './KitchenEditor.module.css';
 
-const KITCHEN_MODULES: KitchenModuleType[] = ['drawers', 'shelves', 'sink', 'dishwasher', 'oven', 'pantry'];
-const KITCHEN_DEFAULT_W: Record<KitchenModuleType, number> = { drawers: 60, shelves: 60, sink: 80, dishwasher: 64, oven: 60, pantry: 60 };
+const KITCHEN_MODULES: KitchenModuleType[] = ['drawers', 'shelves', 'sink', 'dishwasher', 'oven', 'pantry', 'wall'];
+const KITCHEN_DEFAULT_W: Record<KitchenModuleType, number> = { drawers: 60, shelves: 60, sink: 80, dishwasher: 64, oven: 60, pantry: 60, wall: 100 };
 
 interface Props {
   units: KitchenUnit[];
-  onAddUnit: (moduleType: KitchenModuleType, name: string, W?: number) => void;
+  onAddUnit: (moduleType: KitchenModuleType, name: string, W?: number, materials?: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId }) => void;
   onRemoveUnit: (unitId: string) => void;
   onOpenUnit: (unitId: string) => void;
   onReorderUnit: (unitId: string, direction: 'left' | 'right') => void;
@@ -21,6 +23,8 @@ interface Props {
     customMaterials?: import('../../types/materials').CustomMaterial[];
     bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+    bodyEnabledMaterialIds?: string[];
+    frontEnabledMaterialIds?: string[];
   } | undefined;
 }
 
@@ -42,6 +46,42 @@ export function KitchenEditor({
   const selectedUnit = selectedUnitId ? units.find(u => u.id === selectedUnitId) ?? null : null;
   const selectedIndex = selectedUnit ? units.indexOf(selectedUnit) : -1;
 
+  // ── Kitchen-wide materials (global selectors) ───────────────────────────────
+  // No stored kitchen-level field (single source of truth = the units): the
+  // selector value is DERIVED — the material shared by all units, or null when
+  // they differ ("mixed"). Changing it writes the material to every unit.
+  // Per-unit overrides happen later via each unit's own form.
+  const DEFAULT_MATERIAL_IDS = Object.keys(MATERIALS);
+  const allMaterials = [
+    ...Object.values(MATERIALS),
+    ...(settings?.customMaterials ?? []),
+  ];
+  function sharedMaterial(pick: (u: KitchenUnit) => string): string | null {
+    if (units.length === 0) return null;
+    const first = pick(units[0]!);
+    return units.every(u => pick(u) === first) ? first : null;
+  }
+  const commonBody = sharedMaterial(u => u.cabinet.input.bodyMaterialId);
+  const commonFront = sharedMaterial(u => u.cabinet.input.frontMaterialId);
+  function materialOptions(enabledIds: string[] | undefined, current: string | null) {
+    const enabled = enabledIds ?? DEFAULT_MATERIAL_IDS;
+    const base = allMaterials.filter(m => enabled.includes(m.id));
+    // Always include the current shared material even if it was unchecked in settings.
+    if (current && !base.some(m => m.id === current)) {
+      const cur = allMaterials.find(m => m.id === current);
+      if (cur) return [...base, cur];
+    }
+    return base;
+  }
+  const bodyOptions = materialOptions(settings?.bodyEnabledMaterialIds, commonBody);
+  const frontOptions = materialOptions(settings?.frontEnabledMaterialIds, commonFront);
+  function setAllMaterials(patch: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId }): void {
+    if (!onUpdateUnit) return;
+    for (const u of units) {
+      onUpdateUnit(u.id, { input: { ...u.cabinet.input, ...patch }, state: u.cabinet.state });
+    }
+  }
+
   function handleModuleChange(mod: KitchenModuleType) {
     setSelectedModule(mod);
     setUnitW(String(KITCHEN_DEFAULT_W[mod]));
@@ -51,13 +91,52 @@ export function KitchenEditor({
     e.preventDefault();
     const w = parseFloat(unitW);
     const finalName = unitName.trim() || `${t.project.kitchenModules[selectedModule] ?? selectedModule} ${w}`;
-    onAddUnit(selectedModule, finalName, Number.isFinite(w) && w > 0 ? w : undefined);
+    // Inherit the kitchen-wide material so a new unit doesn't break uniformity.
+    const inherited: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId } = {};
+    if (commonBody) inherited.bodyMaterialId = commonBody as MaterialId;
+    if (commonFront) inherited.frontMaterialId = commonFront as MaterialId;
+    const hasInherited = inherited.bodyMaterialId !== undefined || inherited.frontMaterialId !== undefined;
+    onAddUnit(selectedModule, finalName, Number.isFinite(w) && w > 0 ? w : undefined, hasInherited ? inherited : undefined);
     setUnitName('');
     setShowAddForm(false);
   }
 
   return (
     <div className={styles.editor}>
+      {/* Kitchen-wide material selectors — apply to every unit; per-unit
+          overrides happen later via each unit's own editor. */}
+      {units.length > 0 && onUpdateUnit && (
+        <div className={styles.materialsBar}>
+          <span className={styles.materialsTitle}>{t.kitchen.materialsTitle}</span>
+          <label className={styles.materialField}>
+            {t.form.bodyMaterial}
+            <select
+              className={styles.materialSelect}
+              value={commonBody ?? ''}
+              onChange={e => setAllMaterials({ bodyMaterialId: e.target.value as MaterialId })}
+            >
+              {commonBody === null && <option value="" disabled>{t.kitchen.mixed}</option>}
+              {bodyOptions.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.materialField}>
+            {t.form.frontMaterial}
+            <select
+              className={styles.materialSelect}
+              value={commonFront ?? ''}
+              onChange={e => setAllMaterials({ frontMaterialId: e.target.value as MaterialId })}
+            >
+              {commonFront === null && <option value="" disabled>{t.kitchen.mixed}</option>}
+              {frontOptions.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
       {/* Visual overview */}
       <KitchenOverview
         units={units}

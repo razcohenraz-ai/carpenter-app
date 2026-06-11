@@ -113,18 +113,32 @@
   }
 }
 
-/* ── BodiesView (flex of CabinetSketch per unit) ── */
-.unitsRow {
+/* ── Elevation (base + optional wall row above the countertop) ── */
+.elevation {
   display: flex;
-  flex-direction: row-reverse;  /* RTL — units render right to left */
-  align-items: flex-end;
-  gap: 0;                       /* units sit flush against each other */
   padding: var(--spacing-md);
   background: var(--color-bg);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   overflow-x: auto;
   min-height: 320px;
+}
+
+/* Coordinate system for absolutely-positioned units. Units anchor by their
+   physical `right`/`bottom` so the elevation reads right-to-left with the floor
+   at the bottom. `margin-left:auto` hugs the canvas to the right edge (physical
+   — correct in both RTL and LTR). */
+.elevationCanvas {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.countertop {
+  position: absolute;
+  background: var(--color-text-secondary);
+  opacity: 0.5;
+  border-radius: 1px;
 }
 
 .unitWrapper {

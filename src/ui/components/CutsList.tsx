@@ -25,6 +25,13 @@ function format2(v: number): string {
   return (Math.round(v * 100) / 100).toFixed(2);
 }
 
+/** Display-only: convert an area from cm² to m² with 2 decimals (the
+ *  carpenter-facing sheet-area unit). 10 000 cm² = 1 m². Same round-half-up
+ *  behaviour as {@link format2}. */
+function formatM2(areaCm2: number): string {
+  return (Math.round(areaCm2 / 100) / 100).toFixed(2);
+}
+
 interface MaterialGroup {
   /** materialId (catalog or custom) or null when the cut is not bound to any material
    *  (drawer-box parts at fixed 12mm/6mm). */
@@ -146,7 +153,7 @@ export default function CutsList({ cuts, settings }: CutsListProps): React.JSX.E
                           <span className={styles.dimH}>{format2(widthCm)}</span>
                         </td>
                         <td className={styles.colQty}>{c.qty}</td>
-                        <td className={styles.colArea}>{Math.round(areaCm2).toLocaleString()}</td>
+                        <td className={styles.colArea}>{formatM2(areaCm2)}</td>
                       </tr>
                     );
                   })}
@@ -158,7 +165,7 @@ export default function CutsList({ cuts, settings }: CutsListProps): React.JSX.E
                     </td>
                     <td className={styles.colQty}>{totalPieces}</td>
                     <td className={styles.colArea}>
-                      {Math.round(totalAreaCm2).toLocaleString()}
+                      {formatM2(totalAreaCm2)}
                     </td>
                   </tr>
                   <tr>
@@ -166,7 +173,7 @@ export default function CutsList({ cuts, settings }: CutsListProps): React.JSX.E
                       {t.cutsList.totalArea}
                     </td>
                     <td className={styles.colArea}>
-                      {Math.round(totalAreaCm2).toLocaleString()}
+                      {formatM2(totalAreaCm2)}
                     </td>
                   </tr>
                   {(() => {

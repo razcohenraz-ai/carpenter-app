@@ -139,7 +139,7 @@ export default function App(): React.JSX.Element {
         {!activeKitchenUnit && activeProduct && isKitchen && (
           <KitchenEditor
             units={activeProduct.kitchenUnits ?? []}
-            onAddUnit={(moduleType, name, W) => addKitchenUnit(activeProduct.id, moduleType, name, W)}
+            onAddUnit={(moduleType, name, W, materials) => addKitchenUnit(activeProduct.id, moduleType, name, W, materials)}
             onRemoveUnit={unitId => removeKitchenUnit(activeProduct.id, unitId)}
             onOpenUnit={unitId => setActiveKitchenUnitId(unitId)}
             onReorderUnit={(unitId, dir) => reorderKitchenUnit(activeProduct.id, unitId, dir)}

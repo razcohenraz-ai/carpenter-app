@@ -212,6 +212,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
       ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
+      ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
     });
     // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
@@ -335,6 +336,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
       ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
+      ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
     });
   }
 
@@ -658,6 +660,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
             {...(hideMainDimensions ? { hideRodOption: true } : {})}
             {...(initialInput?.hasFronts === false ? { hideInteriorControls: true } : {})}
+            {...(initialInput?.mount === 'wall' ? { shelfOnly: true } : {})}
             {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
             {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
           />

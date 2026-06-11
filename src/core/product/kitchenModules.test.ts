@@ -92,6 +92,32 @@ describe('kitchenModuleInput — pantry (מזווה)', () => {
   });
 });
 
+describe('kitchenModuleInput — wall (קלפה)', () => {
+  it('default W=100, H=50, D=35, plinth=0 (wall cabinet, no plinth)', () => {
+    const inp = kitchenModuleInput('wall');
+    expect(inp.W).toBe(100);
+    expect(inp.H).toBe(50);
+    expect(inp.D).toBe(35);
+    expect(inp.plinth).toBe(0);
+  });
+
+  it('W override is respected', () => {
+    expect(kitchenModuleInput('wall', 80).W).toBe(80);
+  });
+
+  it('single front: maxDoorWidth (120) > W (100) → one door column', () => {
+    expect(kitchenModuleInput('wall').maxDoorWidth).toBe(120);
+  });
+
+  it('mount = wall (drives elevation + shelf-only editor)', () => {
+    expect(kitchenModuleInput('wall').mount).toBe('wall');
+  });
+
+  it('has a door: hasFronts left at default (undefined → true)', () => {
+    expect(kitchenModuleInput('wall').hasFronts).toBeUndefined();
+  });
+});
+
 describe('kitchenModuleState — interior shape', () => {
   it('drawers → 3 external drawers', () => {
     const st = kitchenModuleState('drawers');
@@ -119,6 +145,14 @@ describe('kitchenModuleState — interior shape', () => {
     expect(Object.keys(st.interior).length).toBe(0);
     expect(Object.keys(st.doors).length).toBe(0);
     expect(Object.keys(st.partitions).length).toBe(0);
+  });
+
+  it('wall → 2 shelves (single-door wall cabinet)', () => {
+    const st = kitchenModuleState('wall');
+    const items = st.interior['single:single'];
+    expect(items).toBeDefined();
+    expect(items!.length).toBe(2);
+    expect(items!.every(i => i.type === 'shelf')).toBe(true);
   });
 
   it('pantry → 6 internal drawers, bottom 30 + 5×28, filling bodyH=170 exactly', () => {

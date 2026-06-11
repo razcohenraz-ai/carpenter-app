@@ -78,6 +78,9 @@ interface Props {
   /** When true, hide ALL add-item controls (shelf, drawer, rod, partition).
    *  Used for appliance-bay units (e.g. dishwasher) that have no interior. */
   hideInteriorControls?: boolean;
+  /** When true, expose ONLY the "add shelf" control — drawer, rod and partition
+   *  buttons are hidden. Used by wall cabinets (קלפה), which hold shelves only. */
+  shelfOnly?: boolean;
   /** Sink-open variant flags — passed through to BoxBodySketch so the
    *  carcass background renders the standing sink traverses instead of a
    *  top board. Both undefined for non-sink units. */
@@ -102,6 +105,7 @@ export default function BoxInteriorEditor({
   derivedW, derivedH, derivedD,
   hideRodOption,
   hideInteriorControls,
+  shelfOnly,
   topVariant, sinkTraverseWidthCm,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -733,10 +737,12 @@ export default function BoxInteriorEditor({
                       <button className={styles.addBtn} onClick={() => addCellShelf(ci)}>
                         {t.interior.addShelf}
                       </button>
-                      <button className={styles.addBtn} onClick={() => addCellDrawer(ci)}>
-                        {t.interior.addDrawer}
-                      </button>
-                      {!hideRodOption && (
+                      {!shelfOnly && (
+                        <button className={styles.addBtn} onClick={() => addCellDrawer(ci)}>
+                          {t.interior.addDrawer}
+                        </button>
+                      )}
+                      {!hideRodOption && !shelfOnly && (
                         <button className={styles.addBtn} onClick={() => addCellRod(ci)}>
                           {t.interior.addRod}
                         </button>
@@ -794,15 +800,17 @@ export default function BoxInteriorEditor({
                 <button className={styles.addBtn} onClick={addShelf}>
                   {t.interior.addShelf}
                 </button>
-                <button className={styles.addBtn} onClick={addDrawer}>
-                  {t.interior.addDrawer}
-                </button>
-                {!hideRodOption && (
+                {!shelfOnly && (
+                  <button className={styles.addBtn} onClick={addDrawer}>
+                    {t.interior.addDrawer}
+                  </button>
+                )}
+                {!hideRodOption && !shelfOnly && (
                   <button className={styles.addBtn} onClick={addRod}>
                     {t.interior.addRod}
                   </button>
                 )}
-                {numFronts > 1 && (
+                {numFronts > 1 && !shelfOnly && (
                   <button className={styles.addBtn} onClick={requestAddPartition}>
                     {t.interior.addPartition}
                   </button>

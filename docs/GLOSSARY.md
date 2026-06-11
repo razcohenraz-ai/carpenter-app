@@ -309,6 +309,15 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 ### pantry module / מודול מזווה
 `KitchenModuleType = 'pantry'`. גוף גבוה (larder) עם חזיתות (`hasFronts` ברירת מחדל). מידות שונות משאר הגופים: H=180 (גבוה מהשיש), W=60, D=60, plinth=10. פנים = 6 מגירות **פנימיות** מאחורי הדלת: תחתונה 30 + 5×28, ממלאות bodyH=170 עד התקרה. מגירות פנימיות → פרזול + סקיצה בלבד, **לא** חלקי חיתוך (תיבות נרכשות). רוחב ברירת מחדל: 60 ס"מ.
 
+### wall module / מודול קלפה
+`KitchenModuleType = 'wall'`. ארון קיר עליון התלוי מעל השיש. W=100, H=50, D=35, `plinth=0`, חזית בודדת (`maxDoorWidth=120`), 2 מדפים ברירת מחדל. `mount:'wall'` מניע את תצוגת ה-elevation (שורה עליונה בגובה 152 ס"מ) ואת עורך ה-shelf-only. רוחב ברירת מחדל: 100 ס"מ.
+
+### mount
+שדה ב-`CabinetInput` (`'base' | 'wall'`, ברירת מחדל `base`). `'wall'` = ארון קיר (קלפה) התלוי מעל השיש. מטא-דאטה ל-UI/מיקום בלבד — מניע את ה-elevation ב-`KitchenOverview` ואת ה-`shelfOnly` ב-`BoxInteriorEditor`; **לא** משפיע על חישוב לוחות/חיתוכים.
+
+### elevation / תצוגת חזית מטבח
+פריסת `UnitsView` ב-`KitchenOverview`: גופי רצפה בשורה תחתונה + גופי קיר (`mount:'wall'`) בשורה עליונה (תחתיתם 152 ס"מ מהרצפה), עם פס שיש ביניהם. מיקום אבסולוטי לפי `right`/`bottom` (RTL, רצפה למטה).
+
 ### hasFronts / hasBack / hasBottom
 שדות אופציונליים ב-`CabinetInput` (ברירת מחדל `true`):
 - `hasFronts=false`: מדכא cuts מ-`calcCuts` (group:'door'), מעמיד `hasDoor:false` לכל הדלתות, מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).
