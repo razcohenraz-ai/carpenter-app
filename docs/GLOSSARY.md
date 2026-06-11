@@ -306,6 +306,9 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 ### oven module / מודול תנור
 `KitchenModuleType = 'oven'`. גוף סטנדרטי (plinth=10, גב, תחתון) עם `hasFronts=false`. מגירה חיצונית (h=19.2) + מדף קבוע (hff=17.4) בתחתית; חלל 59 ס"מ לתנור מעל. רוחב ברירת מחדל: 60 ס"מ.
 
+### pantry module / מודול מזווה
+`KitchenModuleType = 'pantry'`. גוף גבוה (larder) עם חזיתות (`hasFronts` ברירת מחדל). מידות שונות משאר הגופים: H=180 (גבוה מהשיש), W=60, D=60, plinth=10. פנים = 6 מגירות **פנימיות** מאחורי הדלת: תחתונה 30 + 5×28, ממלאות bodyH=170 עד התקרה. מגירות פנימיות → פרזול + סקיצה בלבד, **לא** חלקי חיתוך (תיבות נרכשות). רוחב ברירת מחדל: 60 ס"מ.
+
 ### hasFronts / hasBack / hasBottom
 שדות אופציונליים ב-`CabinetInput` (ברירת מחדל `true`):
 - `hasFronts=false`: מדכא cuts מ-`calcCuts` (group:'door'), מעמיד `hasDoor:false` לכל הדלתות, מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).

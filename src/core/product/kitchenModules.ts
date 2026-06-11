@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -48,6 +48,14 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
     // front fills it. External-drawer front cuts are NOT suppressed (they come
     // from calcExternalDrawerFrontCuts, independent of hasFronts).
     return { ...base, hasFronts: false };
+  }
+  if (type === 'pantry') {
+    // מזווה (tall larder): taller than countertop height. Standard W/D/plinth;
+    // overrides only H → 180. Keeps hasFronts at its default (true) so it has
+    // doors; the interior is a stack of INTERNAL drawers behind those doors
+    // (see kitchenModuleState — internal drawers emit hardware + sketch, not
+    // cut parts, matching bought drawer systems).
+    return { ...base, H: 180 };
   }
   return base;
 }
@@ -107,6 +115,33 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
         [slotKey]: [
           { id: 'km-ov-d1', type: 'drawer', heightFromFloor: 0,    drawerHeight: 19.2, mount: 'external' },
           { id: 'km-ov-sh1', type: 'shelf',  heightFromFloor: 17.4, isFixedAboveExternals: true },
+        ],
+      },
+    };
+  }
+
+  if (type === 'pantry') {
+    // מזווה: a vertical stack of INTERNAL drawers behind the door(s).
+    //
+    // Geometry (bodyH = H180 − plinth10 = 170 cm):
+    //   bottom drawer height = 30 cm           → top = 30
+    //   remaining (170 − 30) = 140 cm split into 5 EQUAL drawers = 28 cm each
+    //   tops: 58, 86, 114, 142, 170            → fills to the ceiling exactly
+    //   no overlap (each hff = previous top), no out-of-bounds (max top = bodyH)
+    //
+    // Internal drawers produce hardware (slides) + body-sketch rects but NO
+    // cut-list parts (drawer boxes are bought systems) — same convention as the
+    // 'drawers' module's external faces. Every height is overridable per body.
+    return {
+      ...emptyBase,
+      interior: {
+        [slotKey]: [
+          { id: 'km-pn-d1', type: 'drawer', heightFromFloor: 0,   drawerHeight: 30, mount: 'internal' },
+          { id: 'km-pn-d2', type: 'drawer', heightFromFloor: 30,  drawerHeight: 28, mount: 'internal' },
+          { id: 'km-pn-d3', type: 'drawer', heightFromFloor: 58,  drawerHeight: 28, mount: 'internal' },
+          { id: 'km-pn-d4', type: 'drawer', heightFromFloor: 86,  drawerHeight: 28, mount: 'internal' },
+          { id: 'km-pn-d5', type: 'drawer', heightFromFloor: 114, drawerHeight: 28, mount: 'internal' },
+          { id: 'km-pn-d6', type: 'drawer', heightFromFloor: 142, drawerHeight: 28, mount: 'internal' },
         ],
       },
     };

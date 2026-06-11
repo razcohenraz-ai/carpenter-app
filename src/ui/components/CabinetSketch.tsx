@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
+import { isValidSketchInput, computeSketchGeometry, internalDrawerBoxBoundsCm, DRAWER_BOX_SIDE_GAP_CM } from './CabinetSketch.utils';
 import {
   type RowFrontLayout,
   computeFrontGeometry,
@@ -408,11 +408,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
               );
             }
             if (item.type === 'drawer') {
-              const yBottom = toSvgY(item.heightFromFloor);
-              const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
+              // Internal drawer: render as the inner drawer BOX (inset), like the
+              // external drawer box, so the carcass top/bottom boards stay visible
+              // behind it instead of being covered by a full-bleed band.
+              const d = item as DrawerItem;
+              const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
+              const yBottom = toSvgY(bottomCm);
+              const yTop    = toSvgY(topCm);
+              const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * geo.scale;
               return (
-                <rect key={item.id} x={innerX} y={yTop}
-                  width={innerW} height={yBottom - yTop}
+                <rect key={item.id} x={innerX + sideGapPx} y={yTop}
+                  width={Math.max(innerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
                   className={styles.drawerRect} />
               );
             }
@@ -526,11 +532,16 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                     return <line key={item.id} x1={cellInnerX} y1={y} x2={cellInnerX + cellInnerW} y2={y} className={styles.rodLine} />;
                   }
                   if (item.type === 'drawer') {
-                    const yBottom = toSvgY(item.heightFromFloor);
-                    const yTop    = toSvgY(item.heightFromFloor + (item as DrawerItem).drawerHeight);
+                    // Internal drawer (partitioned cell): inner box, inset — same
+                    // as the full-body case so the carcass boards stay visible.
+                    const d = item as DrawerItem;
+                    const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
+                    const yBottom = toSvgY(bottomCm);
+                    const yTop    = toSvgY(topCm);
+                    const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * geo.scale;
                     return (
-                      <rect key={item.id} x={cellInnerX} y={yTop}
-                        width={cellInnerW} height={yBottom - yTop}
+                      <rect key={item.id} x={cellInnerX + sideGapPx} y={yTop}
+                        width={Math.max(cellInnerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
                         className={styles.drawerRect} />
                     );
                   }

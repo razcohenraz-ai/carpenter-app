@@ -6,6 +6,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { getEffectiveMaterial } from '../../catalog';
 import { buildBoardModel } from '../../core/boards/boardModel';
 import CabinetCutSketch from './CabinetCutSketch';
+import { internalDrawerBoxBoundsCm, DRAWER_BOX_SIDE_GAP_CM } from './CabinetSketch.utils';
 import styles from './BoxBodySketch.module.css';
 
 interface Props {
@@ -304,15 +305,20 @@ export default function BoxBodySketch({
         }
 
         if (item.type === 'drawer') {
-          const yBottom = toY(h);
-          const yTop    = toY(h + item.drawerHeight);
+          // Render as the inner drawer BOX (inset), matching the kitchen bodies
+          // view, so the carcass top/bottom boards stay visible behind it. `h`
+          // is the drag-aware floor; the label still reports heightFromFloor.
+          const { bottomCm, topCm } = internalDrawerBoxBoundsCm(h, item.drawerHeight);
+          const yBottom = toY(bottomCm);
+          const yTop    = toY(topCm);
+          const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * scale;
           return (
             <g key={item.id} {...dragProps}>
               <rect
-                x={innerX}
+                x={innerX + sideGapPx}
                 y={yTop}
-                width={innerW}
-                height={yBottom - yTop}
+                width={Math.max(innerW - 2 * sideGapPx, 0)}
+                height={Math.max(yBottom - yTop, 0)}
                 className={styles.drawerRect}
                 opacity={isDragging ? 0.4 : 1}
               />

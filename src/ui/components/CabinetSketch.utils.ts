@@ -15,6 +15,31 @@ const PAD_LEFT = 90;
 // Ordered from top to bottom for split-line calculation
 const LEVEL_ORDER: BoxLevel[] = ['top', 'middle', 'bottom', 'single'];
 
+// ── Drawer-box visual insets ─────────────────────────────────────────────────
+// A drawer is drawn as its inner BOX (tray), inset from the body opening, so the
+// carcass boards (sides, top, bottom) stay visible around it — never as a full-
+// bleed band that would occlude them. Same convention used for the external
+// drawer box in the kitchen bodies view; internal drawers reuse it so they look
+// like trays inside the carcass rather than solid panels.
+export const DRAWER_BOX_SIDE_GAP_CM = 1.25;   // each side
+export const DRAWER_BOX_BOTTOM_GAP_CM = 2;
+export const DRAWER_BOX_TOP_GAP_CM = 3;
+
+/** Inner drawer-box vertical bounds (cm from body bottom) for an INTERNAL drawer
+ *  at `heightFromFloor` with height `drawerHeight`. The bottom/top insets keep
+ *  the top/bottom carcass boards visible behind the tray. A drawer shorter than
+ *  the combined insets yields `topCm ≤ bottomCm` — callers clamp the rendered
+ *  height to ≥ 0. */
+export function internalDrawerBoxBoundsCm(
+  heightFromFloor: number,
+  drawerHeight: number,
+): { bottomCm: number; topCm: number } {
+  return {
+    bottomCm: heightFromFloor + DRAWER_BOX_BOTTOM_GAP_CM,
+    topCm: heightFromFloor + drawerHeight - DRAWER_BOX_TOP_GAP_CM,
+  };
+}
+
 export interface SketchLine {
   x1: number;
   y1: number;
