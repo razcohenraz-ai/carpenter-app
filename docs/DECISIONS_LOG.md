@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-06-10 — מודולים: סקיל `add-module` עכשיו, רפקטר ל-registry גנרי כשיהיו 2 מוצרים
+
+**ההחלטה**: ליצור סקיל פרודקט-אגנוסטי `.claude/skills/add-module/SKILL.md` שמקודד את
+מתכון הוספת המודול (type → input factory → state factory → UI → i18n → tests → docs),
+**בלי** לרפקטר את הקוד ל-`ProductModule` registry גנרי. הסקיל מחזיק "מפת מוצר→מערכת
+מודולים" שכרגע ממפה רק `kitchen` (`kitchenModules.ts`). מוצר חדש עם מודולים → מוסיפים
+שורה למפה (+ Bootstrap של `<product>Modules.ts` בתבנית kitchen).
+
+**הנימוק**:
+- **YAGNI / הפשטה מדוגמה יחידה**: כיום רק `kitchen` יש לו מודולים. עיצוב registry גנרי
+  מדוגמה אחת מסכן להטמיע הנחות מטבח-ספציפיות (קיטוע צוקל ב-`plinth=0`, `LEVELER_GAP_CM`,
+  קיבוץ צוקל ב-`groupKitchenUnitsForPlinth`) שלא בהכרח יתאימו לארון/ספרייה.
+- **הסקיל זול לעדכן**: פרוצדורה + ידע, לא קוד. מתעדכן בשורה אחת כשנדע יותר.
+- **תיעוד ה-gotchas**: הסקיל משמר באגים אמיתיים שנתקלנו בהם (חזית מגירה חיצונית
+  כש-`hasFronts=false`, אובדן דגלים ב-`CabinetForm`, קווי צוקל "לפי גודל גוף") —
+  ערך מיידי גם בלי רפקטר.
+
+**טריגר לרפקטר (גישה B)**: כשמוצר **שני** יקבל מודול ראשון. אז יהיו שתי דוגמאות
+אמיתיות, ואם יש שכפול ממשי בין `kitchenModules.ts` ל-`<product2>Modules.ts` — לחלץ
+`interface ProductModule { id; productTypes[]; defaultW; buildInput(); buildState(); labelKey }`
++ registry יחיד, והעורכים יסננו לפי `productType`. עד אז המפה בסקיל מספיקה.
+
+**אלטרנטיבה שנדחתה — רפקטר עכשיו**: לחלץ `ProductModule` גנרי לפני שיש מוצר שני.
+נדחה כי אין דוגמה שנייה שתאמת את ההפשטה, והסיכון הוא abstraction מוקדם שמקבע
+kitchen-isms.
+
+---
+
 ## 2026-06-02 — Custom Materials: Support בכל ה-stack מ-form עד cuts list
 
 **ההחלטה**: Custom materials (יוצרים ידי משתמש שמוגדרים בהגדרות) יידרשו לתמיכה בחישובי מטריאלים בעומק ה-core. זה דורש:
