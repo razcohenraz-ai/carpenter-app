@@ -823,29 +823,47 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
     return map;
   }, [units]);
 
-  // ── Elevation layout ────────────────────────────────────────────────────────
-  // Single horizontal axis in cm, measured from the RIGHT edge (the row is RTL).
-  // Base units tile the floor; each wall cabinet is anchored above the base unit
-  // that precedes it in the array (consecutive walls tile sideways from there).
-  // `yBottomCm` = the unit's bottom above the floor: 0 for base, 152 for wall.
+  // ── Elevation layout (two-pass) ─────────────────────────────────────────────
+  // Pass 1: place all BASE units left-to-right; identify "wall blockers" — base
+  // units whose height reaches the wall zone (H ≥ WALL_BOTTOM_CM, e.g. pantry).
+  // Pass 2: place WALL units in array order, advancing past any blocker they
+  // would overlap. This ensures correctness regardless of whether the wall unit
+  // appears before or after the tall base unit in the units array.
   const positions = new Map<string, { xCm: number; yBottomCm: number }>();
   {
+    // Pass 1 — base units.
+    const wallBlockers: Array<{ lo: number; hi: number }> = [];
     let baseX = 0;
-    let wallCursor = 0;
     for (const u of units) {
+      if (isWall(u)) continue;
       const w = unitOuterW(u);
-      if (isWall(u)) {
-        positions.set(u.id, { xCm: wallCursor, yBottomCm: WALL_BOTTOM_CM });
-        wallCursor += w;
-      } else {
-        positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
-        // A tall base unit (e.g. pantry, top ≥ 152) reaches into the wall zone,
-        // so reserve its FULL width in the wall row — wall cabinets sit beside
-        // it, not overlapping it. A standard base only blocks the left edge.
-        const reachesWallZone = effectiveDims(u).H >= WALL_BOTTOM_CM;
-        wallCursor = Math.max(wallCursor, reachesWallZone ? baseX + w : baseX);
-        baseX += w;
+      positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
+      if (effectiveDims(u).H >= WALL_BOTTOM_CM) {
+        wallBlockers.push({ lo: baseX, hi: baseX + w });
       }
+      baseX += w;
+    }
+
+    // Pass 2 — wall units: skip over any tall-base blocker they'd collide with.
+    let wallX = 0;
+    for (const u of units) {
+      if (!isWall(u)) continue;
+      const w = unitOuterW(u);
+      // Advance wallX until the range [wallX, wallX+w] clears all blockers.
+      // Repeat because clearing one blocker might expose the next.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const b of wallBlockers) {
+          if (wallX < b.hi && wallX + w > b.lo) {
+            wallX = b.hi;
+            changed = true;
+            break;
+          }
+        }
+      }
+      positions.set(u.id, { xCm: wallX, yBottomCm: WALL_BOTTOM_CM });
+      wallX += w;
     }
   }
   const baseRunW = units.filter(u => !isWall(u)).reduce((s, u) => s + unitOuterW(u), 0);
