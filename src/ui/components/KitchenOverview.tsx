@@ -823,47 +823,61 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
     return map;
   }, [units]);
 
-  // ── Elevation layout (two-pass) ─────────────────────────────────────────────
-  // Pass 1: place all BASE units left-to-right; identify "wall blockers" — base
-  // units whose height reaches the wall zone (H ≥ WALL_BOTTOM_CM, e.g. pantry).
-  // Pass 2: place WALL units in array order, advancing past any blocker they
-  // would overlap. This ensures correctness regardless of whether the wall unit
-  // appears before or after the tall base unit in the units array.
+  // ── Elevation layout ─────────────────────────────────────────────────────────
+  // Single pass (preserving array-order → visual-position mapping) with a
+  // pre-computed blocker list so wall units are pushed past tall base units
+  // regardless of whether the wall appears before or after the tall unit in the
+  // array. Without the pre-scan, a wall placed before a pantry in the array
+  // would be placed before seeing the blocker and would collide.
+  //
+  // wallCursor tracks the next available x in the wall row and advances for
+  // every wall unit placed and for every tall base unit encountered.
+  // For non-tall base units the original "wallCursor = max(wallCursor, baseX)"
+  // rule is preserved so the wall's x position reflects its array rank.
   const positions = new Map<string, { xCm: number; yBottomCm: number }>();
   {
-    // Pass 1 — base units.
+    // Pre-scan: collect x-ranges that are blocked in the wall row (H ≥ WALL_BOTTOM_CM).
     const wallBlockers: Array<{ lo: number; hi: number }> = [];
-    let baseX = 0;
-    for (const u of units) {
-      if (isWall(u)) continue;
-      const w = unitOuterW(u);
-      positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
-      if (effectiveDims(u).H >= WALL_BOTTOM_CM) {
-        wallBlockers.push({ lo: baseX, hi: baseX + w });
+    {
+      let scanX = 0;
+      for (const u of units) {
+        if (isWall(u)) continue;
+        const w = unitOuterW(u);
+        if (effectiveDims(u).H >= WALL_BOTTOM_CM) wallBlockers.push({ lo: scanX, hi: scanX + w });
+        scanX += w;
       }
-      baseX += w;
     }
 
-    // Pass 2 — wall units: skip over any tall-base blocker they'd collide with.
-    let wallX = 0;
+    let baseX = 0;
+    let wallCursor = 0;
     for (const u of units) {
-      if (!isWall(u)) continue;
       const w = unitOuterW(u);
-      // Advance wallX until the range [wallX, wallX+w] clears all blockers.
-      // Repeat because clearing one blocker might expose the next.
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const b of wallBlockers) {
-          if (wallX < b.hi && wallX + w > b.lo) {
-            wallX = b.hi;
-            changed = true;
-            break;
+      if (isWall(u)) {
+        // Before placing, push wallCursor past any blocker it would overlap.
+        // (Because blockers are pre-computed, this works even if the blocker
+        // appears later in the array than the wall unit.)
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const b of wallBlockers) {
+            if (wallCursor < b.hi && wallCursor + w > b.lo) {
+              wallCursor = b.hi; changed = true; break;
+            }
           }
         }
+        positions.set(u.id, { xCm: wallCursor, yBottomCm: WALL_BOTTOM_CM });
+        wallCursor += w;
+      } else {
+        positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
+        // For tall units: wallCursor jumps to their right edge (they block the
+        // wall zone). For normal units: wallCursor tracks their start x so wall
+        // units placed after them land "above" them (array-order semantics).
+        wallCursor = Math.max(
+          wallCursor,
+          effectiveDims(u).H >= WALL_BOTTOM_CM ? baseX + w : baseX,
+        );
+        baseX += w;
       }
-      positions.set(u.id, { xCm: wallX, yBottomCm: WALL_BOTTOM_CM });
-      wallX += w;
     }
   }
   const baseRunW = units.filter(u => !isWall(u)).reduce((s, u) => s + unitOuterW(u), 0);
