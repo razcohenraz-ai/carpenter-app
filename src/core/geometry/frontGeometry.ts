@@ -127,6 +127,29 @@ export function getBoxFirstGlobalFrontIndex(args: {
   return -1;
 }
 
+/** Number of front columns a single body splits into.
+ *
+ *  Standard bodies split once per `maxDoorWidth` of width — a 130 cm body at
+ *  maxDoorWidth 120 yields 2 columns (`ceil(130 / 120)`).
+ *
+ *  Wall cabinets (`mount === 'wall'`) are pinned to a SINGLE front whatever
+ *  their width: the lift-up flap is one panel, not a hinged pair, so a wide
+ *  wall cabinet must NOT auto-split. (A future per-cabinet "front count"
+ *  override will let the carpenter request more — until then it is always 1.)
+ *
+ *  This is the single source of truth for the column count; every compute path
+ *  (useCabinet, cabinetCompute, the kitchen overview) routes through it so the
+ *  number of doors stays consistent across the sketch, the cut list and the
+ *  hardware. */
+export function frontColumnsForBox(
+  boxW: number,
+  maxDoorWidth: number,
+  mount?: 'base' | 'wall',
+): number {
+  if (mount === 'wall') return 1;
+  return Math.max(1, Math.ceil(boxW / maxDoorWidth));
+}
+
 /** Total number of fronts in a row — convenience for layout input. */
 export function getTotalFrontsInRow(
   rowBoxes: ReadonlyArray<Pick<Box, 'id'>>,

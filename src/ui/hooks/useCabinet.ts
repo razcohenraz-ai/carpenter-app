@@ -22,6 +22,7 @@ import {
   getBoxFirstGlobalFrontIndex,
   getTotalFrontsInRow,
   groupBoxesByRow,
+  frontColumnsForBox,
   type RowFrontLayout,
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
@@ -882,7 +883,7 @@ export function useCabinet(settings?: {
         const savedCells = pendingRestore.cellInterior[slotKey];
         if (savedCells) stableCellMap.set(slotKey, savedCells);
         if (pendingRestore.partitions[slotKey]) stablePartitionsMap.set(slotKey, true);
-        const nf = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+        const nf = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
         for (let fi = 0; fi < nf; fi++) {
           const dsk = `${slotKey}:${fi}`;
           const sd = pendingRestore.doors[dsk];
@@ -930,7 +931,7 @@ export function useCabinet(settings?: {
 
     for (const box of bodyBoxes) {
       const key = boxStableKey(box);
-      const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+      const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
       newNumFrontsMap.set(box.id, numFronts);
 
       // Interior
@@ -963,8 +964,24 @@ export function useCabinet(settings?: {
     const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
     for (const [level, rowBoxes] of rowsByLevel) {
       const totalFrontsInRow = getTotalFrontsInRow(rowBoxes, newNumFrontsMap);
+      // Per-row EFFECTIVE outer width. The row's fronts spread across the sum
+      // of its (possibly overridden) body widths — not the global input W —
+      // so a manual body-size override widens/narrows the fronts to match the
+      // body beneath them (single source of truth: the same box.W the bodies
+      // sketch uses). `W − innerW` is the cabinet's shell offset (2·tFront when
+      // symmetric, tFront for a single-side shell, 0 with none); adding the
+      // row's inner width back reproduces the outer width. Without any override
+      // `rowInnerW === innerW`, so this equals the global W exactly — no change
+      // to existing (un-overridden) cabinets. Note: when bodies in a row differ
+      // in width (a per-body override on one of several same-row bodies) the
+      // uniform split still divides the row evenly; the fronts fill the full
+      // effective width but each column shares the average, not its own body's
+      // width. The common cases — a single-body row (e.g. a wall cabinet) or a
+      // row of equal bodies — are exact.
+      const rowInnerW = rowBoxes.reduce((s, b) => s + b.W, 0);
+      const rowEffectiveOuterW = (W - innerW) + rowInnerW;
       layoutByRow.set(level, computeRowFrontLayout({
-        cabinetW: W,
+        cabinetW: rowEffectiveOuterW,
         hasOuterShell: hasAnyShell,
         shellThicknessCm: tFront,
         totalFrontsInRow,

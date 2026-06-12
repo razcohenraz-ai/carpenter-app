@@ -7,6 +7,33 @@
 
 ## [Unreleased]
 
+### תוקן — קלפה רחבה התפצלה לשתי דלתות + "מחיצה" מדומה (רגרסיה מתיקון רוחב per-row)
+
+תיקון רוחב החזית per-row (להלן) גרם ל-`numFronts` ול-decompose להגיב ל-`box.W` האפקטיבי. כשהקלפה הורחבה מעבר ל-100/120 צצו **שני** תסמינים:
+
+1. **שתי דלתות**: `numFronts = ceil(W/maxDoorWidth)` נתן 2 כש-W>120. **בקלפה תמיד דלת אחת** (עד override עתידי).
+2. **"מחיצה" מדומה במרכז בתצוגת המטבח**: `KitchenOverview` העביר ל-`CabinetSketch` המוטמע `W=effW` (אחרי override) **יחד עם** `boxDimensionOverrides`. בתוך הסקיצה `decomposeBoxes(effW)` פיצל גוף יחיד שרוחבו עבר את `MAX_BOX_W` (100) לשני גופים — קו מחיצה פיזי — וה-override על `'single:single'` אף לא הוחל (אף חצי אינו `single`). עורך הגוף לא הראה זאת כי הוא מפרק על `input.W` ומחיל override **אחריו**.
+
+**תיקונים**:
+- helper יחיד `frontColumnsForBox(boxW, maxDoorWidth, mount)` ב-`frontGeometry` — `mount==='wall'` → `1` תמיד, אחרת `ceil(boxW/maxDoorWidth)`. כל **5 מסלולי החישוב** (`useCabinet` ×2, `cabinetCompute`, `KitchenOverview` ×2) מנותבים דרכו (single source of truth).
+- `KitchenOverview` עבר לפרק על **מידות ה-input** ולהחיל את ה-`boxDimensionOverrides` על התוצאה — בדיוק כמו `useCabinet`/עורך הגוף. גם ה-`CabinetSketch` המוטמע מקבל כעת `inp.W`/`inp.H` (במקום `effW`/`effH`) ומחיל את ה-override פנימית. כעת שתי התצוגות עקביות: גוף שהורחב בעקיפה נשאר גוף יחיד ללא מחיצת שווא. ארונות בסיס רגילים ללא שינוי.
+
+### תוקן — עקיפת מידות גוף לא התעדכנה בתצוגת חזיתות
+
+כאשר הנגר שינה מידת גוף ידנית (W/H/D) דרך עורך הגוף, תצוגת **חזיתות** המשיכה להציג את המידות לפני העקיפה — גם מתאר הגוף וה-labels, וגם **רוחב החזית עצמה** (החזית לא התיישרה לרוחב הגוף החדש).
+
+**שלוש שכבות לשורש**:
+1. **גיאומטריית הסקיצה (רוחב + מתאר)**: `CabinetFrontsSketch` לא קיבל את `boxDimensionOverrides`, ולכן `computeSketchGeometry` חישב `levelHeightMap` / `boxSvgRects` / labels מהמידות הגולמיות.
+2. **רוחב החזית**: ב-`useCabinet` (וב-`cabinetCompute`) ה-front layout חושב מ-`cabinetW: W` הגלובלי — `door.width = frontWidth` התעלם מ-`box.W` אחרי העקיפה.
+3. **גובה המתאר (scale אסימטרי)**: `computeSketchGeometry` כבר חישב את ה-scale מרוחב אפקטיבי (`effectiveCabW`), אבל לגובה השתמש ב-`H` הגולמי. כך מתאר הארון (`cabH = H·scale`) צויר בגובה הישן בעוד ה-`boxSvgRects` והדלת השתמשו ב-`box.H` אחרי העקיפה — אי-עקביות פנימית שגרמה לחזית לא למלא את המתאר (התצוגה "השבורה").
+
+**תיקון**:
+- `CabinetFrontsSketch` קיבל prop `boxDimensionOverrides` ומעביר אותו ל-`computeSketchGeometry` (פרמטר אופציונלי קיים). `CabinetForm` מעביר את המפה רק כש-`size > 0`.
+- `useCabinet` + `cabinetCompute` (שני מסלולי ה-compute, נשמרים מסונכרנים): ה-front layout מחושב מרוחב אפקטיבי **per-row** — `(W − innerW) + Σ box.W` של גופי השורה — במקום מ-`W` הגלובלי. בלי עקיפה זה שווה ל-`W` בדיוק (אפס שינוי לארונות קיימים). לגוף יחיד (קלפה) או שורה של גופים שווים — מדויק; שורה רב-גופית עם עקיפה על גוף בודד מתחלקת אחיד (החזיתות ממלאות את הרוחב, אך חולקות ממוצע).
+- `computeSketchGeometry` מחשב `effectiveH` (סכום גבהי ה-levels אחרי עקיפה + צוקל + מעטפת עליונה) ומשתמש בו ל-`scale`/`cabH`/`bodyH`/קווי מדף/label — סימטרי ל-`effectiveCabW` של הרוחב. כעת מתאר הארון מתיישר עם ה-box rects והחזית ממלאת אותו. בלי עקיפה `effectiveH === H`.
+
+**מגבלה ידועה (חוב טכני)**: חיתוך הדלת ב-CutsList (`calcCuts`, מסלול single-row) משחזר עמודות מ-`input.W` ואינו תומך ב-box override על W — לכן רוחב חיתוך הדלת לא מתעדכן עם עקיפה (חיתוכי הקורפוס והמגירות החיצוניות כן). תיקון דורש גזירת חיתוכי הדלת מ-`doorsById` במקום מ-`calcCuts`.
+
 ### תוקן — 5 באגים במודול קלפה
 
 1. **חיצי הזזה הפוכים (RTL)**: `←` קרא `'left'` (= idx−1 = זז ימינה בתצוגה RTL). תוקן: `←` → `'right'`, `→` → `'left'`, תנאי `disabled` מתאים.

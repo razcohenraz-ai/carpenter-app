@@ -172,16 +172,36 @@ export function computeSketchGeometry(
     (sides.left ? envelopeCm : 0) +
     (sides.right ? envelopeCm : 0);
 
-  // Scale fits the actual cabinet (effectiveCabW × H). Using `max(W,
-  // effectiveCabW)` would mis-scale when overrides + shell make the
-  // cabinet wider than input W (height would shrink because scale drops).
-  const scale = Math.min(drawW / Math.max(1, effectiveCabW), drawH / Math.max(1, H));
+  // ── Build level → H map (body boxes only) ────────────────────────────────────
+  // Built BEFORE the scale so the effective total height (below) can drive both
+  // the scale and the cabinet outline. Mirrors the width path, which already
+  // scales to effectiveCabW (sum of body widths) rather than the raw W param.
+  const levelHeightMap = new Map<BoxLevel, number>();
+  for (const box of boxes) {
+    if (box.level !== 'plinth' && !levelHeightMap.has(box.level)) {
+      levelHeightMap.set(box.level, box.H);
+    }
+  }
+
+  // Effective TOTAL cabinet height: sum of the (possibly overridden) per-level
+  // body heights + plinth + top-envelope band. This — not the raw H param —
+  // drives the scale and the cabinet outline, so a per-body H override grows the
+  // outline together with the body rects (which already use box.H). Without any
+  // override this equals H exactly, so un-overridden cabinets are unchanged.
+  const levelHeightSum = [...levelHeightMap.values()].reduce((s, h) => s + h, 0);
+  const effectiveH = levelHeightSum + plinth + (hasEnvelopeTop && envelopeCm ? envelopeCm : 0);
+
+  // Scale fits the actual cabinet (effectiveCabW × effectiveH). Using the raw
+  // W/H params would mis-scale whenever per-body overrides change the body
+  // footprint (the outline would shrink while the body rects kept the override
+  // size — the "broken" vertical layout the carpenter saw in the fronts view).
+  const scale = Math.min(drawW / Math.max(1, effectiveCabW), drawH / Math.max(1, effectiveH));
 
   const cabW = effectiveCabW * scale;
-  const cabH = H * scale;
+  const cabH = effectiveH * scale;
   const cabX = PAD_LEFT + (drawW - cabW) / 2;
   const cabY = PAD_TOP + (drawH - cabH) / 2;
-  const bodyH = (H - plinth) * scale;
+  const bodyH = (effectiveH - plinth) * scale;
 
   const plinthRect = plinth > 0
     ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
@@ -192,14 +212,6 @@ export function computeSketchGeometry(
   // end before the right envelope (if present). Asymmetric in kitchen units.
   const leftInsetPx = sides.left ? envelopePx : 0;
   const rightInsetPx = sides.right ? envelopePx : 0;
-
-  // ── Build level → H map (body boxes only) ────────────────────────────────────
-  const levelHeightMap = new Map<BoxLevel, number>();
-  for (const box of boxes) {
-    if (box.level !== 'plinth' && !levelHeightMap.has(box.level)) {
-      levelHeightMap.set(box.level, box.H);
-    }
-  }
 
   // Active body levels sorted top → bottom
   const activeLevels = LEVEL_ORDER.filter(l => levelHeightMap.has(l));
@@ -237,9 +249,9 @@ export function computeSketchGeometry(
   }
   const internalShelfLines: SketchLine[] = [...internalShelfHeights].map(sh => ({
     x1: cabX + leftInsetPx,
-    y1: cabY + (H - sh) * scale,
+    y1: cabY + (effectiveH - sh) * scale,
     x2: cabX + cabW - rightInsetPx,
-    y2: cabY + (H - sh) * scale,
+    y2: cabY + (effectiveH - sh) * scale,
   }));
 
   // ── Body floors: cumulative cm above plinth, bottom-to-top ──────────────────
@@ -310,7 +322,7 @@ export function computeSketchGeometry(
     hLabel: {
       x: PAD_LEFT / 2,
       y: cabY + cabH / 2,
-      text: `${[...levelHeightMap.values()].reduce((s, h) => s + h, 0) + plinth + (hasEnvelopeTop && tEnvelope ? tEnvelope : 0)}`,
+      text: `${effectiveH}`,
     },
     scale,
     bodyFloors,

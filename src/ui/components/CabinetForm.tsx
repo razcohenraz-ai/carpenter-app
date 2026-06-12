@@ -1078,6 +1078,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               onDrawerFrontClick={handleDrawerFrontClick}
               onDoorClick={handleDoorClick}
               onBoxClick={handleBoxClick}
+              {...(boxDimensionOverrides.size > 0 ? { boxDimensionOverrides } : {})}
             />
           )}
         </div>

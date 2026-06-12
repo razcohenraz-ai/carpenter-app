@@ -33,11 +33,17 @@ interface Props {
   onDoorClick?: (doorId: string) => void;
   /** Click handler for a body area (gap between doors, outline edges). */
   onBoxClick?: (boxId: string) => void;
+  /** Per-body dimension overrides — same map that CabinetSketch receives.
+   *  When present, the sketch geometry (box rects, dimension labels) reflects
+   *  the overridden values so the fronts view stays consistent with the bodies
+   *  view after a manual body-size edit. */
+  boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
   drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
+  boxDimensionOverrides,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -55,7 +61,12 @@ export default function CabinetFrontsSketch({
     doorsPerColumn === '1' ? 1 :
     doorsPerColumn === '2' ? 2 :
     doorsPerColumn === '3' ? 3 : 'auto';
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth), lo, dpc, mid);
+  const geo = computeSketchGeometry(
+    parseFloat(W), parseFloat(H), parseFloat(D), parseFloat(plinth),
+    lo, dpc, mid,
+    /* tEnvelope */ undefined, /* hasEnvelopeTop */ false,
+    boxDimensionOverrides,
+  );
   const plinthH = parseFloat(plinth);
 
   return (

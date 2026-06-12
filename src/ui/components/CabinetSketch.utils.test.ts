@@ -163,4 +163,52 @@ describe('computeSketchGeometry', () => {
     const expectedY = g.cabinet.y + (240 - 220) * (g.cabinet.h / 240);
     expect(shelf.y1).toBeCloseTo(expectedY, 1);
   });
+
+  // ── Per-body dimension overrides drive the EFFECTIVE outline ────────────────
+  // The override map is keyed by boxStableKey; for a single-box cabinet that key
+  // is 'single:single'. A W or H override must grow BOTH the outline and the
+  // body rect together — the bug was the outline scaling to the raw W/H param
+  // while the body rect used the overridden box size (a "broken" layout where
+  // the front/body didn't fill the outline).
+  describe('box dimension overrides → effective outline', () => {
+    const ovr = (dims: { W?: number; H?: number; D?: number }) =>
+      new Map([['single:single', dims]]);
+
+    it('H override grows the outline and the H label (wall cabinet 50 → 60)', () => {
+      const base = computeSketchGeometry(100, 50, 35, 0);
+      const tall = computeSketchGeometry(100, 50, 35, 0, undefined, 'auto', undefined, undefined, false, ovr({ H: 60 }));
+      expect(base.hLabel.text).toBe('50');
+      expect(tall.hLabel.text).toBe('60');
+      // Taller body → cabinet occupies more vertical space (or same scale-bound).
+      expect(tall.cabinet.h).toBeGreaterThan(base.cabinet.h);
+    });
+
+    it('outline height matches the single body rect after an H override', () => {
+      // The exact bug: outline (cabH) used raw H while the body rect used box.H.
+      // For a single full-height body (plinth 0) the two must be equal.
+      const g = computeSketchGeometry(100, 50, 35, 0, undefined, 'auto', undefined, undefined, false, ovr({ H: 60 }));
+      const onlyBox = g.boxes.find(b => b.level !== 'plinth')!;
+      const rect = g.boxSvgRects[onlyBox.id]!;
+      expect(rect.h).toBeCloseTo(g.cabinet.h, 1);
+      expect(rect.y).toBeCloseTo(g.cabinet.y, 1);
+    });
+
+    it('W override updates the W label and keeps the body rect flush with the outline', () => {
+      // The cabinet rect is scale-bound to the draw area, so its pixel WIDTH
+      // doesn't necessarily grow — but the label reflects the effective width,
+      // and the single body rect must still span the full outline width.
+      const wide = computeSketchGeometry(100, 50, 35, 0, undefined, 'auto', undefined, undefined, false, ovr({ W: 120 }));
+      expect(wide.wLabel.text).toBe('120');
+      const onlyBox = wide.boxes.find(b => b.level !== 'plinth')!;
+      const rect = wide.boxSvgRects[onlyBox.id]!;
+      expect(rect.w).toBeCloseTo(wide.cabinet.w, 1);
+      expect(rect.x).toBeCloseTo(wide.cabinet.x, 1);
+    });
+
+    it('no override → labels equal the raw params (no behavioural change)', () => {
+      const g = computeSketchGeometry(100, 50, 35, 0);
+      expect(g.wLabel.text).toBe('100');
+      expect(g.hLabel.text).toBe('50');
+    });
+  });
 });

@@ -22,6 +22,7 @@ import {
   getTotalFrontsInRow,
   groupBoxesByRow,
   computeFrontGeometryForSpan,
+  frontColumnsForBox,
   type RowFrontLayout,
 } from './geometry/frontGeometry';
 import type { BoxLevel } from '../types/geometry';
@@ -188,7 +189,7 @@ export function computeUnitCutsAndHardware(
 
   for (const box of bodyBoxes) {
     const key = boxStableKey(box);
-    const numFronts = Math.max(1, Math.ceil(box.W / maxDoorWidth));
+    const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
     newNumFrontsMap.set(box.id, numFronts);
 
     const savedItems = savedState.interior[key];
@@ -207,8 +208,16 @@ export function computeUnitCutsAndHardware(
   const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
   for (const [level, rowBoxes] of rowsByLevel) {
     const totalFrontsInRow = getTotalFrontsInRow(rowBoxes, newNumFrontsMap);
+    // Per-row EFFECTIVE outer width — sum of the row's (possibly overridden)
+    // body widths plus the cabinet shell offset (`W − innerW`). Mirrors
+    // useCabinet so a per-body W override widens/narrows the fronts to match
+    // the body beneath them, both in the live cabinet and in the kitchen
+    // overview. Without overrides `rowInnerW === innerW`, so this equals W
+    // exactly — no change to un-overridden units.
+    const rowInnerW = rowBoxes.reduce((s, b) => s + b.W, 0);
+    const rowEffectiveOuterW = (W - innerW) + rowInnerW;
     layoutByRow.set(level, computeRowFrontLayout({
-      cabinetW: W,
+      cabinetW: rowEffectiveOuterW,
       hasOuterShell: hasAnyShell,
       shellThicknessCm: tFront,
       totalFrontsInRow,

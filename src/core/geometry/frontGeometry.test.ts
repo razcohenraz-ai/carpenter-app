@@ -6,8 +6,33 @@ import {
   getBoxFirstGlobalFrontIndex,
   getTotalFrontsInRow,
   groupBoxesByRow,
+  frontColumnsForBox,
 } from './frontGeometry';
 import type { Box } from '../../types/geometry';
+
+describe('frontColumnsForBox', () => {
+  it('splits standard bodies once per maxDoorWidth (ceil)', () => {
+    expect(frontColumnsForBox(60, 60)).toBe(1);
+    expect(frontColumnsForBox(120, 60)).toBe(2);
+    expect(frontColumnsForBox(121, 60)).toBe(3); // ceil(121/60)
+    expect(frontColumnsForBox(130, 120)).toBe(2);
+  });
+
+  it('never returns less than 1 for a degenerate width', () => {
+    expect(frontColumnsForBox(0, 60)).toBe(1);
+  });
+
+  it('base mount behaves like the default (splits by width)', () => {
+    expect(frontColumnsForBox(130, 120, 'base')).toBe(2);
+  });
+
+  it('wall cabinets are pinned to a single front regardless of width', () => {
+    // The bug: a wall cabinet widened past maxDoorWidth auto-split into 2 doors.
+    expect(frontColumnsForBox(130, 120, 'wall')).toBe(1);
+    expect(frontColumnsForBox(300, 60, 'wall')).toBe(1);
+    expect(frontColumnsForBox(50, 120, 'wall')).toBe(1);
+  });
+});
 
 const GAP = 0.2; // cm — standard 2mm cabinet gap
 

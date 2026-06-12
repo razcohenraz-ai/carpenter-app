@@ -4,7 +4,7 @@ import type { MaterialId, CustomMaterial } from '../../types/materials';
 import type { CutItem } from '../../types/cuts';
 import type { HardwareLineItem } from '../../types/hardware';
 import { calcDoors } from '../../core/doors/doorCalc';
-import { computeRowFrontLayout, computeFrontGeometry, getTotalFrontsInRow, groupBoxesByRow, type RowFrontLayout } from '../../core/geometry/frontGeometry';
+import { computeRowFrontLayout, computeFrontGeometry, getTotalFrontsInRow, groupBoxesByRow, frontColumnsForBox, type RowFrontLayout } from '../../core/geometry/frontGeometry';
 import { decomposeBoxes } from '../../core/geometry/boxDecomposition';
 import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
 import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
@@ -111,11 +111,12 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   // = left-envelope width (if present). Inside-the-box layout is symmetric
   // around the box, so fronts span the box width (= effW).
   const leftEnvCm = sides.left ? tFront : 0;
-  // Front COLUMN count comes from the unit's OWN maxDoorWidth — calcDoors uses
-  // the global APP_DEFAULTS.maxDoorWidth (60) and would over-split a wide
-  // single-front unit like the wall cabinet (W=100, maxDoorWidth=120 → 1).
-  // `dl` is still used below for the door-ROW heights.
-  const numFronts = Math.max(1, Math.ceil(effW / inp.maxDoorWidth));
+  // Front COLUMN count comes from the unit's OWN maxDoorWidth via the shared
+  // frontColumnsForBox helper — calcDoors uses the global APP_DEFAULTS
+  // maxDoorWidth (60) and would over-split a wide single-front unit. The helper
+  // also pins wall cabinets to a single front whatever their width (lift-up
+  // flap, not a hinged pair). `dl` is still used below for the door-ROW heights.
+  const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount);
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
     hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
@@ -931,14 +932,31 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
         const tFront = frontMat.thickness / 10;
         const sides = getShellSides(inp);
         const hasAnyShell = sides.left || sides.right;
-        const innerW = computeInnerWidth(effW, sides, tFront);
+        // Decompose at the INPUT dimensions, THEN apply per-body overrides —
+        // mirrors useCabinet/cabinetCompute and the body editor. Decomposing at
+        // effW/effH (post-override) would re-split a single body whose width was
+        // overridden past MAX_BOX_W (100) into two boxes — drawing a phantom
+        // centre divider the body editor never shows, and orphaning the
+        // 'single:single' override since neither half is 'single' anymore.
+        const innerW = computeInnerWidth(inp.W, sides, tFront);
         const carcassD = computeCarcassDepth(inp.D, inp.backThickness, HINGE_GAP_CM, tFront);
         const envelopeTopH = (inp.hasEnvelopeTop && hasAnyShell) ? tFront : 0;
-        const boxes = decomposeBoxes(innerW, effH, carcassD, inp.lowerDoorH, inp.plinth, inp.doorsPerColumn, inp.middleDoorH, envelopeTopH);
+        const boxDimensionOverrides = new Map(Object.entries(st.boxDimensionOverrides ?? {}));
+        const rawBoxes = decomposeBoxes(innerW, inp.H, carcassD, inp.lowerDoorH, inp.plinth, inp.doorsPerColumn, inp.middleDoorH, envelopeTopH);
+        const boxes = boxDimensionOverrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
+          const o = boxDimensionOverrides.get(boxStableKey(box));
+          if (!o) return box;
+          return {
+            ...box,
+            ...(o.W !== undefined ? { W: o.W } : {}),
+            ...(o.H !== undefined ? { H: o.H } : {}),
+            ...(o.D !== undefined ? { D: o.D } : {}),
+          };
+        });
         const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
         const numFrontsPerBox = new Map<string, number>();
         for (const box of bodyBoxes) {
-          numFrontsPerBox.set(box.id, Math.max(1, Math.ceil(box.W / inp.maxDoorWidth)));
+          numFrontsPerBox.set(box.id, frontColumnsForBox(box.W, inp.maxDoorWidth, inp.mount));
         }
         const cabinetGapCm = inp.doorGapMm / 10;
         const rowsByLevel = groupBoxesByRow(bodyBoxes);
@@ -971,7 +989,6 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
           if (st.partitions[slotKey]) partitionsById.set(box.id, true);
         }
         const boardOverrides = new Map(Object.entries(st.boardOverrides ?? {}));
-        const boxDimensionOverrides = new Map(Object.entries(st.boxDimensionOverrides ?? {}));
 
         // Render the unit at its REAL OUTER dimensions × shared `scale`.
         // The cabinet outer width includes envelope panels (per side), so the
@@ -1003,8 +1020,8 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
             <div className={styles.sketchHolder} style={{ width: `${unitWpx}px`, height: `${unitHpx}px` }}>
               <CabinetSketch
                 embedded
-                W={String(effW)}
-                H={String(effH)}
+                W={String(inp.W)}
+                H={String(inp.H)}
                 D={String(inp.D)}
                 backThicknessCm={inp.backThickness}
                 plinth={String(inp.plinth)}
