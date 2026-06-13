@@ -22,7 +22,7 @@ src/
 │   ├── hardware.ts     HardwareSpec, HardwareLineItem, FurnitureType
 │   ├── cabinet.ts      CabinetInput + getShellSides() — single source לפיצול per-side shell
 │   │                   שדות appliance-bay: hasFronts? hasBack? hasBottom? (ברירת מחדל true)
-│   │                   כש-hasFronts=false: אין cuts מ-calcCuts, hasDoor:false לכל הדלתות
+│   │                   כש-hasFronts=false: hasDoor:false לכל הדלתות → buildDoorCutItems מדלג (אין cut 'door')
 │   │                   כש-hasBottom=false: דפנות מתארכות ל-H−t−LEVELER_GAP_CM (רגלי בונד)
 │   │                   mount? ('base'|'wall', ברירת מחדל base): wall=קלפה → elevation + shelf-only.
 │   │                   מטא-דאטה UI בלבד; לא משפיע על חישוב לוחות/חיתוכים
@@ -42,7 +42,8 @@ src/
 │   │   ├── doorUtils.ts          צירים, kindings, coversSkirt, calcMainDoorHeight, calcExternalStackHeight, getSkirtCoveringDrawer
 │   │   └── drawerFrontsCalc.ts   deriveDrawerFronts
 │   ├── cuts/
-│   │   ├── cuttingList.ts        calcCuts
+│   │   ├── cuttingList.ts        calcCuts (drawer-box parts; doors נגזרים ב-doorCuts, קורפוס ב-BoardModel)
+│   │   ├── doorCuts.ts           buildDoorCutItems — חיתוכי דלת נגזרים מ-doorsById (single source)
 │   │   ├── externalDrawerCuts.ts calcExternalDrawerFrontCuts
 │   │   ├── mergeCutItems.ts      קיבוץ זוגות (top+bottom וכו') לפלט קומפקטי
 │   │   └── sheetCalculator.ts    ספירת לוחות
@@ -113,13 +114,13 @@ src/
 CabinetForm (input) 
     → useCabinet.calculate(input)
         → decomposeBoxes()     → boxes: Box[]
-        → calcCuts()           → cuts: CutItem[] (doors + drawer-box)
-        → calcDoors()          → doors: DoorCalcResult
+        → calcDoors()          → doors: DoorCalcResult (row layout heights)
         → buildBoardModel()    → Board[] per body (every board carries stableId)
         → buildPlinthBoardModel() → Board[] (cabinet-level plinth)
         → boardsToCutItems(_, _, boardOverridesByStableId)
                                → cuts: CutItem[] (carcass + plinth, effective values)
-        → door preservation    → doorsById: DoorById
+        → door preservation    → doorsById: DoorById (width/height reflect box overrides)
+        → buildDoorCutItems(doorsById) → cuts: CutItem[] (group 'door', single source)
         → interior preservation → interiorById: InteriorById
         → external drawer cuts → cuts (group 'front')
         → deriveDrawerFronts()  → drawerFrontsById: DrawerFrontById

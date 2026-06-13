@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { decomposeBoxes, calcCuts, calcDoors } from '../../core';
+import { decomposeBoxes, calcDoors } from '../../core';
 import { initInteriorFromBoxes, boxStableKey, filterItemsForHeight } from '../../core/interior/interiorUtils';
 import {
   recomputeDoorHinges,
@@ -27,6 +27,7 @@ import {
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
+import { buildDoorCutItems } from '../../core/cuts/doorCuts';
 import { calcHardware } from '../../core/hardware/calcHardware';
 import {
   buildBoardModel,
@@ -829,15 +830,13 @@ export function useCabinet(settings?: {
       bodyOverrides: bodyEdgingOverridesRef.current,
       boardOverrides: boardOverridesRef.current,
     };
-    // calcCuts now emits ONLY doors + drawer-box parts. Carcass / shell /
-    // plinth / back / shelves all come from the BoardModel loop below.
-    // The drawer-box also sits inside the carcass, so it uses carcassD too.
-    // When hasFronts=false (appliance bays), door cuts are filtered out.
+    // Door cuts are derived from `newDoors` AFTER the door loop (single source
+    // of truth — see core/cuts/doorCuts.ts), so they track per-body W/H
+    // overrides and external-drawer shortening. The carcass / shell / plinth /
+    // back / shelves all come from the BoardModel loop below.
+    // hasFronts=false (appliance bays) → doors get hasDoor=false, which
+    // buildDoorCutItems skips.
     const skipFronts = (input.hasFronts ?? true) === false;
-    const rawFrontCuts = calcCuts('cabinet', innerW, H, carcassD, 0, 0, true, plinth, doorCoversPlinth, lowerDoorH, false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging);
-    const cuts  = skipFronts
-      ? rawFrontCuts.filter(c => c.group !== 'door' && c.group !== 'front')
-      : rawFrontCuts;
     const doors = calcDoors(innerW, H, plinth, doorCoversPlinth, lowerDoorH, false, tBody, forceRows, doorGapMm / 10);
 
     // ── Stable maps from previous state ────────────────────────────────────
@@ -1052,6 +1051,11 @@ export function useCabinet(settings?: {
       }
     }
 
+    // ── Door cuts (derived from the finished doors — single source of truth) ──
+    const doorCuts = buildDoorCutItems({
+      doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
+    });
+
     // ── External-drawer front cuts ────────────────────────────────────────
     // Width comes from the cabinet-level layout (same source as the doors):
     //   cell drawer (partition):  one column   → layout.frontWidth
@@ -1117,7 +1121,7 @@ export function useCabinet(settings?: {
     cellInteriorRef.current = newCellInteriorById;
     setCellInteriorById(newCellInteriorById);
     skirtCoveringDrawerIdsRef.current = skirtCoveringIds;
-    baseCutsRef.current = cuts;
+    baseCutsRef.current = doorCuts;
 
     numFrontsRef.current = newNumFrontsMap;
     setNumFrontsPerBox(newNumFrontsMap);
@@ -1239,7 +1243,7 @@ export function useCabinet(settings?: {
       });
     }
     const allCuts = [
-      ...enrich(cuts),
+      ...enrich(doorCuts),
       ...boardCuts,
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),

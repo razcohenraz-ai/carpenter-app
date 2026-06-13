@@ -13,7 +13,8 @@
  * sync — see DECISIONS_LOG entry for the rationale of duplicating vs. refactor.
  */
 
-import { decomposeBoxes, calcCuts } from './index';
+import { decomposeBoxes } from './index';
+import { buildDoorCutItems } from './cuts/doorCuts';
 import { boxStableKey } from './interior/interiorUtils';
 import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
 import {
@@ -165,19 +166,11 @@ export function computeUnitCutsAndHardware(
     boardOverrides,
   };
 
-  // Door + drawer-box parts.
-  // When hasFronts=false (appliance bays), door CutItems are filtered out so
-  // they don't appear in the cut list. Drawer-box parts are always kept because
-  // they represent internal box construction, not visible fronts.
+  // Door cuts are derived from `newDoors` AFTER the door loop (single source of
+  // truth — see core/cuts/doorCuts.ts), so they track per-body W/H overrides
+  // (applied to `boxes` above) and external-drawer shortening. hasFronts=false
+  // (appliance bays) → doors get hasDoor=false, which buildDoorCutItems skips.
   const skipFronts = (input.hasFronts ?? true) === false;
-  const rawFrontCuts = calcCuts(
-    'cabinet', innerW, H, carcassD, 0, 0, true,
-    plinth, doorCoversPlinth, lowerDoorH,
-    false, tBody, tBody, doorGapMm, false, tBody, maxDoorWidth, cabinetEdging,
-  );
-  const cuts = skipFronts
-    ? rawFrontCuts.filter(c => c.group !== 'door' && c.group !== 'front')
-    : rawFrontCuts;
 
   // ── Build interior/cells/partitions/doors maps from saved state ─────────────
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
@@ -297,6 +290,11 @@ export function computeUnitCutsAndHardware(
       }
     }
   }
+
+  // ── Door cuts (derived from the finished doors — single source of truth) ──
+  const doorCuts = buildDoorCutItems({
+    doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
+  });
 
   // ── External-drawer front cuts ─────────────────────────────────────────────
   const externalDrawerCuts: CutItem[] = [];
@@ -419,7 +417,7 @@ export function computeUnitCutsAndHardware(
   }
 
   const allCuts = [
-    ...enrich(cuts),
+    ...enrich(doorCuts),
     ...boardCuts,
     ...enrich(partitionCuts),
     ...enrich(externalDrawerCuts),

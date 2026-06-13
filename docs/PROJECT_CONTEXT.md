@@ -68,8 +68,8 @@
 ### Pricing — חיבור ל-UI
 `core/pricing/laborCalc.ts` ו-`core/hardware/calcHardware.ts` קיימים. `HardwareList` מציג פרזולים. אומדן עלויות-עבודה לא מחובר ל-UI עדיין.
 
-### box dimension override — חיתוך הדלת לא מגיב
-עקיפת רוחב גוף (`boxDimensionOverrides`) משנה את הסקיצה, רוחב החזית המצוירת (`door.width`), חיתוכי הקורפוס וחיתוכי המגירות החיצוניות — אבל **לא** את חיתוך הדלת ב-CutsList. הסיבה: `calcCuts` (מסלול single-row) משחזר עמודות מ-`input.W` ומחשב `frontWidth` לבד, מנותק מה-`box.W` אחרי העקיפה (עקיפה לא משנה decomposition). תיקון נכון: לגזור את חיתוכי הדלת מ-`doorsById` (שכבר מגיב) במקום מ-`calcCuts`.
+### box dimension override — מסלול אחיד לכל התצוגות
+עקיפת מידות גוף (`boxDimensionOverrides`) משנה את הסקיצה, רוחב/גובה החזית המצוירת (`door.width`/`door.height`), חיתוכי הקורפוס, חיתוכי המגירות החיצוניות **וחיתוך הדלת**. חיתוך הדלת נגזר מ-`doorsById` דרך `buildDoorCutItems` (`core/cuts/doorCuts.ts`) — מקור אמת יחיד שמשקף את העקיפה — ולא מ-`calcCuts` (שמחשב מ-`input.W`). `calcCuts` נותר אחראי רק על חלקי קופסת המגירה.
 
 ---
 

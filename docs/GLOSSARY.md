@@ -320,6 +320,6 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 
 ### hasFronts / hasBack / hasBottom
 שדות אופציונליים ב-`CabinetInput` (ברירת מחדל `true`):
-- `hasFronts=false`: מדכא cuts מ-`calcCuts` (group:'door'), מעמיד `hasDoor:false` לכל הדלתות, מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).
+- `hasFronts=false`: מעמיד `hasDoor:false` לכל הדלתות → `buildDoorCutItems` מדלג עליהן (אין cut מקבוצת 'door'), מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).
 - `hasBack=false`: לא נפלט לוח גב. `backThickness` עדיין משמש בנוסחת `carcassD`.
 - `hasBottom=false`: לא נפלט לוח תחתון. הדפנות מתארכות ל-`H − t − LEVELER_GAP_CM` (רגלי בונד). ב-`CabinetForm` גם מחביא כפתורי עריכה פנימית.

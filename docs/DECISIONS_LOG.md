@@ -4,6 +4,23 @@
 
 ---
 
+## 2026-06-13 — חיתוכי הדלת נגזרים מ-doorsById (סגירת החוב מ-2026-05-25)
+
+**ההחלטה**: חיתוכי הדלת ב-CutsList נגזרים מ-`doorsById` דרך `buildDoorCutItems` (`core/cuts/doorCuts.ts`), לא מ-`calcCuts`. ה-helper פולט `CutItem` אחד לכל דלת (`qty=1`, `group:'door'`) עם `w = cm(door.width) − perimMm`, `h = cm(door.height) − perimMm`; `mergeCutItems` מקבץ זהות במורד הזרם. `useCabinet` ו-`cabinetCompute` חדלו לקרוא ל-`calcCuts` עבור דלתות. `calcCuts` עצמו **לא** שונה (נשאר אחראי על חלקי קופסת מגירה ועדיין מכוסה ב-21 בדיקות `cuttingList.test`).
+
+**הנימוק**:
+- **סגירת חוב מתועד**: החלטה 2026-05-25 השאירה דלתות ב-`calcCuts` "עד ש-BoardModel יטפל בהן". בפועל הדלתות כבר מחושבות נכון ב-`doorsById` (מקור אמת לתצוגה ולסקיצה) — `calcCuts` רק שכפל את החישוב מ-`input.W`/`input.H` והתעלם מ-box override. גזירה מ-`doorsById` מאחדת את המקור (עיקרון 2 + 2026-05-20).
+- **לא דרך BoardModel**: הדלת היא חזית (front) עם state עשיר (צירים, כיסוי צוקל, גובה תלוי-interior) שחי ב-`Door`, לא "לוח קורפוס". העברתה ל-BoardModel הייתה refactor גדול בלי תועלת — `doorsById` הוא ה-equivalent הנכון של "מקור אמת" עבורה.
+- **דיוק נלווה**: `door.height` (מ-`calcMainDoorHeight`) כבר מתחשב במגירות חיצוניות שמקצרות את הדלת וב-`envelopeTopH`; `calcCuts` (getDoorHeight) התעלם משניהם. הגזירה מתקנת זאת.
+
+**טריידאוף**:
+- שינוי התנהגות מכוון: חיתוך הדלת בארונות עם מגירות חיצוניות / מעטפת תקרה יקצר בהתאם (נכון יותר). אין טסט קיים שהסתמך על הערך הישן.
+- `calcCuts` נותר עם קוד דלתות שאינו נקרא ממסלולי ה-compute (משמש רק בבדיקותיו הישירות + `carpenter-app.jsx` legacy). לא הוסר כדי לא לגעת בכיסוי הבדיקות; מועמד לניקוי עתידי כש-drawer-box parts גם יעברו ל-BoardModel.
+
+**אלטרנטיבה שנדחתה — לתקן את `calcCuts` שיקבל box dimensions**: נדחתה כי `calcCuts` הוא single-row שמחשב decomposition בעצמו מ-`W`; הזרקת effective dims הייתה משכפלת את לוגיקת ה-row layout במקום לצרוך אותה. גזירה מ-`doorsById` צורכת את המקור הקיים.
+
+---
+
 ## 2026-06-11 — קלפה: "מעטפת עליון/תחתון" (envelope-bottom) נדחתה
 
 **ההחלטה**: מודול הקלפה נבנה (מידות, חזית בודדת, shelf-only editor, elevation, פרזול מנגנון קלפה). הבקשה להוסיף checkbox "מעטפת עליון תחתון" (לוח front-material נוסף מעל העליון ומתחת לתחתון) **נדחתה** לעת עתה — לא מומשה.
