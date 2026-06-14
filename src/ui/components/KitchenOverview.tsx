@@ -116,7 +116,7 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   // maxDoorWidth (60) and would over-split a wide single-front unit. The helper
   // also pins wall cabinets to a single front whatever their width (lift-up
   // flap, not a hinged pair). `dl` is still used below for the door-ROW heights.
-  const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount);
+  const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount, inp.singleFront);
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
     hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
@@ -840,14 +840,17 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
   // rule is preserved so the wall's x position reflects its array rank.
   const positions = new Map<string, { xCm: number; yBottomCm: number }>();
   {
-    // Pre-scan: collect x-ranges that are blocked in the wall row (H ≥ WALL_BOTTOM_CM).
+    // Pre-scan: collect x-ranges that are blocked in the wall row
+    // (H > WALL_BOTTOM_CM — strict, so a pantry whose top edge sits exactly at
+    // the wall row's bottom touches but does not overlap, and a wall cabinet
+    // is allowed directly above it).
     const wallBlockers: Array<{ lo: number; hi: number }> = [];
     {
       let scanX = 0;
       for (const u of units) {
         if (isWall(u)) continue;
         const w = unitOuterW(u);
-        if (effectiveDims(u).H >= WALL_BOTTOM_CM) wallBlockers.push({ lo: scanX, hi: scanX + w });
+        if (effectiveDims(u).H > WALL_BOTTOM_CM) wallBlockers.push({ lo: scanX, hi: scanX + w });
         scanX += w;
       }
     }
@@ -876,9 +879,11 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
         // For tall units: wallCursor jumps to their right edge (they block the
         // wall zone). For normal units: wallCursor tracks their start x so wall
         // units placed after them land "above" them (array-order semantics).
+        // Strict `>` mirrors the pre-scan above — a unit whose top edge sits
+        // exactly at WALL_BOTTOM_CM does not block the wall row.
         wallCursor = Math.max(
           wallCursor,
-          effectiveDims(u).H >= WALL_BOTTOM_CM ? baseX + w : baseX,
+          effectiveDims(u).H > WALL_BOTTOM_CM ? baseX + w : baseX,
         );
         baseX += w;
       }
@@ -959,7 +964,7 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
         const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
         const numFrontsPerBox = new Map<string, number>();
         for (const box of bodyBoxes) {
-          numFrontsPerBox.set(box.id, frontColumnsForBox(box.W, inp.maxDoorWidth, inp.mount));
+          numFrontsPerBox.set(box.id, frontColumnsForBox(box.W, inp.maxDoorWidth, inp.mount, inp.singleFront));
         }
         const cabinetGapCm = inp.doorGapMm / 10;
         const rowsByLevel = groupBoxesByRow(bodyBoxes);

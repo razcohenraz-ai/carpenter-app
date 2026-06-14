@@ -888,7 +888,7 @@ export function useCabinet(settings?: {
         const savedCells = pendingRestore.cellInterior[slotKey];
         if (savedCells) stableCellMap.set(slotKey, savedCells);
         if (pendingRestore.partitions[slotKey]) stablePartitionsMap.set(slotKey, true);
-        const nf = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
+        const nf = frontColumnsForBox(box.W, maxDoorWidth, input.mount, input.singleFront);
         for (let fi = 0; fi < nf; fi++) {
           const dsk = `${slotKey}:${fi}`;
           const sd = pendingRestore.doors[dsk];
@@ -936,7 +936,7 @@ export function useCabinet(settings?: {
 
     for (const box of bodyBoxes) {
       const key = boxStableKey(box);
-      const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
+      const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount, input.singleFront);
       newNumFrontsMap.set(box.id, numFronts);
 
       // Interior
@@ -1052,10 +1052,12 @@ export function useCabinet(settings?: {
       }
     }
 
-    // ── Wall cabinet (קלפה): suppress hinges ─────────────────────────────
-    // Wall cabinets open with a lift-up mechanism, not cup hinges. Clear all
-    // auto-computed hinges so no hinge markers appear in any sketch or editor.
-    if (input.mount === 'wall') {
+    // ── Lift-mechanism cabinets (קלפה): suppress hinges ───────────────────
+    // These cabinets open with a single hinged-from-top panel, not cup hinges.
+    // Clear all auto-computed hinges so no markers appear in any sketch or
+    // editor. Driven by `liftMechanism`, not `mount`, so other wall-row modules
+    // (e.g. עליון מזווה — pantry top) keep their normal hinges.
+    if (input.liftMechanism === true) {
       for (const doorId of Object.keys(newDoors)) {
         newDoors[doorId] = { ...newDoors[doorId]!, hinges: [], hingeCount: 0 };
       }
@@ -1261,7 +1263,7 @@ export function useCabinet(settings?: {
     ];
     const hardwareItems = calcHardware(
       newDoors, newInterior, newCellInteriorById,
-      input.mount === 'wall' ? 'wall_cabinet' : 'cabinet',
+      input.liftMechanism === true ? 'wall_cabinet' : 'cabinet',
     );
     const derivedBoxDims = new Map(
       rawBoxes

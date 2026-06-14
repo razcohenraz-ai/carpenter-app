@@ -13,9 +13,22 @@ describe('kitchenModuleInput — drawers', () => {
   it('W override is respected', () => {
     expect(kitchenModuleInput('drawers', 75).W).toBe(75);
   });
+
+  // The bug closed by this branch: widening a drawers unit past maxDoorWidth
+  // (e.g. W=90, maxDoorWidth=60) auto-split into two drawer faces — but a
+  // drawers unit emits ONE bank per body. `singleFront:true` pins the column
+  // count to 1; downstream sketches + the cut list both follow.
+  it('singleFront = true (drawer face always spans the full body width)', () => {
+    expect(kitchenModuleInput('drawers').singleFront).toBe(true);
+    expect(kitchenModuleInput('drawers', 90).singleFront).toBe(true);
+  });
 });
 
 describe('kitchenModuleInput — shelves', () => {
+  it('singleFront NOT set (a wide shelves unit can split into 2 doors at >60)', () => {
+    expect(kitchenModuleInput('shelves').singleFront).toBeUndefined();
+  });
+
   it('default W = 60', () => {
     expect(kitchenModuleInput('shelves').W).toBe(60);
   });
@@ -69,10 +82,10 @@ describe('kitchenModuleInput — dishwasher', () => {
 });
 
 describe('kitchenModuleInput — pantry (מזווה)', () => {
-  it('default W = 60, H = 180 (taller than countertop), D = 60, plinth = 10', () => {
+  it('default W = 60, H = 152 (top aligned with wall-cabinet bottom), D = 60, plinth = 10', () => {
     const inp = kitchenModuleInput('pantry');
     expect(inp.W).toBe(60);
-    expect(inp.H).toBe(180);
+    expect(inp.H).toBe(152);
     expect(inp.D).toBe(60);
     expect(inp.plinth).toBe(10);
   });
@@ -105,7 +118,7 @@ describe('kitchenModuleInput — wall (קלפה)', () => {
     expect(kitchenModuleInput('wall', 80).W).toBe(80);
   });
 
-  it('single front: maxDoorWidth (120) > W (100) → one door column', () => {
+  it('default maxDoorWidth = 120 (>= default W=100)', () => {
     expect(kitchenModuleInput('wall').maxDoorWidth).toBe(120);
   });
 
@@ -115,6 +128,57 @@ describe('kitchenModuleInput — wall (קלפה)', () => {
 
   it('has a door: hasFronts left at default (undefined → true)', () => {
     expect(kitchenModuleInput('wall').hasFronts).toBeUndefined();
+  });
+
+  // liftMechanism separates the lift-up mechanism from the wall mount, so
+  // pantry-top (also wall-mounted) can use normal cup hinges.
+  it('wall → liftMechanism = true (cup hinges replaced by lift-up panel)', () => {
+    expect(kitchenModuleInput('wall').liftMechanism).toBe(true);
+  });
+
+  // singleFront pins the column count regardless of width override — a wide
+  // קלפה (e.g. W=130) keeps a single lift panel rather than splitting.
+  it('wall → singleFront = true (lift panel is one piece per body)', () => {
+    expect(kitchenModuleInput('wall').singleFront).toBe(true);
+  });
+});
+
+describe('kitchenModuleInput — pantry-top (עליון מזווה)', () => {
+  it('default W=60, H=50, D=60, plinth=0 (pantry footprint, wall height)', () => {
+    const inp = kitchenModuleInput('pantry-top');
+    expect(inp.W).toBe(60);
+    expect(inp.H).toBe(50);
+    expect(inp.D).toBe(60);
+    expect(inp.plinth).toBe(0);
+  });
+
+  it('W override is respected', () => {
+    expect(kitchenModuleInput('pantry-top', 80).W).toBe(80);
+  });
+
+  it('maxDoorWidth = 60 (standard kitchen; W>60 override splits into 2 doors)', () => {
+    expect(kitchenModuleInput('pantry-top').maxDoorWidth).toBe(60);
+  });
+
+  it('mount = wall (drives elevation + shelf-only editor)', () => {
+    expect(kitchenModuleInput('pantry-top').mount).toBe('wall');
+  });
+
+  // Unlike the wall cabinet (קלפה), pantry-top uses ordinary cup hinges — so
+  // liftMechanism stays unset (the body editor must show hinge controls).
+  it('liftMechanism is NOT set (normal cup hinges, not lift-up)', () => {
+    expect(kitchenModuleInput('pantry-top').liftMechanism).toBeUndefined();
+  });
+
+  // pantry-top is the explicit reason mount='wall' no longer pins the column
+  // count in frontColumnsForBox: a wider pantry-top must split into multiple
+  // doors, unlike the lift-panel קלפה.
+  it('singleFront is NOT set (a wider pantry-top splits into multiple doors)', () => {
+    expect(kitchenModuleInput('pantry-top').singleFront).toBeUndefined();
+  });
+
+  it('has a door: hasFronts left at default (undefined → true)', () => {
+    expect(kitchenModuleInput('pantry-top').hasFronts).toBeUndefined();
   });
 });
 
@@ -155,15 +219,25 @@ describe('kitchenModuleState — interior shape', () => {
     expect(items![0]!.type).toBe('shelf');
   });
 
-  it('pantry → 6 internal drawers, bottom 30 + 5×28, filling bodyH=170 exactly', () => {
+  it('pantry-top → 1 centred shelf (single-door cabinet above the pantry)', () => {
+    const st = kitchenModuleState('pantry-top');
+    const items = st.interior['single:single'];
+    expect(items).toBeDefined();
+    expect(items!.length).toBe(1);
+    expect(items![0]!.type).toBe('shelf');
+    // Same hff as the wall cabinet — both share a 50 cm body split at 24.1.
+    expect((items![0] as { heightFromFloor: number }).heightFromFloor).toBe(24.1);
+  });
+
+  it('pantry → 5 internal drawers, bottom 30 + 4×28, filling bodyH=142 exactly', () => {
     const st = kitchenModuleState('pantry');
     const items = st.interior['single:single'];
     expect(items).toBeDefined();
     const drawers = items!.filter((i): i is import('../../types/interior').DrawerItem => i.type === 'drawer');
-    expect(drawers.length).toBe(6);
+    expect(drawers.length).toBe(5);
     // All internal (behind the doors).
     expect(drawers.every(d => d.mount === 'internal')).toBe(true);
-    // Bottom drawer = 30 at floor; the rest = 28.
+    // Bottom drawer = 30 at floor; the rest = 28 (deeper-storage pattern).
     const sorted = [...drawers].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
     expect(sorted[0]!.heightFromFloor).toBe(0);
     expect(sorted[0]!.drawerHeight).toBe(30);
@@ -172,8 +246,8 @@ describe('kitchenModuleState — interior shape', () => {
     for (let i = 0; i < sorted.length - 1; i++) {
       expect(sorted[i + 1]!.heightFromFloor).toBe(sorted[i]!.heightFromFloor + sorted[i]!.drawerHeight);
     }
-    // Stack fills to the ceiling exactly: top of highest = bodyH = 180 − 10 = 170.
+    // Stack fills to the ceiling exactly: top of highest = bodyH = 152 − 10 = 142.
     const top = sorted[sorted.length - 1]!;
-    expect(top.heightFromFloor + top.drawerHeight).toBe(170);
+    expect(top.heightFromFloor + top.drawerHeight).toBe(142);
   });
 });

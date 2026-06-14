@@ -26,11 +26,29 @@ describe('frontColumnsForBox', () => {
     expect(frontColumnsForBox(130, 120, 'base')).toBe(2);
   });
 
-  it('wall cabinets are pinned to a single front regardless of width', () => {
-    // The bug: a wall cabinet widened past maxDoorWidth auto-split into 2 doors.
-    expect(frontColumnsForBox(130, 120, 'wall')).toBe(1);
-    expect(frontColumnsForBox(300, 60, 'wall')).toBe(1);
-    expect(frontColumnsForBox(50, 120, 'wall')).toBe(1);
+  it('mount alone does NOT pin column count — `singleFront` does that job', () => {
+    // The wall mount stays in the signature but no longer forces a single
+    // column on its own. עליון מזווה uses mount='wall' yet splits its doors
+    // normally over maxDoorWidth. Wall cabinets (קלפה) get their pin via
+    // singleFront, not via mount.
+    expect(frontColumnsForBox(90, 60, 'wall')).toBe(2);    // pantry-top W=90
+    expect(frontColumnsForBox(130, 60, 'wall')).toBe(3);
+    expect(frontColumnsForBox(60, 60, 'wall')).toBe(1);
+  });
+
+  // The bug closed by this branch: a drawers unit widened past maxDoorWidth
+  // (e.g. W=90 with default maxDoorWidth=60) was splitting into two drawer
+  // faces. A drawers unit emits ONE bank of drawers per body — the single-front
+  // lock decouples this from the wall-mount path.
+  it('singleFront=true pins to one column regardless of width or mount', () => {
+    expect(frontColumnsForBox(90, 60, 'base', true)).toBe(1);
+    expect(frontColumnsForBox(200, 60, 'base', true)).toBe(1);
+    expect(frontColumnsForBox(60, 60, undefined, true)).toBe(1);
+  });
+
+  it('singleFront=false or undefined preserves the ceil(W/maxDoorWidth) split', () => {
+    expect(frontColumnsForBox(90, 60, 'base', false)).toBe(2);
+    expect(frontColumnsForBox(90, 60, 'base', undefined)).toBe(2);
   });
 });
 

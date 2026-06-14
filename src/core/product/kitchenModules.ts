@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry' | 'wall';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry' | 'wall' | 'pantry-top';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -51,18 +51,44 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
   }
   if (type === 'pantry') {
     // מזווה (tall larder): taller than countertop height. Standard W/D/plinth;
-    // overrides only H → 180. Keeps hasFronts at its default (true) so it has
-    // doors; the interior is a stack of INTERNAL drawers behind those doors
-    // (see kitchenModuleState — internal drawers emit hardware + sketch, not
-    // cut parts, matching bought drawer systems).
-    return { ...base, H: 180 };
+    // overrides only H → 152, which aligns the pantry's TOP edge exactly with
+    // the BOTTOM of the wall-cabinet row in the kitchen elevation
+    // (`WALL_BOTTOM_CM = BASE_REF_H_CM + COUNTERTOP_CM + WALL_CLEARANCE_CM`
+    // in `KitchenOverview.tsx`). Keeps hasFronts at its default (true) so it
+    // has doors; the interior is a stack of INTERNAL drawers behind those
+    // doors (see kitchenModuleState — internal drawers emit hardware + sketch,
+    // not cut parts, matching bought drawer systems).
+    return { ...base, H: 152 };
   }
   if (type === 'wall') {
     // קלפה (wall/upper cabinet): hung on the wall above the countertop, NOT on
-    // the floor. W=100, H=50, D=35, no plinth. A single front: maxDoorWidth=120
-    // (> W) forces one door column. `mount:'wall'` drives the kitchen elevation
-    // (upper row, aligned above its base unit) and the shelf-only body editor.
-    return { ...base, W: w ?? 100, H: 50, D: 35, plinth: 0, maxDoorWidth: 120, mount: 'wall' };
+    // the floor. W=100, H=50, D=35, no plinth. `mount:'wall'` drives the
+    // kitchen elevation (upper row, aligned above its base unit) and the
+    // shelf-only body editor. `liftMechanism:true` swaps cup hinges for the
+    // lift-up mechanism (200₪ preset). `singleFront:true` pins the column
+    // count to 1 — the lift panel is one piece whatever the override width.
+    return { ...base, W: w ?? 100, H: 50, D: 35, plinth: 0, maxDoorWidth: 120, mount: 'wall', liftMechanism: true, singleFront: true };
+  }
+  if (type === 'pantry-top') {
+    // עליון מזווה (pantry top): the upper cabinet that sits directly above the
+    // pantry, completing the vertical column up to the top of the wall row.
+    // Same footprint as the pantry (W=60, D=60) and same external height as
+    // the wall cabinet (H=50) so its top edge aligns with the wall row.
+    // Hung on the wall: mount='wall' → kitchen elevation upper row, shelf-only
+    // editor. Unlike קלפה: regular cup hinges (no liftMechanism), normal
+    // hardware preset. maxDoorWidth=60 (default kitchen value, NOT 120) so an
+    // override widening past 60 cm splits into two doors — pantry-top doors
+    // are panels, not lift mechanisms, and follow standard kitchen sizing.
+    return { ...base, W: w ?? 60, H: 50, D: 60, plinth: 0, mount: 'wall' };
+  }
+  if (type === 'drawers') {
+    // יחידת מגירות (drawers unit): standard kitchen carcass with EXTERNAL
+    // drawer faces filling the full body width. `singleFront:true` pins the
+    // column count to 1 regardless of `maxDoorWidth` — so widening the unit
+    // to e.g. 90 cm keeps a single drawer face per row (not two), matching
+    // how drawer units are built in practice (one bank of drawers per body;
+    // a second column would be a separate adjacent unit).
+    return { ...base, singleFront: true };
   }
   return base;
 }
@@ -130,10 +156,10 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
   if (type === 'pantry') {
     // מזווה: a vertical stack of INTERNAL drawers behind the door(s).
     //
-    // Geometry (bodyH = H180 − plinth10 = 170 cm):
+    // Geometry (bodyH = H152 − plinth10 = 142 cm):
     //   bottom drawer height = 30 cm           → top = 30
-    //   remaining (170 − 30) = 140 cm split into 5 EQUAL drawers = 28 cm each
-    //   tops: 58, 86, 114, 142, 170            → fills to the ceiling exactly
+    //   remaining (142 − 30) = 112 cm split into 4 EQUAL drawers = 28 cm each
+    //   tops: 58, 86, 114, 142                → fills to the ceiling exactly
     //   no overlap (each hff = previous top), no out-of-bounds (max top = bodyH)
     //
     // Internal drawers produce hardware (slides) + body-sketch rects but NO
@@ -148,7 +174,6 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
           { id: 'km-pn-d3', type: 'drawer', heightFromFloor: 58,  drawerHeight: 28, mount: 'internal' },
           { id: 'km-pn-d4', type: 'drawer', heightFromFloor: 86,  drawerHeight: 28, mount: 'internal' },
           { id: 'km-pn-d5', type: 'drawer', heightFromFloor: 114, drawerHeight: 28, mount: 'internal' },
-          { id: 'km-pn-d6', type: 'drawer', heightFromFloor: 142, drawerHeight: 28, mount: 'internal' },
         ],
       },
     };
@@ -164,6 +189,20 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
       interior: {
         [slotKey]: [
           { id: 'km-wl-s1', type: 'shelf', heightFromFloor: 24.1 },
+        ],
+      },
+    };
+  }
+
+  if (type === 'pantry-top') {
+    // עליון מזווה: same internal shape as the wall cabinet — single door, one
+    // centred shelf — but with the pantry's deeper footprint (W=60, D=60). The
+    // shelf splits the 50 cm body into two equal compartments at hff=24.1.
+    return {
+      ...emptyBase,
+      interior: {
+        [slotKey]: [
+          { id: 'km-pt-s1', type: 'shelf', heightFromFloor: 24.1 },
         ],
       },
     };

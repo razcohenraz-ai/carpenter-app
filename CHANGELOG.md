@@ -7,6 +7,48 @@
 
 ## [Unreleased]
 
+### תוקן — יחידת מגירות התפצלה ל-2 חזיתות + הפרדת `singleFront` מ-`mount`
+
+יחידת מגירות (`drawers` module) ברוחב 90 ס"מ (override מ-60) הציגה **שתי** חזיתות מגירה כי `frontColumnsForBox` חישב `ceil(90/60) = 2`. אבל יחידת מגירות אמיתית היא תמיד **בנק אחד של מגירות** — חזית מלאת רוחב.
+
+**תיקון**: שדה חדש `singleFront?: boolean` ב-`CabinetInput` שקובע pin → 1 חזית לכל הרוחב, בלי תלות ב-`maxDoorWidth`. `frontColumnsForBox` קיבל פרמטר רביעי; כל 5 ה-callers (`useCabinet` ×2, `cabinetCompute`, `KitchenOverview` ×2) מעבירים את `input.singleFront`. `kitchenModuleInput('drawers')` מסומן `singleFront: true`. `CabinetForm` (3 ה-payloads) משמר את ה-flag.
+
+**ניקוי `mount` מ-column-counting** (תיקון נלווה): `frontColumnsForBox` הפסיק להתחשב ב-`mount === 'wall'` — שדה ה-pin הוא אך ורק `singleFront`. הסיבה: עליון מזווה (`pantry-top`, גם הוא `mount: 'wall'`) **צריך** להתפצל לדלתות נוספות כשרוחבו עובר את `maxDoorWidth` — בניגוד לקלפה (`liftMechanism`, פאנל אחד). הפרדה ניאותה:
+- `mount`: מיקום בלבד (elevation row, plinth grouping, shelf-only editor, wall envelope checkbox)
+- `singleFront`: column count
+- `liftMechanism`: mechanism + הסתרת hinges
+
+**עדכון מודולים**:
+- `wall` (קלפה): קיבל `singleFront: true` במפורש (במקום הסתמכות על `mount === 'wall'`). אפס שינוי בהתנהגות.
+- `pantry-top` (עליון מזווה): `maxDoorWidth` ירד מ-120 ל-60 (default kitchen). W=60 → 1 דלת; W>60 → 2 דלתות (התנהגות חדשה, לפי בקשת המשתמש).
+
+### נוסף — מודול "עליון מזווה" (pantry-top) + הפרדת lift mechanism מ-mount
+
+מודול שמיני (`'pantry-top'`): גוף קיר עליון שיושב **ישירות מעל המזווה** ומשלים את העמודה האנכית עד עליון שורת הקלפות. דלת בודדת + מדף יחיד באמצע.
+
+- **מידות**: W=60, D=60 (footprint של מזווה), H=50 (גובה שורת הקיר). plinth=0. `maxDoorWidth=120` → דלת אחת. mount='wall' → מצויר בשורת הקיר ב-elevation, עורך גוף shelf-only (כפתור מדף בלבד, ללא דלת/מגירה/מוט/מחיצה). פנים: מדף יחיד באמצע (hff=24.1, כמו קלפה).
+- **שונה מקלפה (`'wall'`)**: עליון מזווה משתמש בצירים רגילים (לא במנגנון קלפה). זה מצריך הפרדה של ה-lift mechanism מ-`mount==='wall'` — שדה חדש `liftMechanism?: boolean` ב-`CabinetInput`.
+
+**שדה חדש `liftMechanism?: boolean`** (default false). מי שתלוי בו:
+- `cabinetCompute` ו-`useCabinet`: דיכוי צירים (`hinges:[]`, `hingeCount:0`) + בחירת `wall_cabinet` preset לפרזול. עברו מ-`mount === 'wall'` ל-`liftMechanism === true`.
+- `CabinetForm`: `noHinges` ב-`DoorEditor` עבר ל-`liftMechanism === true`. שלושת ה-payloads מעבירים את ה-flag.
+- קלפה (`kitchenModuleInput('wall')`) מקבלת אוטומטית `liftMechanism: true` — שום שינוי בהתנהגות הקלפה.
+
+מי שלא תלוי ב-mechanism (נשאר על mount):
+- Elevation (`KitchenOverview` שורת הקיר), קיבוץ הצוקל (סינון), `frontColumnsForBox` (דלת בודדת לכל wall mount), עורך shelf-only (`CabinetForm`), checkbox המעטפת (`hasWallEnvelope`).
+
+כך עליון מזווה (`mount:'wall', liftMechanism:undefined`) יושב בשורת הקיר עם דלת בודדת ועורך shelf-only — אבל עם צירים רגילים ופרזול cabinet רגיל.
+
+### שונה — מזווה (pantry): H=180 → 152 (יישור לתחתית הקלפה), 6 מגירות → 5 מגירות
+
+ברירת המחדל של המזווה התעדכנה: **H=152** ס"מ — בדיוק `WALL_BOTTOM_CM` (תחתית שורת הקלפות ב-elevation, `90 base + 2 countertop + 60 clearance`). ראש המזווה ותחתית הקלפה **נוגעים** פיזית בלי לחפוף — מקטין את ה-gap הוויזואלי בין שורת הבסיס לשורת הקיר ומאפשר לקלפה לעמוד **ישירות מעל** המזווה בעמודה אחת.
+
+bodyH = 142, **5 מגירות**: bottom 30 + 4×28 (במקום 6 = bottom 30 + 5×28). tops: `30/58/86/114/142` — ממלא את הגוף בדיוק. שאר המידות (W=60, D=60, plinth=10) נשארות.
+
+**שינוי לוגיקה נלווה (`KitchenOverview` pre-scan)**: התנאי שחוסם קלפה מעל מזווה התהדק מ-`H >= WALL_BOTTOM_CM` ל-`H > WALL_BOTTOM_CM`. בעת המעבר ל-152 ה-`>=` היה כולל את המזווה החדש כ-blocker, וקלפה לא הייתה יכולה לעמוד מעליו למרות שאין חפיפה פיזית. עם `>` הסטריקטי, מזווה H=152 לא חוסם; מזווה override שעולה מעל 152 (למשל המידה הישנה 180) עדיין חוסם.
+
+החזית, רשימת החיתוכים (boards: sides/top/bottom/back) והפרזול (slides למגירות) נגזרים אוטומטית מהמידה החדשה. **ארונות מזווה ששמורים בפרויקטים קיימים** משמרים את ה-H המקורי שלהם — השינוי משפיע רק על יצירה של מודול חדש.
+
 ### תוקן — `handleSubmit` ב-`CabinetForm` השמיט דגלי מודול (mount, hasFronts, hasBack, hasBottom, topVariant, sinkTraverseWidthCm)
 
 לחיצה על "חשב" בנתה `cabinetInput` חדש בלי לפזר את דגלי המודול מ-`initialInput`, אז כל הגדרת מודול שלא יושבת כשדה בטופס (קלפה `mount:'wall'`, תנור `hasFronts:false`, כיור `topVariant:'sink-open'` וכו') נמחקה בקריאת `calculate()` שלאחריה. הבאג היה רדום עד שמעטפת הקלפה (`hasWallEnvelope`, שמגודרת ב-`mount==='wall'`) חשפה אותו — המעטפת **צוירה** בסקיצה (פוטנציאל זרם ישיר מ-`form` state) אבל הגוף **לא התכווץ** וחיתוכי המעטפת **חסרו** מ-CutsList, כי `wallEnv` בעורק ה-compute ראה `mount=undefined` אחרי לחיצה. תוקן: שני ה-payloads האחרים (mount-effect + applyPlinthUpdate) **כן** פזרו את הדגלים; `handleSubmit` עכשיו עושה אותו דבר.

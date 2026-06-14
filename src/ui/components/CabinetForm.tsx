@@ -218,6 +218,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
+      ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
     });
     // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
@@ -343,6 +345,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
+      ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
     });
   }
 
@@ -531,6 +535,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
+      ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
     };
     calculate(cabinetInput);
   }
@@ -735,7 +741,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onHasDoor={v => setDoorHasDoor(editing.doorId, v)}
             onThickness={matId => setDoorThickness(editing.doorId, matId)}
             onBack={closeEditor}
-            {...(initialInput?.mount === 'wall' ? { noHinges: true } : {})}
+            {...(initialInput?.liftMechanism === true ? { noHinges: true } : {})}
           />
         </div>
       );

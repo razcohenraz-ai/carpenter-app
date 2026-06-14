@@ -186,7 +186,7 @@ export function computeUnitCutsAndHardware(
 
   for (const box of bodyBoxes) {
     const key = boxStableKey(box);
-    const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount);
+    const numFronts = frontColumnsForBox(box.W, maxDoorWidth, input.mount, input.singleFront);
     newNumFrontsMap.set(box.id, numFronts);
 
     const savedItems = savedState.interior[key];
@@ -255,9 +255,11 @@ export function computeUnitCutsAndHardware(
         : defaultHingeSide(box.position, allPositions);
 
       // For pure compute (no preservation of user-edited hinges), use defaults.
-      // Wall cabinets (קלפה) open with a lift-up mechanism, not hinges → emit
-      // none (no markers in any sketch; hardware uses the lift-mechanism preset).
-      const isWall = input.mount === 'wall';
+      // Lift-mechanism cabinets (קלפה) open with a single hinged-from-top panel,
+      // not cup hinges → emit none (no markers in any sketch; hardware uses the
+      // lift-mechanism preset). Driven by `liftMechanism`, not `mount`, so other
+      // wall-row modules (e.g. עליון מזווה) keep normal hinges.
+      const isWall = input.liftMechanism === true;
       const slotKey = boxStableKey(box);
       const savedDoor = savedState.doors[`${slotKey}:${fi}`];
 
@@ -433,7 +435,7 @@ export function computeUnitCutsAndHardware(
 
   const hardwareItems = calcHardware(
     newDoors, newInterior, newCellInteriorById,
-    input.mount === 'wall' ? 'wall_cabinet' : 'cabinet',
+    input.liftMechanism === true ? 'wall_cabinet' : 'cabinet',
   );
 
   return { cuts: allCuts, hardwareItems };

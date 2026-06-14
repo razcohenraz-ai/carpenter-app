@@ -76,6 +76,19 @@ export interface CabinetInput {
    *  `hasEnvelopeTop` it shrinks the body (the cap thickness is taken from the
    *  external H, not added to it). Default false. */
   hasWallEnvelope?: boolean;
+  /** Lift-up mechanism (קלפה): a single hinged-from-top panel instead of cup
+   *  hinges. When true, the door is emitted with no hinges (`hinges:[]`,
+   *  `hingeCount:0`), the hardware preset switches to `'wall_cabinet'` (the
+   *  200₪ lift mechanism), and `DoorEditor` hides the hinge controls. Decoupled
+   *  from `mount` so other wall-row modules (e.g. עליון מזווה — pantry top)
+   *  can sit in the same elevation row with normal cup hinges. Default false. */
+  liftMechanism?: boolean;
+  /** Single-front lock: when true, the body always emits exactly ONE front
+   *  column whatever its width — `maxDoorWidth` is ignored for column counting.
+   *  Used by modules where a full-width facade is structural (drawers unit,
+   *  קלפה, עליון מזווה — a drawer face / lift panel is one piece per body).
+   *  Default false → normal `ceil(W / maxDoorWidth)` split. */
+  singleFront?: boolean;
 }
 
 /** Single source of truth for "which sides of the cabinet have a shell".
