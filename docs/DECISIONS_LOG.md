@@ -4,6 +4,44 @@
 
 ---
 
+## 2026-06-14 — מעטפת עליון+תחתון לקלפה (envelope-bottom) — סגירת החוב מ-2026-06-11
+
+**ההחלטה**: ה-`envelope-bottom` מומש. השדה `CabinetInput.hasWallEnvelope?: boolean` (מטא-דאטה, ברירת מחדל false, מגודר ע"י `mount === 'wall'`) מפעיל **שני** לוחות מעטפת — עליון ותחתון — מחומר חזית, **בלי תלות ב-shell הצדדי**. ה-checkbox מופיע ב-`CabinetForm` רק לקלפות, מחליף את "מעטפת תקרה" הקיים (`hideEnvelopeTop` כבר מסתיר אותו לקלפות).
+
+**מודל הגובה**: המכסים **בתוך** ה-H (הגוף הפנימי מתכווץ ב-2×עובי חזית; H=50 חיצוני נשמר), עקבי עם `hasEnvelopeTop` הקיים — לא עם תוספת חיצונית.
+
+**איך נסגרו שני החסמים שתועדו ב-2026-06-11**:
+1. **חסם הגאומטריה (`computeSketchGeometry`)** — נפתר ב-2026-06-13 כשהוספנו את `effectiveH` (סכום גבהי הגופים אחרי עקיפה + צוקל + מעטפת). הוא משמש גם ל-scale וגם למתאר. עכשיו פשוט מוסיפים `wallEnvAdded = 2·tFront` ל-`effectiveH`, ה-boxes מתחילים אחרי ה-cap העליון, וה-`envelopeBottomPanel` יושב צמוד לתחתית. **המכסים לא נחתכים יותר** ב-viewBox החתוך של תצוגת המטבח.
+2. **חסם ה-shell (`deriveEnvelopeFlags`)** — נפתר עם פרמטר חדש `hasWallEnvelope = false`. כש-true → מחזיר `{ left:false, right:false, top:isTopRow, bottom:isBottomRow }` **עוקף** את שער ה-`!sides` המוקדם. ה-EnvelopeFlags interface קיבל `hasEnvelopeBottom: boolean` (חובה בחתימה הפנימית; אופציונלי ב-`BuildBoardModelArgs` עם ברירת מחדל false → אפס תאימות לאחור).
+
+**גזירה ל-cuts + sketch (תבנית `envelope-top`)**:
+- `boxDecomposition` קיבל פרמטר חמישי `envelopeBottomH = 0` — מקטין `bottom/single` ב-cm נתון (mirror של `envelopeTopH`).
+- `BoardRole` קיבל `'envelope-bottom'`; `getEdgingPattern`/`ROLE_LABELS`/`ROLE_GROUP` הם switch/Record ממצים → tsc אילץ ה-case החדש.
+- `buildBoardModel` פולט board ב-`yFrom:H, yTo:H+tF`, חומר חזית, `length:W, width:envD`.
+- `computeSketchGeometry` קיבל `wallEnvelopeCm = 0` (פרמטר אחרון). הוא מעביר את הערך כ-`envelopeTopH=envelopeBottomH` ל-`decomposeBoxes` (כך ה-`box.H` בסקיצה תואם ל-cuts), ובונה `envelopeTopPanel` + `envelopeBottomPanel` מלאי-רוחב.
+- `CabinetSketch` ו-`CabinetFrontsSketch` מרנדרים את הפאנלים pre-calc; post-calc הם מגיעים אוטומטית כ-board.
+
+**טריידאוף**:
+- שינוי התנהגות מכוון לקלפה עם הדגל: `H` הפנימי הזמין לתכולה (`box.H`) מצטמצם ב-2×tFront (לדוגמה 3.6 ס"מ ב-MDF 18). הגובה ש"רואים" בחוץ נשמר.
+- `EnvelopeFlags.hasEnvelopeBottom` נוסף כשדה **חובה** בחתימה הפנימית של `deriveEnvelopeFlags`, אבל **אופציונלי** ב-`BuildBoardModelArgs` (ברירת מחדל false) — אפס שינוי לכל קורא קיים שמעביר רק 3 דגלים.
+- `wallEnvelopeCm` כפרמטר אופציונלי 12-th ב-`computeSketchGeometry`. סדר ה-args נשמר; חתימה גודלת, אך אין breaking change.
+
+**אלטרנטיבה שנדחתה — להפעיל את `hasEnvelopeTop` לקלפה (במקום שדה חדש)**: נדחה כי `hasEnvelopeTop` הקיים מגודר ב-3 מקומות שונים ע"י `hasShellLeft||hasShellRight` (form payload בכל קריאת `calculate()`, `useCabinet` ב-`envelopeTopH`, `KitchenOverview`). שינוי הגדרה אומר רגרסיה לארונות בסיס. שדה מבודד נקי יותר.
+
+**יישום**:
+- `src/types/cabinet.ts` — `hasWallEnvelope?: boolean`.
+- `src/core/geometry/boxDecomposition.ts` — פרמטר `envelopeBottomH = 0`.
+- `src/core/boards/boardModel.ts` — BoardRole חדש, label, group, getEdgingPattern, EnvelopeFlags, BuildBoardModelArgs (אופציונלי), deriveEnvelopeFlags (פרמטר wallEnv), emission.
+- `src/ui/hooks/useCabinet.ts` + `src/core/cabinetCompute.ts` — `wallEnv` נגזר, מעביר ל-decompose + deriveEnvelopeFlags + buildBoardModel.
+- `src/ui/components/CabinetSketch.utils.ts` — `wallEnvelopeCm` arg, `effectiveH += 2·wallEnv`, `levelYOffset` מתחיל אחרי cap עליון, panels חדשים.
+- `src/ui/components/CabinetSketch.tsx` + `CabinetFrontsSketch.tsx` — `wallEnvelopeCm` prop, מעבירים לגאומטריה, מרנדרים `envelopeBottomPanel`.
+- `src/ui/components/CabinetForm.tsx` — FormState field, init + 3 payloads + reset, checkbox מגודר ע"י `initialInput?.mount === 'wall'`, מעביר `wallEnvelopeCm = frontThicknessCm` כשמסומן.
+- `src/ui/components/KitchenOverview.tsx` — מעביר `wallEnvelopeCm = tFront` ל-CabinetSketch המוטמע.
+- `src/i18n/translations.ts` — `t.form.hasWallEnvelope` (HE: "מעטפת עליון+תחתון", EN: "Top+bottom envelope").
+- בדיקות: +2 ל-`boardModel.test.ts` (wall envelope flags + emission), +4 ל-`boxDecomposition.test.ts` (envelopeBottomH), +4 ל-`CabinetSketch.utils.test.ts` (wall envelope caps). 669 עוברים.
+
+---
+
 ## 2026-06-13 — חיתוכי הדלת נגזרים מ-doorsById (סגירת החוב מ-2026-05-25)
 
 **ההחלטה**: חיתוכי הדלת ב-CutsList נגזרים מ-`doorsById` דרך `buildDoorCutItems` (`core/cuts/doorCuts.ts`), לא מ-`calcCuts`. ה-helper פולט `CutItem` אחד לכל דלת (`qty=1`, `group:'door'`) עם `w = cm(door.width) − perimMm`, `h = cm(door.height) − perimMm`; `mergeCutItems` מקבץ זהות במורד הזרם. `useCabinet` ו-`cabinetCompute` חדלו לקרוא ל-`calcCuts` עבור דלתות. `calcCuts` עצמו **לא** שונה (נשאר אחראי על חלקי קופסת מגירה ועדיין מכוסה ב-21 בדיקות `cuttingList.test`).

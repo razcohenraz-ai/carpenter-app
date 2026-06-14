@@ -37,6 +37,9 @@
 ### Shell / מעטפת
 לוחות עיטוף חיצוניים מחומר החזיתות: שני לוחות צד (envelope outer) ואופציונלית לוח תקרה (envelope top).
 
+### Wall envelope / מעטפת קלפה (עליון+תחתון)
+לקלפה (`mount === 'wall'`) — שני לוחות חזית, **עליון ותחתון**, **בלי תלות ב-shell הצדדי**. דגל יחיד `hasWallEnvelope?: boolean` ב-`CabinetInput` (ברירת מחדל false). מודל גובה זהה ל-`hasEnvelopeTop`: המכסים בתוך ה-H (הגוף הפנימי מתכווץ ב-2×עובי חזית; H חיצוני נשמר). ברמת ה-cuts: BoardRole חדש `'envelope-bottom'` (mirror של `envelope-top`); ROLE_GROUP = `'shell'`; ROLE_LABEL = "מעטפת תחתית". ב-`deriveEnvelopeFlags` מסלול נפרד שעוקף את שער ה-`!sides`. ראה גם DECISIONS_LOG 2026-06-14.
+
 ---
 
 ## מונחי גיאומטריה בקוד
@@ -201,7 +204,7 @@ toggle מחיצות פנימיות לגוף. מעדכן cuts מיד.
 פונקציה `(data: unknown) => unknown` שממירה `Project` מגרסה `n` לגרסה `n+1`. נרשמת ב-`migrations[n]`. `migrate()` מריץ אותן ב-order מ-`data.schemaVersion` עד `CURRENT_SCHEMA_VERSION`. כרגע ה-registry ריק (גרסה 1 היא ה-baseline).
 
 ### CabinetInput
-ערכי הטופס שמזינים את `calculate()` — `W, H, D, backThickness, hasShell, hasShellLeft?, hasShellRight?, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth, edging?, topVariant?, sinkTraverseWidthCm?`. מוגדר ב-`types/cabinet.ts`. Single source of truth להגדרה החיצונית של הארון.
+ערכי הטופס שמזינים את `calculate()` — `W, H, D, backThickness, hasShell, hasShellLeft?, hasShellRight?, hasEnvelopeTop, hasWallEnvelope?, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH?, middleDoorH?, doorsPerColumn, doorGapMm, maxDoorWidth, edging?, topVariant?, sinkTraverseWidthCm?, mount?`. מוגדר ב-`types/cabinet.ts`. Single source of truth להגדרה החיצונית של הארון.
 
 ### SavedCabinetState
 מבנה ה-state השמור של הארון — מפות `Record<string, ...>` לבחירות משתמש ששורדות `calculate()` rebuilds: `interior`, `cellInterior`, `partitions`, `doors`, `plinthGableOverrides`, `boardOverrides`, ואופציונליים `bodyEdgingOverrides?`, `doorEdgingOverrides?`, `boxDimensionOverrides?`. כל אחת ממופתחת לפי identifier יציב (`BoxSlotId` / `DoorSlotKey` / `Board.stableId`).

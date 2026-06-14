@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+### תוקן — `handleSubmit` ב-`CabinetForm` השמיט דגלי מודול (mount, hasFronts, hasBack, hasBottom, topVariant, sinkTraverseWidthCm)
+
+לחיצה על "חשב" בנתה `cabinetInput` חדש בלי לפזר את דגלי המודול מ-`initialInput`, אז כל הגדרת מודול שלא יושבת כשדה בטופס (קלפה `mount:'wall'`, תנור `hasFronts:false`, כיור `topVariant:'sink-open'` וכו') נמחקה בקריאת `calculate()` שלאחריה. הבאג היה רדום עד שמעטפת הקלפה (`hasWallEnvelope`, שמגודרת ב-`mount==='wall'`) חשפה אותו — המעטפת **צוירה** בסקיצה (פוטנציאל זרם ישיר מ-`form` state) אבל הגוף **לא התכווץ** וחיתוכי המעטפת **חסרו** מ-CutsList, כי `wallEnv` בעורק ה-compute ראה `mount=undefined` אחרי לחיצה. תוקן: שני ה-payloads האחרים (mount-effect + applyPlinthUpdate) **כן** פזרו את הדגלים; `handleSubmit` עכשיו עושה אותו דבר.
+
+### תוקן — חזית התקצרה ב-2×עובי מעטפת גם כשרק צד אחד היה עם מעטפת
+
+ב-`computeRowFrontLayout`, ה-`hasOuterShell` הוא boolean והקיצור היה תמיד `2 × shellThicknessCm`. ביחידת מטבח עם מעטפת **בצד אחד בלבד** (למשל קלפה הצמודה לקיר משמאל ועם מעטפת ימין) — `wAvailable` ירד ב-2×t במקום ב-1×t, וכל החזית בארון התקצרה ב-1.8 ס"מ מיותרים. מודל הקירוב הסימטרי לא תאם את ה-shell האסימטרי שכבר נתמך ב-`computeInnerWidth`/`deriveEnvelopeFlags`.
+
+**תיקון**: שדה אופציונלי חדש `shellSides?: { left, right }` ב-`RowFrontLayoutArgs`. כשמועבר, הוא **גובר** על `hasOuterShell` ומקבל per-side flags: `wAvailable = cabinetW - (left?t:0) - (right?t:0)`, `cabinetLeftOffset = (left?t:0)`. שלושת ה-callers ב-production (`useCabinet`, `cabinetCompute`, `KitchenOverview` ×2) מעבירים את `shellSides` ש-`getShellSides(input)` כבר מחזיר. ארונות עם shell סימטרי / בלי shell — ללא שינוי (`hasOuterShell` הסימטרי נשמר כברירת מחדל). הטסטים הקיימים שלא מעבירים `shellSides` ממשיכים לעבוד.
+
+### תוקן — checkbox "מעטפת עליון+תחתון" לא הריץ recalculate (drift מ-pattern של material selectors)
+
+ה-onChange של ה-checkbox רק עדכן `form` state — כמו ה-shell checkboxes. אבל בלי `calculate()` אוטומטי, הסקיצה הציגה את ה-cap (pre-calc fallback מ-form state) **בזמן ש-result נשאר עם ה-input הישן** — הגוף לא התכווץ והחיתוכים חסרו, עד שהמשתמש יזכור ללחוץ "חשב". ה-material selectors (`bodyMaterialId`/`frontMaterialId`) משתמשים ב-pattern של live recalculate (`calculate({ ...getLastInput(), bodyMaterialId: newId })`); ה-checkbox עכשיו עושה אותו דבר עם `hasWallEnvelope`. השמירה האוטומטית (`onCabinetChange` ב-useEffect של `[result]`) תפסה את העדכון מיד.
+
+### נוסף — מעטפת עליון+תחתון לקלפה (envelope-bottom) — סגירת החוב מ-2026-06-11
+
+הקלפה קיבלה checkbox "מעטפת עליון+תחתון" שמוסיף שני לוחות חזית — מעל ומתחת הגוף — בלי תלות ב-shell הצדדי. ההתנהגות עקבית עם `hasEnvelopeTop` הקיים: המכסים **בתוך** ה-H (הגוף הפנימי מתכווץ ב-2×עובי חזית; H=50 חיצוני נשמר).
+
+**איך נסגרו שני החסמים שתועדו ב-2026-06-11 (DECISIONS_LOG)**:
+1. **חסם הגאומטריה** — נפתר בקומיט `d93dde7` כשהוספנו את `effectiveH` ל-`computeSketchGeometry`. כעת הוספה של `2·wallEnvelopeCm` ל-`effectiveH` מספיקה — המכסים לא נחתכים יותר ב-viewBox של תצוגת המטבח.
+2. **חסם ה-shell** — שדה חדש מבודד `hasWallEnvelope?: boolean` ב-`CabinetInput`, מגודר ע"י `mount === 'wall'`. `deriveEnvelopeFlags` קיבל פרמטר רביעי `hasWallEnvelope` ש**עוקף** את שער ה-`!sides` ומחזיר `{ top:isTopRow, bottom:isBottomRow }` בלי דרישה ל-shell צדדי.
+
+**יישום**: `BoardRole` חדש `'envelope-bottom'` (mirror של `envelope-top` ב-`yFrom:H, yTo:H+tF`). `decomposeBoxes` קיבל פרמטר חמישי `envelopeBottomH`. שני מסלולי ה-compute (`useCabinet` + `cabinetCompute`) מסונכרנים. `CabinetSketch`/`CabinetFrontsSketch` מקבלים `wallEnvelopeCm` ומרנדרים את שני הפאנלים. הטופס מציג את ה-checkbox רק לקלפות. תרגום: HE "מעטפת עליון+תחתון", EN "Top+bottom envelope".
+
 ### תוקן — חיתוך הדלת ב-CutsList לא הגיב לעקיפת מידות גוף (סגירת חוב 2026-05-25)
 
 עקיפת מידות גוף עדכנה את הסקיצה, רשימת הדלתות, חיתוכי הקורפוס והמגירות — אבל **לא** את חיתוך הדלת ברשימת החיתוכים. השורש: `calcCuts` (מסלול single-row) שחזר את רוחב/גובה הדלת מ-`input.W`/`input.H` הגלובליים, מנותק מ-`box.W`/`box.H` אחרי העקיפה. שתי רשימות שמתארות את אותה דלת לא היו עקביות (DoorsList גזר מ-`doorsById`, CutsList חישב מחדש).

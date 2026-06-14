@@ -211,6 +211,9 @@ function FrontPanels({ unit, layout, scale }: {
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
     hasOuterShell: hasAnyShell,
+    // Asymmetric shell support — a wall-flush unit with shell on one side
+    // only must shrink the door width by 1×t, not 2×t.
+    shellSides: sides,
     shellThicknessCm: tFront,
     totalFrontsInRow: dl.n,
     gapCm,
@@ -966,6 +969,8 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
           layoutByRow.set(level, computeRowFrontLayout({
             cabinetW: effW,
             hasOuterShell: hasAnyShell,
+            // Asymmetric shell support — mirrors useCabinet/cabinetCompute.
+            shellSides: sides,
             shellThicknessCm: tFront,
             totalFrontsInRow: totalFronts,
             gapCm: cabinetGapCm,
@@ -1036,6 +1041,8 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
                 hasShellRight={sides.right}
                 frontMaterialThickness={tFront}
                 {...(inp.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
+                {...(inp.hasWallEnvelope && inp.mount === 'wall'
+                  ? { wallEnvelopeCm: tFront } : {})}
                 frontLayoutByRow={layoutByRow}
                 numFrontsPerBox={numFrontsPerBox}
                 bodyMaterialId={inp.bodyMaterialId}

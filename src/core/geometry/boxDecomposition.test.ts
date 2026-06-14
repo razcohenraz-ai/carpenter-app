@@ -429,4 +429,32 @@ describe("decomposeBoxes", () => {
     expect(singles).toHaveLength(2);
     singles.forEach(b => expect(b.H).toBeCloseTo(178.2, 5));
   });
+
+  // ── מעטפת תחתונה (envelopeBottomH) — קלפה ────────────────────────────────────
+
+  it("envelopeBottomH=0 (ברירת מחדל) — לא משנה גובה שום גוף", () => {
+    const boxes = decomposeBoxes(50, 180, 60, undefined, 0, "auto", undefined, 0, 0);
+    expect(boxes[0]!.H).toBe(180);
+  });
+
+  it("single עם envelopeBottomH=1.8 — גובה הגוף יורד ב-1.8", () => {
+    const boxes = decomposeBoxes(50, 50, 35, undefined, 0, "auto", undefined, 0, 1.8);
+    const single = boxes.find(b => b.level === "single")!;
+    expect(single.H).toBeCloseTo(48.2, 5);
+  });
+
+  it("single עם top+bottom envelope ביחד — גובה הגוף יורד ב-3.6", () => {
+    // קלפה אמיתית: H=50, envelopes=1.8 כל אחד → body = 50 - 3.6 = 46.4
+    const boxes = decomposeBoxes(100, 50, 35, undefined, 0, "auto", undefined, 1.8, 1.8);
+    const single = boxes.find(b => b.level === "single")!;
+    expect(single.H).toBeCloseTo(46.4, 5);
+  });
+
+  it("פיצול 2 קומות: bottom מוקטן ע\"י envelopeBottomH, top לא מושפע", () => {
+    const boxes = decomposeBoxes(50, 240, 60, 100, 0, "auto", undefined, 0, 1.8);
+    const top    = boxes.find(b => b.level === "top")!;
+    const bottom = boxes.find(b => b.level === "bottom")!;
+    expect(top.H).toBe(140);
+    expect(bottom.H).toBeCloseTo(98.2, 5);  // 100 - 1.8
+  });
 });

@@ -73,8 +73,12 @@ export interface SketchGeometry {
   boxes: Box[];
   /** Outer envelope side panels (when hasShell) */
   envelopePanels: { left: BoxSvgRect | null; right: BoxSvgRect | null } | null;
-  /** Outer envelope ceiling panel (when hasShell && hasEnvelopeTop) */
+  /** Outer envelope ceiling panel (when hasShell && hasEnvelopeTop, OR a wall
+   *  cabinet with `wallEnvelopeCm > 0`). */
   envelopeTopPanel: BoxSvgRect | null;
+  /** Wall-cabinet bottom envelope cap (when `wallEnvelopeCm > 0`). null for
+   *  all base cabinets — the cabinet sits on a plinth, not a cap. */
+  envelopeBottomPanel: BoxSvgRect | null;
 }
 
 export function isValidSketchInput(
@@ -133,6 +137,11 @@ export function computeSketchGeometry(
   hasEnvelopeTop = false,
   boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>,
   shellSides?: { left: boolean; right: boolean },
+  /** Wall-cabinet top+bottom envelope cap thickness (cm). > 0 → the body
+   *  shrinks by 2× this in decomposeBoxes, and full-width caps render at the
+   *  top and bottom. Independent of the side shell — wall cabinets have none.
+   *  Default 0 (no wall envelope). */
+  wallEnvelopeCm = 0,
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
@@ -146,7 +155,15 @@ export function computeSketchGeometry(
   const sides = shellSides ?? { left: tEnvelope !== undefined, right: tEnvelope !== undefined };
   const innerW = computeInnerWidth(W, sides, envelopeCm);
 
-  const rawBoxes = decomposeBoxes(innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH);
+  // Wall envelope shrinks the body in decompose (mirrors useCabinet path) so
+  // box.H and yLevels stay consistent with the cuts. `hasEnvelopeTop` (shell)
+  // is left out of the decompose here — that path renders as overlay (legacy
+  // behaviour for base cabinets with shell + envelope-top).
+  const rawBoxes = decomposeBoxes(
+    innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH,
+    wallEnvelopeCm > 0 ? wallEnvelopeCm : 0,
+    wallEnvelopeCm > 0 ? wallEnvelopeCm : 0,
+  );
   const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
     ? rawBoxes.map(box => {
         const ovr = boxDimensionOverrides.get(boxStableKey(box));
@@ -189,7 +206,11 @@ export function computeSketchGeometry(
   // outline together with the body rects (which already use box.H). Without any
   // override this equals H exactly, so un-overridden cabinets are unchanged.
   const levelHeightSum = [...levelHeightMap.values()].reduce((s, h) => s + h, 0);
-  const effectiveH = levelHeightSum + plinth + (hasEnvelopeTop && envelopeCm ? envelopeCm : 0);
+  // Wall envelope adds 2× caps to the external cabinet height (the body was
+  // already shrunk by 2× in decompose so this restores H exactly).
+  const wallEnvAdded = wallEnvelopeCm > 0 ? 2 * wallEnvelopeCm : 0;
+  const effectiveH =
+    levelHeightSum + plinth + (hasEnvelopeTop && envelopeCm ? envelopeCm : 0) + wallEnvAdded;
 
   // Scale fits the actual cabinet (effectiveCabW × effectiveH). Using the raw
   // W/H params would mis-scale whenever per-body overrides change the body
@@ -267,9 +288,11 @@ export function computeSketchGeometry(
   // ── Box SVG rects: one per non-plinth box ─────────────────────────────────
   const boxSvgRects: Record<string, BoxSvgRect> = {};
   {
-    // Level y-offsets from top of body area (top → down)
+    // Level y-offsets from top of body area (top → down). Start below the
+    // wall envelope top cap when present (the cap occupies the first
+    // wallEnvelopeCm of the cabinet height).
     const levelYOffset: Partial<Record<BoxLevel, number>> = {};
-    let cumLevelH = 0;
+    let cumLevelH = wallEnvelopeCm > 0 ? wallEnvelopeCm : 0;
     for (const level of activeLevels) {
       levelYOffset[level] = cumLevelH;
       cumLevelH += levelHeightMap.get(level)!;
@@ -303,8 +326,17 @@ export function computeSketchGeometry(
   // Top envelope spans the inner width between whichever side panels are present.
   const topInsetLeft = sides.left ? envelopePx : 0;
   const topInsetRight = sides.right ? envelopePx : 0;
+  const wallEnvPx = wallEnvelopeCm * scale;
+  // Top cap: either the shell-gated envelope-top (legacy) or the wall envelope
+  // (קלפה). Wall caps are full-width — no side shell to inset under.
   const envelopeTopPanel = (hasEnvelopeTop && envelopePx > 0)
     ? { x: cabX + topInsetLeft, y: cabY, w: cabW - topInsetLeft - topInsetRight, h: envelopePx }
+    : wallEnvPx > 0
+      ? { x: cabX, y: cabY, w: cabW, h: wallEnvPx }
+      : null;
+  // Bottom cap: wall envelope only — base cabinets sit on a plinth, not a cap.
+  const envelopeBottomPanel = wallEnvPx > 0
+    ? { x: cabX, y: cabY + cabH - wallEnvPx, w: cabW, h: wallEnvPx }
     : null;
 
   return {
@@ -330,5 +362,6 @@ export function computeSketchGeometry(
     boxes,
     envelopePanels,
     envelopeTopPanel,
+    envelopeBottomPanel,
   };
 }

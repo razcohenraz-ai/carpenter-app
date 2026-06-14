@@ -60,6 +60,10 @@ interface Props {
   /** When true, render only the <svg> (no wrapper div, no title).
    *  Used by KitchenOverview to embed multiple cabinet sketches side by side. */
   embedded?: boolean;
+  /** Wall-cabinet top+bottom envelope cap thickness (cm). When > 0, two
+   *  full-width caps are rendered (and the body shrinks accordingly). 0 / omit
+   *  for base cabinets. */
+  wallEnvelopeCm?: number;
   /** Optional: 'sink-open' triggers sink basin overlay (rect + drain circle).
    *  Passed through to buildBoardModel for sink-traverse boards (top boards
    *  become two narrow traverses at front/back). */
@@ -91,7 +95,7 @@ interface Props {
   hasBottom?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -122,7 +126,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const fullD = parseFloat(D);
   const tFrontCm = frontMaterialThickness ?? 0;
   const carcassD = computeCarcassDepth(fullD, backThicknessCm, HINGE_GAP_CM, tFrontCm);
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides, shellSides);
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides, shellSides, wallEnvelopeCm ?? 0);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
   // Boards are emitted only post-calc (interiorById defined) and only when
@@ -312,6 +316,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             y={geo.envelopeTopPanel.y}
             width={geo.envelopeTopPanel.w}
             height={geo.envelopeTopPanel.h}
+            className={styles.envelopePanel}
+          />
+        )}
+
+        {/* Wall-cabinet bottom envelope cap — pre-calc only (post-calc → board). */}
+        {!hasBoards && geo.envelopeBottomPanel && (
+          <rect
+            x={geo.envelopeBottomPanel.x}
+            y={geo.envelopeBottomPanel.y}
+            width={geo.envelopeBottomPanel.w}
+            height={geo.envelopeBottomPanel.h}
             className={styles.envelopePanel}
           />
         )}

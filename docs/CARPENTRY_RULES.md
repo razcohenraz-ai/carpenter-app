@@ -183,6 +183,12 @@
 - `cabinetTotalH` = גובה הארון החיצוני המלא (כולל צוקל וכולל מעטפת תקרה אם קיימת). זהה ל-`H` שהוזן בטופס.
 - **0.6 ס"מ** (קבוע `LEVELER_GAP_CM`): רווח רצפה להגבהות פלסטיק שמחזיקות את הארון מעל הרצפה — הצדדים החיצוניים חייבים להיות קצרים ב-6 מ"מ כדי שיוכלו לשבת על ההגבהות.
 
+### מעטפת קלפה (עליון+תחתון)
+- **רק לקלפה** (`mount === 'wall'`). דגל יחיד `hasWallEnvelope` ב-`CabinetInput`. **לא תלוי** ב-shell הצדדי (לקלפה אין shell צדדי).
+- כששדה זה מסומן: שני לוחות חזית נוספים — `envelope-top` ו-`envelope-bottom` — שניהם מלאי-רוחב (`length = W`, `width = envD`).
+- **מודל גובה**: המכסים **בתוך** ה-`H` החיצוני. הגוף הפנימי (`box.H`) מתכווץ ב-`2 × frontMaterial.thickness`. דוגמה: קלפה W=100, H=50, חזית 18 מ"מ → `box.H = 46.4` ס"מ.
+- ב-`deriveEnvelopeFlags` מסלול עצמאי מ-shell: כש-`hasWallEnvelope=true` → `{ left:false, right:false, top:isTopRow, bottom:isBottomRow }`. ראה DECISIONS_LOG 2026-06-14.
+
 ---
 
 ## צירים

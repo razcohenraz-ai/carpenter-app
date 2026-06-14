@@ -96,6 +96,58 @@ describe('computeRowFrontLayout', () => {
     });
     expect(layout.frontWidth).toBe(0);
   });
+
+  // ── Asymmetric shell (shellSides override) — kitchen units flush to a wall ─
+  describe('asymmetric shell via shellSides', () => {
+    // The bug closed by this branch: a kitchen unit with shell on one side
+    // only (e.g. flush against a wall on the left) was shrinking the door by
+    // 2× shell thickness because computeRowFrontLayout used `hasOuterShell`
+    // as a binary symmetric flag.
+
+    it('shell on RIGHT only: wAvailable = W − t (not W − 2t), front starts at x=0', () => {
+      const layout = computeRowFrontLayout({
+        cabinetW: 100, hasOuterShell: true, shellThicknessCm: 1.8,
+        shellSides: { left: false, right: true },
+        totalFrontsInRow: 1, gapCm: GAP,
+      });
+      expect(layout.wAvailable).toBeCloseTo(98.2, 3);    // 100 − 1.8
+      expect(layout.cabinetLeftOffset).toBe(0);           // no left shell
+    });
+
+    it('shell on LEFT only: wAvailable = W − t, front offset by t', () => {
+      const layout = computeRowFrontLayout({
+        cabinetW: 100, hasOuterShell: true, shellThicknessCm: 1.8,
+        shellSides: { left: true, right: false },
+        totalFrontsInRow: 1, gapCm: GAP,
+      });
+      expect(layout.wAvailable).toBeCloseTo(98.2, 3);    // 100 − 1.8
+      expect(layout.cabinetLeftOffset).toBeCloseTo(1.8, 3);
+    });
+
+    it('shell on BOTH sides via shellSides matches legacy symmetric path', () => {
+      const asym = computeRowFrontLayout({
+        cabinetW: 100, hasOuterShell: true, shellThicknessCm: 1.8,
+        shellSides: { left: true, right: true },
+        totalFrontsInRow: 1, gapCm: GAP,
+      });
+      const sym = computeRowFrontLayout({
+        cabinetW: 100, hasOuterShell: true, shellThicknessCm: 1.8,
+        totalFrontsInRow: 1, gapCm: GAP,
+      });
+      expect(asym.wAvailable).toBeCloseTo(sym.wAvailable, 3);
+      expect(asym.cabinetLeftOffset).toBe(sym.cabinetLeftOffset);
+    });
+
+    it('NO shell via shellSides matches legacy `hasOuterShell:false` path', () => {
+      const asym = computeRowFrontLayout({
+        cabinetW: 100, hasOuterShell: false, shellThicknessCm: 1.8,
+        shellSides: { left: false, right: false },
+        totalFrontsInRow: 1, gapCm: GAP,
+      });
+      expect(asym.wAvailable).toBe(100);
+      expect(asym.cabinetLeftOffset).toBe(0);
+    });
+  });
 });
 
 describe('computeFrontGeometry — single column', () => {

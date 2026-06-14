@@ -40,6 +40,9 @@ interface FormState {
   hasShellLeft: boolean;
   hasShellRight: boolean;
   hasEnvelopeTop: boolean;
+  /** Wall-cabinet (קלפה) top+bottom envelope toggle. Only meaningful when
+   *  `initialInput.mount === 'wall'`. Independent of `hasShell*`. */
+  hasWallEnvelope: boolean;
   doorCoversPlinth: boolean;
   bodyMaterialId: MaterialId;
   frontMaterialId: MaterialId;
@@ -135,6 +138,7 @@ function inputToFormState(
     hasShellLeft: inp.hasShellLeft ?? inp.hasShell,
     hasShellRight: inp.hasShellRight ?? inp.hasShell,
     hasEnvelopeTop: inp.hasEnvelopeTop,
+    hasWallEnvelope: inp.hasWallEnvelope ?? false,
     doorCoversPlinth: inp.doorCoversPlinth,
     bodyMaterialId: inp.bodyMaterialId, frontMaterialId: inp.frontMaterialId,
     doorsPerColumn: dpc,
@@ -192,6 +196,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       hasShellLeft: form.hasShellLeft,
       hasShellRight: form.hasShellRight,
       hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
+      hasWallEnvelope: form.hasWallEnvelope,
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth: parseFloat(form.plinth) || 0,
@@ -318,6 +323,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       hasShellLeft: form.hasShellLeft,
       hasShellRight: form.hasShellRight,
       hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
+      hasWallEnvelope: form.hasWallEnvelope,
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth: effectivePlinth,
@@ -374,7 +380,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       plinth: '10', plinthRecess: '0',
       lowerDoorH: '110', middleDoorH: '80',
       hasShell: true, hasShellLeft: true, hasShellRight: true,
-      hasEnvelopeTop: false, doorCoversPlinth: false,
+      hasEnvelopeTop: false, hasWallEnvelope: false, doorCoversPlinth: false,
       bodyMaterialId: 'mdf18', frontMaterialId: 'mdf18', doorsPerColumn: 'auto',
       doorGap: '2', doorGapManuallySet: false,
       maxDoorWidth: '60',
@@ -502,6 +508,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       hasShellLeft: form.hasShellLeft,
       hasShellRight: form.hasShellRight,
       hasEnvelopeTop: form.hasEnvelopeTop && (form.hasShellLeft || form.hasShellRight),
+      hasWallEnvelope: form.hasWallEnvelope,
       bodyMaterialId: form.bodyMaterialId,
       frontMaterialId: form.frontMaterialId,
       plinth,
@@ -513,6 +520,17 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       doorGapMm: parseFloat(form.doorGap) || 0,
       maxDoorWidth: Math.max(parseFloat(form.maxDoorWidth) || 60, 10),
       edging: buildCabinetEdging(form),
+      // Preserve module-level flags that aren't form fields. WITHOUT this,
+      // pressing "calculate" on a wall cabinet (קלפה) silently strips its
+      // `mount:'wall'` marker — so `wallEnv` flips back to false, the body
+      // stops shrinking, and envelope-bottom boards disappear from the cut
+      // list. Mirrors the two payloads above.
+      ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
+      ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
+      ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
+      ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
+      ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
+      ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
     };
     calculate(cabinetInput);
   }
@@ -945,6 +963,23 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   )}
                 </div>
               )}
+              {/* Wall-cabinet (קלפה) top+bottom envelope — independent of side
+                  shell. Shown only for wall units; replaces the shell-gated
+                  "מעטפת תקרה" which is hidden by hideEnvelopeTop.
+                  Live recalculate (mirrors the material selectors): toggling
+                  the checkbox runs calculate() immediately so the body shrinks
+                  and the envelope-bottom board reaches the cut list without
+                  requiring the user to press "חשב". */}
+              {initialInput?.mount === 'wall' && checkbox(
+                'input-wall-envelope',
+                form.hasWallEnvelope,
+                t.form.hasWallEnvelope,
+                v => {
+                  setForm(p => ({ ...p, hasWallEnvelope: v }));
+                  const lastInput = getLastInput();
+                  if (lastInput) calculate({ ...lastInput, hasWallEnvelope: v });
+                },
+              )}
             </div>
 
             {/* רווח בין דלתות */}
@@ -1036,6 +1071,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               D={form.D}
               backThicknessCm={backThicknessCm}
               plinth={form.plinth}
+              {...(form.hasWallEnvelope && initialInput?.mount === 'wall'
+                ? { wallEnvelopeCm: frontThicknessCm } : {})}
               doorsPerColumn={form.doorsPerColumn}
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
@@ -1067,6 +1104,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               D={form.D}
               plinth={form.plinth}
               doorsPerColumn={form.doorsPerColumn}
+              {...(form.hasWallEnvelope && initialInput?.mount === 'wall'
+                ? { wallEnvelopeCm: frontThicknessCm } : {})}
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
               doorsById={doorsById}

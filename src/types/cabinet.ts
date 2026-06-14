@@ -70,6 +70,12 @@ export interface CabinetInput {
    *  expose only the shelf control). Pure UI/positioning metadata — it does NOT
    *  affect board or cut computation. */
   mount?: 'base' | 'wall';
+  /** Wall-cabinet (קלפה) top+bottom envelope: two front-material caps wrapping
+   *  the body above and below, enabled by a single checkbox. Independent of the
+   *  side shell (`hasShell*`) — a wall cabinet has no side shell. Like
+   *  `hasEnvelopeTop` it shrinks the body (the cap thickness is taken from the
+   *  external H, not added to it). Default false. */
+  hasWallEnvelope?: boolean;
 }
 
 /** Single source of truth for "which sides of the cabinet have a shell".

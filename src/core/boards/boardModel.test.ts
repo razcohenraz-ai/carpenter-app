@@ -338,6 +338,30 @@ describe('buildBoardModel — envelope', () => {
     expect(eT.materialId).toBe(frontMat.id);
   });
 
+  // Wall-cabinet bottom cap — mirror of envelope-top, emitted when
+  // hasEnvelopeBottom is true (wall cabinets only). Full-width, front material,
+  // sits just below the body at y=H..H+tF.
+  it('hasEnvelopeBottom: 1 extra board below the body (mirror of top)', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({
+      ...baseArgs, box: b,
+      hasEnvelopeBottom: true,
+    });
+    const eB = byRole(boards, 'envelope-bottom')[0]!;
+    expect(eB).toBeDefined();
+    expect(eB.yFrom).toBe(200);
+    expect(eB.yTo).toBeCloseTo(200 + t);
+    expect(eB.xFrom).toBe(0);
+    expect(eB.xTo).toBe(80);
+    expect(eB.materialId).toBe(frontMat.id);
+  });
+
+  it('no hasEnvelopeBottom flag → no envelope-bottom board (default off)', () => {
+    const b = box({ W: 80, H: 200 });
+    const boards = buildBoardModel({ ...baseArgs, box: b });
+    expect(byRole(boards, 'envelope-bottom')).toHaveLength(0);
+  });
+
   it('no envelope flags → no envelope boards', () => {
     const b = box({ W: 80, H: 200 });
     const boards = buildBoardModel({ ...baseArgs, box: b });
@@ -1198,7 +1222,10 @@ describe('deriveEnvelopeFlags', () => {
 
   it('hasShell=false → all false', () => {
     const flags = deriveEnvelopeFlags(b('single'), false, true);
-    expect(flags).toEqual({ hasEnvelopeLeft: false, hasEnvelopeRight: false, hasEnvelopeTop: false });
+    expect(flags).toEqual({
+      hasEnvelopeLeft: false, hasEnvelopeRight: false,
+      hasEnvelopeTop: false, hasEnvelopeBottom: false,
+    });
   });
 
   it('single + shell + envelopeTop → all three', () => {
@@ -1252,6 +1279,25 @@ describe('deriveEnvelopeFlags', () => {
   it("level='top' + envelopeTop=true → envelopeTop true", () => {
     const flags = deriveEnvelopeFlags(b('single', 'top'), true, true);
     expect(flags.hasEnvelopeTop).toBe(true);
+  });
+
+  // Wall-cabinet (קלפה) top+bottom envelope — independent of side shell.
+  // Bypasses the !sides gate so a wall cabinet (no shell) still gets caps.
+  it('hasWallEnvelope=true (no shell) → top+bottom caps, no sides', () => {
+    const flags = deriveEnvelopeFlags(b('single'), false, false, true);
+    expect(flags).toEqual({
+      hasEnvelopeLeft: false, hasEnvelopeRight: false,
+      hasEnvelopeTop: true, hasEnvelopeBottom: true,
+    });
+  });
+
+  it('hasWallEnvelope on a non-single body → caps follow level', () => {
+    const top = deriveEnvelopeFlags(b('single', 'top'), false, false, true);
+    expect(top.hasEnvelopeTop).toBe(true);
+    expect(top.hasEnvelopeBottom).toBe(false);
+    const bot = deriveEnvelopeFlags(b('single', 'bottom'), false, false, true);
+    expect(bot.hasEnvelopeTop).toBe(false);
+    expect(bot.hasEnvelopeBottom).toBe(true);
   });
 });
 

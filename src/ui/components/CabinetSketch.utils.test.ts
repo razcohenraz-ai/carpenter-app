@@ -211,4 +211,46 @@ describe('computeSketchGeometry', () => {
       expect(g.hLabel.text).toBe('50');
     });
   });
+
+  // ── Wall envelope (קלפה — מעטפת עליון+תחתון) ────────────────────────────────
+  describe('wall envelope caps', () => {
+    it('wallEnvelopeCm=0 → no caps, no change to external H', () => {
+      const g = computeSketchGeometry(100, 50, 35, 0);
+      expect(g.envelopeBottomPanel).toBeNull();
+      expect(g.hLabel.text).toBe('50');
+    });
+
+    it('wallEnvelopeCm>0 → both top and bottom caps appear, external H preserved', () => {
+      const g = computeSketchGeometry(
+        100, 50, 35, 0, undefined, 'auto', undefined,
+        undefined, false, undefined, undefined,
+        1.8,
+      );
+      expect(g.envelopeTopPanel).not.toBeNull();
+      expect(g.envelopeBottomPanel).not.toBeNull();
+      // External H is preserved (body shrinks by 2×, caps add 2× back).
+      // Float-arithmetic from the subtract+add cycle leaves a hair of noise;
+      // assert closeness rather than the string text.
+      expect(parseFloat(g.hLabel.text)).toBeCloseTo(50, 5);
+    });
+
+    it('top cap sits at cabY (top of cabinet)', () => {
+      const g = computeSketchGeometry(
+        100, 50, 35, 0, undefined, 'auto', undefined,
+        undefined, false, undefined, undefined,
+        1.8,
+      );
+      expect(g.envelopeTopPanel!.y).toBeCloseTo(g.cabinet.y, 3);
+    });
+
+    it('bottom cap sits flush with cabinet bottom (y+cap.h = cabinet.y+cabinet.h)', () => {
+      const g = computeSketchGeometry(
+        100, 50, 35, 0, undefined, 'auto', undefined,
+        undefined, false, undefined, undefined,
+        1.8,
+      );
+      const cap = g.envelopeBottomPanel!;
+      expect(cap.y + cap.h).toBeCloseTo(g.cabinet.y + g.cabinet.h, 3);
+    });
+  });
 });

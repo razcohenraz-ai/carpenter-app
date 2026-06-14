@@ -49,7 +49,14 @@ export interface RowFrontLayoutArgs {
   /** cm. Outer width of the cabinet. */
   cabinetW: number;
   hasOuterShell: boolean;
-  /** cm. Shell panel thickness (irrelevant if `hasOuterShell` is false). */
+  /** Optional per-side shell flags. When present, **overrides**
+   *  `hasOuterShell` so asymmetric envelopes (e.g. a kitchen unit with shell
+   *  only on the right, where the unit sits against a wall on the left) are
+   *  reflected correctly: the door width loses one shell thickness, not two.
+   *  When absent, `hasOuterShell` applies symmetrically — legacy callers
+   *  unchanged. */
+  shellSides?: { left: boolean; right: boolean };
+  /** cm. Shell panel thickness (irrelevant if neither side has shell). */
   shellThicknessCm: number;
   /** Sum of `numFronts` across every body in this row. */
   totalFrontsInRow: number;
@@ -58,9 +65,14 @@ export interface RowFrontLayoutArgs {
 }
 
 export function computeRowFrontLayout(args: RowFrontLayoutArgs): RowFrontLayout {
-  const { cabinetW, hasOuterShell, shellThicknessCm, totalFrontsInRow: N, gapCm } = args;
-  const cabinetLeftOffset = hasOuterShell ? shellThicknessCm : 0;
-  const wAvailable = hasOuterShell ? cabinetW - 2 * shellThicknessCm : cabinetW;
+  const { cabinetW, hasOuterShell, shellSides, shellThicknessCm: t, totalFrontsInRow: N, gapCm } = args;
+  // Per-side shell flags drive an asymmetric layout when supplied; otherwise
+  // fall back to the symmetric `hasOuterShell` (legacy callers + tests).
+  const sides = shellSides ?? { left: hasOuterShell, right: hasOuterShell };
+  const leftT = sides.left ? t : 0;
+  const rightT = sides.right ? t : 0;
+  const cabinetLeftOffset = leftT;
+  const wAvailable = cabinetW - leftT - rightT;
   const frontWidth = N > 0 ? (wAvailable - (N + 1) * gapCm) / N : 0;
   return { wAvailable, frontWidth, cabinetLeftOffset, gapCm };
 }

@@ -137,11 +137,15 @@ export function computeUnitCutsAndHardware(
   const hasAnyShell = shellSides.left || shellSides.right;
   const innerW = computeInnerWidth(W, shellSides, tFront);
   const carcassD = computeCarcassDepth(D, backThickness, HINGE_GAP_CM, tFront);
-  const envelopeTopH = (hasEnvelopeTop && hasAnyShell) ? tFront : 0;
+  // Wall-cabinet (קלפה) top+bottom envelope — independent of the side shell.
+  // Gated by mount==='wall' so a stray flag on a base cabinet has no effect.
+  const wallEnv = input.hasWallEnvelope === true && input.mount === 'wall';
+  const envelopeTopH = ((hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
+  const envelopeBottomH = wallEnv ? tFront : 0;
 
   const rawBoxes = decomposeBoxes(
     innerW, H, carcassD,
-    lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH,
+    lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH, envelopeBottomH,
   );
 
   // Apply box dimension overrides from saved state
@@ -212,6 +216,9 @@ export function computeUnitCutsAndHardware(
     layoutByRow.set(level, computeRowFrontLayout({
       cabinetW: rowEffectiveOuterW,
       hasOuterShell: hasAnyShell,
+      // Per-side flags so an asymmetric shell (e.g. wall-flush kitchen unit)
+      // shrinks the door width by 1×t, not 2×t. Mirrors useCabinet.
+      shellSides,
       shellThicknessCm: tFront,
       totalFrontsInRow,
       gapCm: cabinetGapCm,
@@ -345,7 +352,7 @@ export function computeUnitCutsAndHardware(
   const cabinetJoint = resolveCabinetJointMethod(W, H);
   const boardCuts: CutItem[] = [];
   for (const box of bodyBoxes) {
-    const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop);
+    const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop, wallEnv);
     const items = newInterior[box.id] ?? [];
     const cellItems = newCellInteriorById[box.id];
     const hasPartitionBox = newPartitionsMap.get(box.id) === true;
@@ -356,6 +363,7 @@ export function computeUnitCutsAndHardware(
       hasEnvelopeLeft: envFlags.hasEnvelopeLeft,
       hasEnvelopeRight: envFlags.hasEnvelopeRight,
       hasEnvelopeTop: envFlags.hasEnvelopeTop,
+      hasEnvelopeBottom: envFlags.hasEnvelopeBottom,
       items,
       hasPartition: hasPartitionBox,
       ...(hasPartitionBox && cellItems

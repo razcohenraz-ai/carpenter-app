@@ -783,6 +783,11 @@ export function useCabinet(settings?: {
     lastInputRef.current = input;
 
     const { W, H, D, backThickness, hasEnvelopeTop, bodyMaterialId, frontMaterialId, plinth, plinthRecess, doorCoversPlinth, lowerDoorH, middleDoorH, doorsPerColumn, doorGapMm, maxDoorWidth } = input;
+    // Wall-cabinet (קלפה) top+bottom envelope: independent of the side shell.
+    // Gated by `mount === 'wall'` so a stray flag on a base cabinet has no
+    // effect. Drives both decomposeBoxes (body shrinks) and deriveEnvelopeFlags
+    // (emits envelope-top + envelope-bottom boards).
+    const wallEnv = input.hasWallEnvelope === true && input.mount === 'wall';
     // Use getMaterialWithCustom to support both catalog and custom materials
     const allCustomMaterials = settings?.customMaterials ?? [];
     const bodyMaterial  = getMaterialWithCustom(bodyMaterialId, allCustomMaterials);
@@ -801,8 +806,9 @@ export function useCabinet(settings?: {
     const carcassD = computeCarcassDepth(D, backThickness, HINGE_GAP_CM, tFront);
     const forceRows: 1 | 2 | 3 | undefined = doorsPerColumn === 'auto' ? undefined : doorsPerColumn;
 
-    const envelopeTopH = (hasEnvelopeTop && hasAnyShell) ? tFront : 0;
-    const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH);
+    const envelopeTopH = ((hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
+    const envelopeBottomH = wallEnv ? tFront : 0;
+    const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH, envelopeBottomH);
     // Apply per-body dimension overrides (W/H/D). Each override replaces only
     // the axes the carpenter explicitly set; unset axes keep the decomposed value.
     // The override affects only the board model for that body — it does NOT
@@ -982,6 +988,10 @@ export function useCabinet(settings?: {
       layoutByRow.set(level, computeRowFrontLayout({
         cabinetW: rowEffectiveOuterW,
         hasOuterShell: hasAnyShell,
+        // Per-side flags so a unit with shell on one side only (e.g. a
+        // kitchen unit flush against a wall) loses one shell thickness from
+        // the door width, not two.
+        shellSides,
         shellThicknessCm: tFront,
         totalFrontsInRow,
         gapCm: cabinetGapCm,
@@ -1147,7 +1157,7 @@ export function useCabinet(settings?: {
     const cabinetJoint = resolveCabinetJointMethod(W, H);
     const boardCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
-      const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop);
+      const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop, wallEnv);
       const items = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
       const hasPartitionBox = newPartitionsMap.get(box.id) === true;
@@ -1158,6 +1168,7 @@ export function useCabinet(settings?: {
         hasEnvelopeLeft: envFlags.hasEnvelopeLeft,
         hasEnvelopeRight: envFlags.hasEnvelopeRight,
         hasEnvelopeTop: envFlags.hasEnvelopeTop,
+        hasEnvelopeBottom: envFlags.hasEnvelopeBottom,
         items,
         hasPartition: hasPartitionBox,
         ...(hasPartitionBox && cellItems

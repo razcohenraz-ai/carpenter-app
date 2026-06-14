@@ -49,7 +49,7 @@
 - **dishwasher module** — `plinth=0, hasFronts=false, hasBack=false, hasBottom=false`: תא ריק, W=64, יושב ישירות על הרצפה (LEVELER_GAP_CM), קוטע צוקל. 3 לוחות בלבד: 2 דפנות + עליון.
 - **oven module** — `hasFronts=false`: גוף סטנדרטי (W=60, plinth=10) עם מגירה חיצונית (h=19.2) + מדף קבוע (hff=17.4) בתחתית, וחלל פתוח של 59 ס"מ לתנור. אין דלת לחלל התנור.
 - **pantry module** — גוף גבוה (larder), H=180 (שונה משאר הגופים), W=60, plinth=10, עם חזיתות. פנים = 6 מגירות פנימיות (תחתונה 30 + 5×28) הממלאות bodyH=170. מגירות פנימיות → פרזול + סקיצה בלבד, לא חלקי חיתוך.
-- **wall module (קלפה)** — `mount:'wall'`: ארון קיר עליון, W=100/H=50/D=35, plinth=0, חזית בודדת, 2 מדפים, עורך shelf-only. תצוגת המטבח עברה ל-**elevation** (`UnitsView` אבסולוטי): גופי קיר בשורה עליונה בגובה 152 ס"מ, מיושרים מעל הגוף התחתון שקדם להם, עם פס שיש מצויר. מסוננים מקיבוץ הצוקל.
+- **wall module (קלפה)** — `mount:'wall'`: ארון קיר עליון, W=100/H=50/D=35, plinth=0, חזית בודדת, 2 מדפים, עורך shelf-only. תצוגת המטבח עברה ל-**elevation** (`UnitsView` אבסולוטי): גופי קיר בשורה עליונה בגובה 152 ס"מ, מיושרים מעל הגוף התחתון שקדם להם, עם פס שיש מצויר. מסוננים מקיבוץ הצוקל. **`hasWallEnvelope?`**: checkbox "מעטפת עליון+תחתון" מוסיף שני לוחות חזית (BoardRole `envelope-bottom` חדש, mirror של `envelope-top`), בלי תלות ב-shell צדדי; הגוף הפנימי מתכווץ ב-2×עובי חזית והגובה החיצוני נשמר.
 - **חומרים מותאמים אישית** — `SettingsPage`: לכל חומר checkbox (כלול ב-dropdown), מחיר עריך, custom materials עם id מותאם.
 - **box dimension overrides** — עקיפת W/H/D פר-body דרך `BoxInteriorEditor`; effective dims מוחל בסקיצה ובחיתוכים.
 - **דו-לשוני** — עברית + אנגלית.

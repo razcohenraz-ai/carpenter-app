@@ -32,6 +32,7 @@ export type BoardRole =
   | 'envelope-left'
   | 'envelope-right'
   | 'envelope-top'
+  | 'envelope-bottom'
   | 'back'
   | 'plinth-front'
   | 'plinth-back'
@@ -186,6 +187,7 @@ export function getEdgingPattern(role: BoardRole): Exclude<EdgingPattern, 'perim
     case 'envelope-left':
     case 'envelope-right':
     case 'envelope-top':
+    case 'envelope-bottom':
     case 'sink-traverse-front':
     case 'sink-traverse-back':
       return 'front';
@@ -359,10 +361,25 @@ export function deriveEnvelopeFlags(
   box: Box,
   shell: boolean | { left: boolean; right: boolean },
   hasEnvelopeTop: boolean,
-): { hasEnvelopeLeft: boolean; hasEnvelopeRight: boolean; hasEnvelopeTop: boolean } {
+  hasWallEnvelope = false,
+): { hasEnvelopeLeft: boolean; hasEnvelopeRight: boolean; hasEnvelopeTop: boolean; hasEnvelopeBottom: boolean } {
+  const isBottomRow = box.level === 'bottom' || box.level === 'single';
+  const isTopRow = box.level === 'top' || box.level === 'single';
+
+  // Wall cabinet (קלפה): top + bottom front-material caps, independent of the
+  // side shell. No side envelope (a wall cabinet has no shell).
+  if (hasWallEnvelope) {
+    return {
+      hasEnvelopeLeft: false,
+      hasEnvelopeRight: false,
+      hasEnvelopeTop: isTopRow,
+      hasEnvelopeBottom: isBottomRow,
+    };
+  }
+
   const sides = typeof shell === 'boolean' ? { left: shell, right: shell } : shell;
   if (!sides.left && !sides.right) {
-    return { hasEnvelopeLeft: false, hasEnvelopeRight: false, hasEnvelopeTop: false };
+    return { hasEnvelopeLeft: false, hasEnvelopeRight: false, hasEnvelopeTop: false, hasEnvelopeBottom: false };
   }
   const isUnit = box.position.startsWith('unit_');
   const isLeftEdge =
@@ -376,12 +393,11 @@ export function deriveEnvelopeFlags(
   // Envelope side panels span the FULL cabinet height — they are a single
   // physical board, not split per level. Only the bottom-most row (or the
   // only row) emits them so the cut list doesn't get duplicate entries.
-  const isBottomRow = box.level === 'bottom' || box.level === 'single';
-  const isTopRow = box.level === 'top' || box.level === 'single';
   return {
     hasEnvelopeLeft: sides.left && isLeftEdge && isBottomRow,
     hasEnvelopeRight: sides.right && isRightEdge && isBottomRow,
     hasEnvelopeTop: hasEnvelopeTop && isTopRow,
+    hasEnvelopeBottom: false,
   };
 }
 
@@ -398,6 +414,9 @@ export interface BuildBoardModelArgs {
   hasEnvelopeRight: boolean;
   /** Outer envelope on top — true for the topmost row only. */
   hasEnvelopeTop: boolean;
+  /** Wall-cabinet bottom envelope cap — true for the bottom-most row only.
+   *  Independent of the side shell. */
+  hasEnvelopeBottom?: boolean;
   /** Items in this body (or in this cell for a partitioned body). Used to
    *  emit shelf and fixed-shelf boards. Drawers, rods, and internal drawers
    *  are not boards — they are ignored here. */
@@ -450,6 +469,7 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   const {
     box, bodyMaterial, frontMaterial,
     hasEnvelopeLeft, hasEnvelopeRight, hasEnvelopeTop,
+    hasEnvelopeBottom = false,
     items, hasPartition, cellItems,
     hasBack = true,
     hasBottom = true,
@@ -694,6 +714,17 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
       role: 'envelope-top', materialId: frontMatId,
       length: W, width: envD, thickness: tF,
       xFrom: 0, xTo: W, yFrom: -tF, yTo: 0, visible: true,
+    });
+  }
+  // Wall-cabinet (קלפה) bottom cap — mirror of envelope-top across the body.
+  // Sits just below the carcass at y=H..H+tF; the body's H was already shrunk
+  // by tF in decomposeBoxes so the external cabinet height is preserved.
+  if (hasEnvelopeBottom) {
+    out.push({
+      id: newItemId(), stableId: boardStableId('envelope-bottom', boxKey),
+      role: 'envelope-bottom', materialId: frontMatId,
+      length: W, width: envD, thickness: tF,
+      xFrom: 0, xTo: W, yFrom: H, yTo: H + tF, visible: true,
     });
   }
 
@@ -1048,6 +1079,7 @@ const ROLE_NAME_HE: Record<BoardRole, string> = {
   'envelope-left': 'מעטפת — צד שמאל',
   'envelope-right': 'מעטפת — צד ימין',
   'envelope-top': 'מעטפת תקרה',
+  'envelope-bottom': 'מעטפת תחתית',
   'back': 'גב',
   'plinth-front': 'צוקל קדמי',
   'plinth-back': 'צוקל אחורי',
@@ -1070,6 +1102,7 @@ const ROLE_GROUP: Record<BoardRole, CutGroup> = {
   'envelope-left': 'shell',
   'envelope-right': 'shell',
   'envelope-top': 'shell',
+  'envelope-bottom': 'shell',
   'back': 'back',
   'plinth-front': 'plinth',
   'plinth-back': 'plinth',

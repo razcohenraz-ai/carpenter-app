@@ -38,12 +38,15 @@ interface Props {
    *  the overridden values so the fronts view stays consistent with the bodies
    *  view after a manual body-size edit. */
   boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>;
+  /** Wall-cabinet top+bottom envelope cap thickness (cm). When > 0, the outline
+   *  + body rects shrink to leave room for the caps. 0 / omit for base cabinets. */
+  wallEnvelopeCm?: number;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
   drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
-  boxDimensionOverrides,
+  boxDimensionOverrides, wallEnvelopeCm,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -66,6 +69,8 @@ export default function CabinetFrontsSketch({
     lo, dpc, mid,
     /* tEnvelope */ undefined, /* hasEnvelopeTop */ false,
     boxDimensionOverrides,
+    /* shellSides */ undefined,
+    wallEnvelopeCm ?? 0,
   );
   const plinthH = parseFloat(plinth);
 
@@ -85,6 +90,22 @@ export default function CabinetFrontsSketch({
           width={geo.cabinet.w} height={geo.cabinet.h}
           className={sketchStyles.cabinetRect}
         />
+
+        {/* Wall-cabinet top + bottom envelope caps (קלפה) */}
+        {geo.envelopeTopPanel && (
+          <rect
+            x={geo.envelopeTopPanel.x} y={geo.envelopeTopPanel.y}
+            width={geo.envelopeTopPanel.w} height={geo.envelopeTopPanel.h}
+            className={sketchStyles.cabinetRect}
+          />
+        )}
+        {geo.envelopeBottomPanel && (
+          <rect
+            x={geo.envelopeBottomPanel.x} y={geo.envelopeBottomPanel.y}
+            width={geo.envelopeBottomPanel.w} height={geo.envelopeBottomPanel.h}
+            className={sketchStyles.cabinetRect}
+          />
+        )}
 
         {/* Per-body click targets — clicks on door/drawer panels stop
             propagation; this rect catches clicks on the surrounding gap

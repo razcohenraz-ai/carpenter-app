@@ -58,6 +58,7 @@ export interface Translations {
     doorGapWarn: string;
     hasEnvelopeTop: string;
     envelopeTopWarn: (cm: number) => string;
+    hasWallEnvelope: string;
     maxDoorWidth: string;
   };
 
@@ -343,6 +344,7 @@ const he: Translations = {
     doorGapWarn: 'רווח גדול מ-4 מ"מ נחשב גדול מהמקובל. וודא שהצירים מתאימים.',
     hasEnvelopeTop: 'מעטפת תקרה',
     envelopeTopWarn: (cm: number) => `אזהרה: גובה קומה עליונה פנימית ${cm.toFixed(1)} ס"מ — מומלץ לפחות 20 ס"מ.`,
+    hasWallEnvelope: 'מעטפת עליון+תחתון',
     maxDoorWidth: 'רוחב מקסימלי לחזית (ס"מ)',
   },
 
@@ -605,6 +607,7 @@ const en: Translations = {
     doorGapWarn: 'Gap over 4 mm is larger than standard. Ensure hinges are suitable.',
     hasEnvelopeTop: 'Ceiling Panel',
     envelopeTopWarn: (cm: number) => `Warning: top section inner height is ${cm.toFixed(1)} cm — recommended minimum is 20 cm.`,
+    hasWallEnvelope: 'Top+bottom envelope',
     maxDoorWidth: 'Max Front Width (cm)',
   },
 
