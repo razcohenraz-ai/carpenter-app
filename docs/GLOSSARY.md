@@ -337,11 +337,12 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 ### ProductPlacement
 מיקום מוצר בחדר: `{ productId, position:{x,z,y?}, rotationDeg, anchorWall? }`. `position` = **מרכז** ה-footprint (סיבוב סביב הציר האנכי). `productId` מפנה ל-`Project.products[]` (flat — placement לא מזיז את המוצר). `anchorWall` = רמז snap ל-UI (north/south/east/west); מקור-האמת הוא position+rotation.
 
-### productBounds (`core/room/productBounds.ts`)
-`productBounds(product) → { width, height, depth }` — bounding box תלת-ממדי בס"מ. מטבח: `kitchenFootprint` (Σ רוחבי base × max depth × גובה שורת קיר). אחר: `input.W × H × D`. המקור היחיד לכל שלוש התצוגות.
+### productBounds / productSubBoxes (`core/room/productBounds.ts`)
+`productBounds(product) → { width, height, depth }` — bounding box תלת-ממדי בס"מ (מטבח: `kitchenFootprint`; אחר: `input.W×H×D`). משמש את מבט-העל + ה-snap.
+`productSubBoxes(product) → ProductSubBox[]` — פירוק לתיבות מקומיות 3D (`x0..x1, y0..y1, z0..z1`): ארון = תיבה אחת מלאה; מטבח = תיבה ליחידה (בסיס על הרצפה, קלפה צפה ב-`WALL_BOTTOM_CM`, הרווח אמיתי). המקור היחיד למבט-החזית ול-3D. parity: union(width,depth) = `productBounds`.
 
 ### roomGeometry (`core/room/roomGeometry.ts`)
-core טהור: `snapToWall(room, bounds, wall, offset)` → position+rotation צמוד לקיר; `placementRectTopView` → spec לציור מבט-על; `placementAABB` → footprint axis-aligned (מתחלף W↔D בסיבוב 90/270); `clampCentreToRoom` → השארת המוצר בתוך החדר בזמן גרירה.
+core טהור: `snapToWall(room, bounds, wall, offset)` → position+rotation צמוד לקיר; `placementRectTopView` → spec לציור מבט-על; `placementAABB` → footprint axis-aligned (מתחלף W↔D בסיבוב 90/270); `clampCentreToRoom` → השארת המוצר בתוך החדר בזמן גרירה; `placementElevationRects(placement, subBoxes, bounds, viewWall, room)` → היטל החזית: local-box→room-AABB (סיבוב סביב Y)→מישור הקיר (north/south ציר X · east/west ציר Z · south/east במראה) + `depth` למיון occlusion.
 
-### kitchenFootprint (`core/product/kitchenFootprint.ts`)
-חולץ מ-`KitchenOverview` (single source): `WALL_BOTTOM_CM=152` וקבועי elevation, `effectiveUnitDims`, `unitOuterW`, `isWallUnit`, `kitchenFootprint(units)`. נצרך גם ע"י `productBounds` וגם ע"י `KitchenOverview`.
+### kitchenFootprint / kitchenElevationLayout (`core/product/kitchenFootprint.ts`)
+חולץ מ-`KitchenOverview` (single source): `WALL_BOTTOM_CM=152` וקבועי elevation, `effectiveUnitDims`, `unitOuterW`, `isWallUnit`, `kitchenFootprint(units)`. `kitchenElevationLayout(units) → KitchenUnitBox[]` — מיקום הפר-יחידתי בחזית (בסיס נצבר משמאל + קלפות בשורה עליונה עם blocker-scan; `>` מחמיר → מזווה 152 לא חוסם). נצרך ע"י `KitchenOverview` (positions) וע"י `productSubBoxes`.

@@ -154,6 +154,9 @@ export interface ProductPlacement {
   /** Snap hint for the UI only — the wall the product is anchored to. The
    *  source of truth for geometry is `position` + `rotationDeg`. */
   anchorWall?: 'north' | 'south' | 'east' | 'west';
+  /** cm from the wall's start corner (x=0 for north/south, z=0 for east/west).
+   *  Persisted so the offset input survives navigation away and back. */
+  anchorOffset?: number;
 }
 
 /** A rectangular room measured at the client's home. References products from

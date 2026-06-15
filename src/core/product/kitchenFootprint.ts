@@ -62,3 +62,77 @@ export function kitchenFootprint(
 
   return { width, height, depth };
 }
+
+// ── Per-unit elevation layout ────────────────────────────────────────────────
+// Where each unit sits in the kitchen's X-Y elevation plane: base units run
+// left→right on the floor; wall cabinets (קלפה) stack in an upper row whose
+// bottom is WALL_BOTTOM_CM, pushed past any tall base unit (a pantry) below
+// them. Lifted verbatim from KitchenOverview's inline `positions` computation
+// so the elevation render, the room sub-boxes, and the future 3D all read one
+// source. `xCm` is measured from the kitchen's left edge.
+
+export interface KitchenUnitBox {
+  unitId: string;
+  /** Left edge of the unit within the kitchen frame, cm (0 = left edge). */
+  xCm: number;
+  /** Bottom of the unit off the floor, cm — 0 for a base unit, WALL_BOTTOM_CM
+   *  for a wall cabinet. */
+  yBottomCm: number;
+  /** Outer width (incl. shell), cm. */
+  w: number;
+  /** Effective height, cm. */
+  h: number;
+  /** Effective depth, cm. */
+  depth: number;
+  isWall: boolean;
+}
+
+/** Lays out every unit of a kitchen in its elevation plane. Preserves the
+ *  array order → visual position mapping. A pre-scan marks x-ranges blocked in
+ *  the wall row by tall base units (H > WALL_BOTTOM_CM, strict — a unit whose
+ *  top edge sits exactly at the wall-row bottom touches but does not overlap),
+ *  so a wall cabinet is pushed past a pantry regardless of array order. */
+export function kitchenElevationLayout(units: ReadonlyArray<KitchenUnit>): KitchenUnitBox[] {
+  // Pre-scan: x-ranges blocked in the wall row by tall base units.
+  const wallBlockers: Array<{ lo: number; hi: number }> = [];
+  {
+    let scanX = 0;
+    for (const u of units) {
+      if (isWallUnit(u)) continue;
+      const w = unitOuterW(u);
+      if (effectiveUnitDims(u).H > WALL_BOTTOM_CM) wallBlockers.push({ lo: scanX, hi: scanX + w });
+      scanX += w;
+    }
+  }
+
+  const boxes: KitchenUnitBox[] = [];
+  let baseX = 0;
+  let wallCursor = 0;
+  for (const u of units) {
+    const w = unitOuterW(u);
+    const { H: h, D: depth } = effectiveUnitDims(u);
+    if (isWallUnit(u)) {
+      // Push wallCursor past any blocker it would overlap (works even when the
+      // blocker appears later in the array than the wall unit).
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const b of wallBlockers) {
+          if (wallCursor < b.hi && wallCursor + w > b.lo) {
+            wallCursor = b.hi; changed = true; break;
+          }
+        }
+      }
+      boxes.push({ unitId: u.id, xCm: wallCursor, yBottomCm: WALL_BOTTOM_CM, w, h, depth, isWall: true });
+      wallCursor += w;
+    } else {
+      boxes.push({ unitId: u.id, xCm: baseX, yBottomCm: 0, w, h, depth, isWall: false });
+      // Tall units block the wall zone (cursor jumps to their right edge);
+      // normal units only advance the cursor to their start x so wall units
+      // placed after them land "above" them (array-order semantics).
+      wallCursor = Math.max(wallCursor, h > WALL_BOTTOM_CM ? baseX + w : baseX);
+      baseX += w;
+    }
+  }
+  return boxes;
+}

@@ -13,8 +13,8 @@ import { groupKitchenUnitsForPlinth, buildKitchenPlinthCuts, plinthPieceWidths, 
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import {
-  effectiveUnitDims, unitOuterW, isWallUnit,
-  WALL_BOTTOM_CM, BASE_REF_H_CM, COUNTERTOP_CM,
+  effectiveUnitDims, isWallUnit, kitchenElevationLayout,
+  BASE_REF_H_CM, COUNTERTOP_CM,
 } from '../../core/product/kitchenFootprint';
 import type { BoxLevel } from '../../types/geometry';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
@@ -817,73 +817,20 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
   }, [units]);
 
   // ── Elevation layout ─────────────────────────────────────────────────────────
-  // Single pass (preserving array-order → visual-position mapping) with a
-  // pre-computed blocker list so wall units are pushed past tall base units
-  // regardless of whether the wall appears before or after the tall unit in the
-  // array. Without the pre-scan, a wall placed before a pantry in the array
-  // would be placed before seeing the blocker and would collide.
-  //
-  // wallCursor tracks the next available x in the wall row and advances for
-  // every wall unit placed and for every tall base unit encountered.
-  // For non-tall base units the original "wallCursor = max(wallCursor, baseX)"
-  // rule is preserved so the wall's x position reflects its array rank.
-  const positions = new Map<string, { xCm: number; yBottomCm: number }>();
-  {
-    // Pre-scan: collect x-ranges that are blocked in the wall row
-    // (H > WALL_BOTTOM_CM — strict, so a pantry whose top edge sits exactly at
-    // the wall row's bottom touches but does not overlap, and a wall cabinet
-    // is allowed directly above it).
-    const wallBlockers: Array<{ lo: number; hi: number }> = [];
-    {
-      let scanX = 0;
-      for (const u of units) {
-        if (isWall(u)) continue;
-        const w = unitOuterW(u);
-        if (effectiveDims(u).H > WALL_BOTTOM_CM) wallBlockers.push({ lo: scanX, hi: scanX + w });
-        scanX += w;
-      }
-    }
-
-    let baseX = 0;
-    let wallCursor = 0;
-    for (const u of units) {
-      const w = unitOuterW(u);
-      if (isWall(u)) {
-        // Before placing, push wallCursor past any blocker it would overlap.
-        // (Because blockers are pre-computed, this works even if the blocker
-        // appears later in the array than the wall unit.)
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const b of wallBlockers) {
-            if (wallCursor < b.hi && wallCursor + w > b.lo) {
-              wallCursor = b.hi; changed = true; break;
-            }
-          }
-        }
-        positions.set(u.id, { xCm: wallCursor, yBottomCm: WALL_BOTTOM_CM });
-        wallCursor += w;
-      } else {
-        positions.set(u.id, { xCm: baseX, yBottomCm: 0 });
-        // For tall units: wallCursor jumps to their right edge (they block the
-        // wall zone). For normal units: wallCursor tracks their start x so wall
-        // units placed after them land "above" them (array-order semantics).
-        // Strict `>` mirrors the pre-scan above — a unit whose top edge sits
-        // exactly at WALL_BOTTOM_CM does not block the wall row.
-        wallCursor = Math.max(
-          wallCursor,
-          effectiveDims(u).H > WALL_BOTTOM_CM ? baseX + w : baseX,
-        );
-        baseX += w;
-      }
-    }
-  }
-  const baseRunW = units.filter(u => !isWall(u)).reduce((s, u) => s + unitOuterW(u), 0);
-  const elevationW = Math.max(1, ...units.map(u => (positions.get(u.id)?.xCm ?? 0) + unitOuterW(u)));
+  // Per-unit elevation positions come from the shared core layout
+  // (kitchenElevationLayout) — single source: the room sub-boxes and the
+  // future 3D read the same. `positions` keeps the legacy {xCm, yBottomCm}
+  // shape the render below consumes unchanged.
+  const elevationLayout = kitchenElevationLayout(units);
+  const positions = new Map(
+    elevationLayout.map(b => [b.unitId, { xCm: b.xCm, yBottomCm: b.yBottomCm }] as const),
+  );
+  const baseRunW = elevationLayout.filter(b => !b.isWall).reduce((s, b) => s + b.w, 0);
+  const elevationW = Math.max(1, ...elevationLayout.map(b => b.xCm + b.w));
   const elevationTopCm = Math.max(
     1,
     hasWall ? BASE_REF_H_CM + COUNTERTOP_CM : 0,
-    ...units.map(u => (positions.get(u.id)?.yBottomCm ?? 0) + effectiveDims(u).H),
+    ...elevationLayout.map(b => b.yBottomCm + b.h),
   );
   // Pixels-per-cm: one scale fitting the elevation horizontally (with padding)
   // and vertically (taller cap when wall cabinets add an upper row).

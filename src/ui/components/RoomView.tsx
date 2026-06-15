@@ -1,10 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import type { Room, ProductUnit, ProductPlacement } from '../../types/project';
 import { useTranslation } from '../hooks/useTranslation';
-import { productBounds } from '../../core/room/productBounds';
+import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import {
-  snapToWall, placementRectTopView, clampCentreToRoom, type RoomWall,
+  snapToWall, placementRectTopView, clampCentreToRoom,
+  placementElevationRects, type RoomWall,
 } from '../../core/room/roomGeometry';
+import { BASE_REF_H_CM, WALL_BOTTOM_CM } from '../../core/product/kitchenFootprint';
 import styles from './RoomView.module.css';
 
 interface Props {
@@ -12,31 +14,58 @@ interface Props {
   /** All products in the project (placed + unplaced). */
   products: ProductUnit[];
   onUpdateDims: (dims: { width?: number; depth?: number; height?: number }) => void;
+  onRenameRoom?: (name: string) => void;
   onPlaceProduct: (placement: ProductPlacement) => void;
   onUpdatePlacement: (productId: string, patch: Partial<ProductPlacement>) => void;
   onRemovePlacement: (productId: string) => void;
   onOpenProduct: (productId: string) => void;
 }
 
+type ViewMode = 'top' | 'elevation';
+
 const WALLS: RoomWall[] = ['north', 'south', 'east', 'west'];
-const PAD = 28;       // px margin around the room rectangle
+const PAD = 28;       // px margin around the drawing
 const MAX_W = 720;    // px — max drawable width
-const MAX_H = 520;    // px — max drawable depth
+const MAX_H = 520;    // px — max drawable height/depth
 
 export function RoomView({
-  room, products, onUpdateDims,
+  room, products, onUpdateDims, onRenameRoom,
   onPlaceProduct, onUpdatePlacement, onRemovePlacement, onOpenProduct,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('top');
+  const [viewWall, setViewWall] = useState<RoomWall>('north');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickProductId, setPickProductId] = useState<string>('');
   const dragRef = useRef<{ productId: string } | null>(null);
+
+  // ── Room name editing ──────────────────────────────────────────────────────
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+
+  function startEditName() { setNameValue(room.name); setEditingName(true); }
+  const commitName = useCallback(() => {
+    const trimmed = nameValue.trim() || room.name;
+    onRenameRoom?.(trimmed);
+    setEditingName(false);
+  }, [nameValue, room.name, onRenameRoom]);
+
+  // ── Placement fit validation ───────────────────────────────────────────────
+  function fitWarning(product: ProductUnit): string | null {
+    const b = productBounds(product);
+    const canFit0 = b.width <= room.width && b.depth <= room.depth;
+    const canFit90 = b.width <= room.depth && b.depth <= room.width;
+    if (!canFit0 && !canFit90) return t.room.productDoesNotFit(b.width, b.depth, room.width, room.depth);
+    if (b.height > room.height) return t.room.productTooTall(b.height, room.height);
+    return null;
+  }
 
   const productById = new Map(products.map(p => [p.id, p]));
   const placedIds = new Set(room.placements.map(p => p.productId));
   const unplaced = products.filter(p => !placedIds.has(p.id));
 
+  // ── Top view (X-Z plane) ──────────────────────────────────────────────────
   const scale = Math.min(MAX_W / Math.max(room.width, 1), MAX_H / Math.max(room.depth, 1));
   const svgW = room.width * scale + PAD * 2;
   const svgH = room.depth * scale + PAD * 2;
@@ -63,12 +92,18 @@ export function RoomView({
 
   function reSnap(productId: string, wall: RoomWall, offset: number) {
     const product = productById.get(productId);
+    const placement = room.placements.find(p => p.productId === productId);
     if (!product) return;
     const snap = snapToWall(room, productBounds(product), wall, offset);
-    onUpdatePlacement(productId, snap);
+    // Preserve height-off-floor (y) across wall/offset changes.
+    const y = placement?.position.y;
+    onUpdatePlacement(productId, {
+      ...snap,
+      position: y !== undefined ? { ...snap.position, y } : snap.position,
+    });
   }
 
-  // ── Drag ────────────────────────────────────────────────────────────────────
+  // ── Top-view drag ─────────────────────────────────────────────────────────
   function onRectPointerDown(e: React.PointerEvent, productId: string) {
     e.preventDefault();
     setSelectedId(productId);
@@ -87,14 +122,85 @@ export function RoomView({
   }
   function onSvgPointerUp() { dragRef.current = null; }
 
+  const selectedForPlace = pickProductId ? productById.get(pickProductId) ?? null : null;
+  const placementWarning = selectedForPlace ? fitWarning(selectedForPlace) : null;
+
   const selected = selectedId ? room.placements.find(p => p.productId === selectedId) ?? null : null;
   const selectedProduct = selected ? productById.get(selected.productId) ?? null : null;
+
+  // ── Elevation view (X-Y / Z-Y plane) ──────────────────────────────────────
+  const isSideWall = viewWall === 'east' || viewWall === 'west';
+  const elevSpan = isSideWall ? room.depth : room.width;
+  const elevScale = Math.min(MAX_W / Math.max(elevSpan, 1), MAX_H / Math.max(room.height, 1));
+  const elevSvgW = elevSpan * elevScale + PAD * 2;
+  const elevSvgH = room.height * elevScale + PAD * 2;
+  const pxH = (cm: number) => PAD + cm * elevScale;                 // along-wall cm → svg px
+  const pxY = (cm: number) => PAD + (room.height - cm) * elevScale; // height cm → svg px (floor at bottom)
+
+  // Per-product projected rects (one product → one or more sub-boxes).
+  const elevItems = room.placements
+    .map(pl => {
+      const product = productById.get(pl.productId);
+      if (!product) return null;
+      const bounds = productBounds(product);
+      const rects = placementElevationRects(pl, productSubBoxes(product), bounds, viewWall, room);
+      return { pl, product, rects };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  // All sub-box rects, farthest from the viewer first (so nearer draws on top).
+  const elevRects = elevItems
+    .flatMap(it => it.rects.map(r => ({ r, productId: it.pl.productId })))
+    .sort((a, b) => b.r.depth - a.r.depth);
+
+  const hasKitchen = elevItems.some(it => it.product.productType === 'kitchen');
+  const refLines = hasKitchen ? [BASE_REF_H_CM, WALL_BOTTOM_CM].filter(y => y < room.height) : [];
 
   return (
     <div className={styles.container}>
       <div className={styles.body}>
-        {/* ── Left: dimensions + placement controls ── */}
+        {/* ── Left: view switch + dimensions + placement controls ── */}
         <div className={styles.controls}>
+          {/* Room name */}
+          <div className={styles.roomNameRow}>
+            {editingName ? (
+              <input
+                className={styles.roomNameInput}
+                value={nameValue}
+                autoFocus
+                onChange={e => setNameValue(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commitName();
+                  if (e.key === 'Escape') setEditingName(false);
+                }}
+              />
+            ) : (
+              <span className={styles.roomNameDisplay} onClick={startEditName}>
+                {room.name}<span className={styles.editHint}> ✎</span>
+              </span>
+            )}
+          </div>
+
+          <div className={styles.viewToggle}>
+            <button type="button"
+              className={`${styles.viewBtn} ${viewMode === 'top' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('top')}>{t.room.topView}</button>
+            <button type="button"
+              className={`${styles.viewBtn} ${viewMode === 'elevation' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('elevation')}>{t.room.elevation}</button>
+          </div>
+
+          {viewMode === 'elevation' && (
+            <div className={styles.wallTabs}>
+              {WALLS.map(w => (
+                <button key={w} type="button"
+                  className={`${styles.wallTab} ${viewWall === w ? styles.wallTabActive : ''}`}
+                  onClick={() => setViewWall(w)}>{t.room.walls[w]}</button>
+              ))}
+            </div>
+          )}
+
           <div className={styles.dimsRow}>
             {(['width', 'depth', 'height'] as const).map(key => (
               <label key={key} className={styles.dimField}>
@@ -117,10 +223,13 @@ export function RoomView({
                 </option>
               ))}
             </select>
-            <button type="button" disabled={!pickProductId} onClick={handlePlace}>
+            <button type="button" disabled={!pickProductId || !!placementWarning} onClick={handlePlace}>
               {t.room.placeProduct}
             </button>
           </div>
+          {placementWarning && (
+            <p className={styles.placeWarning}>{placementWarning}</p>
+          )}
 
           {selected && selectedProduct && (
             <div className={styles.selectedPanel}>
@@ -140,11 +249,25 @@ export function RoomView({
                   <span>{t.room.offsetFromCorner}</span>
                   <input
                     type="number" min={0}
+                    value={selected.anchorOffset ?? 0}
                     onChange={e => reSnap(selected.productId, selected.anchorWall!, Math.max(0, parseFloat(e.target.value) || 0))}
                     onFocus={ev => ev.target.select()}
                   />
                 </label>
               )}
+              <label className={styles.field}>
+                <span>{t.room.heightOffFloor}</span>
+                <input
+                  type="number" min={0} value={selected.position.y ?? 0}
+                  onChange={e => {
+                    const ph = productBounds(selectedProduct).height;
+                    const maxY = Math.max(0, room.height - ph);
+                    const y = Math.min(maxY, Math.max(0, parseFloat(e.target.value) || 0));
+                    onUpdatePlacement(selected.productId, { position: { ...selected.position, y } });
+                  }}
+                  onFocus={ev => ev.target.select()}
+                />
+              </label>
               <label className={styles.field}>
                 <span>{t.room.rotation}</span>
                 <select
@@ -164,44 +287,87 @@ export function RoomView({
           )}
         </div>
 
-        {/* ── Right: top-view floor plan ── */}
-        <svg
-          ref={svgRef}
-          className={styles.plan}
-          width={svgW} height={svgH}
-          onPointerMove={onSvgPointerMove}
-          onPointerUp={onSvgPointerUp}
-          onPointerLeave={onSvgPointerUp}
-        >
-          {/* Room rectangle */}
-          <rect x={px(0)} y={px(0)} width={room.width * scale} height={room.depth * scale}
-            className={styles.roomRect} onClick={() => setSelectedId(null)} />
-          {/* Dimension labels */}
-          <text x={px(room.width / 2)} y={PAD - 8} className={styles.dimLabel}>{room.width}</text>
-          <text x={PAD - 8} y={px(room.depth / 2)} className={styles.dimLabel} transform={`rotate(-90 ${PAD - 8} ${px(room.depth / 2)})`}>{room.depth}</text>
+        {/* ── Right: the drawing ── */}
+        {viewMode === 'top' ? (
+          <svg
+            ref={svgRef}
+            className={styles.plan}
+            width={svgW} height={svgH}
+            onPointerMove={onSvgPointerMove}
+            onPointerUp={onSvgPointerUp}
+            onPointerLeave={onSvgPointerUp}
+          >
+            {/* Room rectangle */}
+            <rect x={px(0)} y={px(0)} width={room.width * scale} height={room.depth * scale}
+              className={styles.roomRect} onClick={() => setSelectedId(null)} />
+            {/* Dimension labels */}
+            <text x={px(room.width / 2)} y={PAD - 8} className={styles.dimLabel}>{room.width}</text>
+            <text x={PAD - 8} y={px(room.depth / 2)} className={styles.dimLabel} transform={`rotate(-90 ${PAD - 8} ${px(room.depth / 2)})`}>{room.depth}</text>
 
-          {/* Placed products */}
-          {room.placements.map(pl => {
-            const product = productById.get(pl.productId);
-            if (!product) return null;
-            const rect = placementRectTopView(pl, productBounds(product));
-            const cx = px(rect.cx), cz = px(rect.cz);
-            const isSel = pl.productId === selectedId;
-            return (
-              <g key={pl.productId} transform={`rotate(${rect.rotationDeg} ${cx} ${cz})`}>
-                <rect
-                  x={px(rect.cx - rect.w / 2)} y={px(rect.cz - rect.d / 2)}
-                  width={rect.w * scale} height={rect.d * scale}
-                  className={`${styles.productRect} ${isSel ? styles.productSelected : ''}`}
-                  onPointerDown={e => onRectPointerDown(e, pl.productId)}
-                  onDoubleClick={() => onOpenProduct(pl.productId)}
+            {/* Placed products */}
+            {room.placements.map(pl => {
+              const product = productById.get(pl.productId);
+              if (!product) return null;
+              const rect = placementRectTopView(pl, productBounds(product));
+              const cx = px(rect.cx), cz = px(rect.cz);
+              const isSel = pl.productId === selectedId;
+              return (
+                <g key={pl.productId} transform={`rotate(${rect.rotationDeg} ${cx} ${cz})`}>
+                  <rect
+                    x={px(rect.cx - rect.w / 2)} y={px(rect.cz - rect.d / 2)}
+                    width={rect.w * scale} height={rect.d * scale}
+                    className={`${styles.productRect} ${isSel ? styles.productSelected : ''}`}
+                    onPointerDown={e => onRectPointerDown(e, pl.productId)}
+                    onDoubleClick={() => onOpenProduct(pl.productId)}
+                  />
+                  <text x={cx} y={cz} className={styles.productLabel}
+                    transform={`rotate(${-rect.rotationDeg} ${cx} ${cz})`}>{product.name}</text>
+                </g>
+              );
+            })}
+          </svg>
+        ) : (
+          <svg className={styles.plan} width={elevSvgW} height={elevSvgH}>
+            {/* Wall backdrop */}
+            <rect x={pxH(0)} y={pxY(room.height)} width={elevSpan * elevScale} height={room.height * elevScale}
+              className={styles.roomRect} onClick={() => setSelectedId(null)} />
+            {/* Reference guides (countertop / wall-mount heights) */}
+            {refLines.map(y => (
+              <line key={y} x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(y)} y2={pxY(y)} className={styles.refLine} />
+            ))}
+            {/* Floor line */}
+            <line x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(0)} y2={pxY(0)} className={styles.floorLine} />
+            {/* Dimension labels */}
+            <text x={pxH(elevSpan / 2)} y={elevSvgH - 6} className={styles.dimLabel}>{elevSpan}</text>
+            <text x={PAD - 8} y={pxY(room.height / 2)} className={styles.dimLabel} transform={`rotate(-90 ${PAD - 8} ${pxY(room.height / 2)})`}>{room.height}</text>
+
+            {/* Product sub-boxes (depth-sorted, nearest on top) */}
+            {elevRects.map(({ r, productId }, i) => {
+              const isSel = productId === selectedId;
+              return (
+                <rect key={i}
+                  x={pxH(Math.min(r.h0, r.h1))} y={pxY(r.y1)}
+                  width={Math.abs(r.h1 - r.h0) * elevScale} height={(r.y1 - r.y0) * elevScale}
+                  className={`${styles.elevationRect} ${isSel ? styles.elevationSelected : ''}`}
+                  onClick={() => setSelectedId(productId)}
+                  onDoubleClick={() => onOpenProduct(productId)}
                 />
-                <text x={cx} y={cz} className={styles.productLabel}
-                  transform={`rotate(${-rect.rotationDeg} ${cx} ${cz})`}>{product.name}</text>
-              </g>
-            );
-          })}
-        </svg>
+              );
+            })}
+
+            {/* One label per product, at the centre of its silhouette */}
+            {elevItems.map(it => {
+              const hMin = Math.min(...it.rects.map(r => Math.min(r.h0, r.h1)));
+              const hMax = Math.max(...it.rects.map(r => Math.max(r.h0, r.h1)));
+              const yMin = Math.min(...it.rects.map(r => r.y0));
+              const yMax = Math.max(...it.rects.map(r => r.y1));
+              return (
+                <text key={it.pl.productId} x={pxH((hMin + hMax) / 2)} y={pxY((yMin + yMax) / 2)}
+                  className={styles.productLabel}>{it.product.name}</text>
+              );
+            })}
+          </svg>
+        )}
       </div>
     </div>
   );

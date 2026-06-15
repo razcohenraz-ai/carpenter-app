@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   snapToWall, placementRectTopView, placementAABB, clampCentreToRoom,
-  type RoomWall,
+  placementElevationRects, type RoomWall,
 } from './roomGeometry';
+import type { ProductSubBox } from './productBounds';
 import type { ProductPlacement } from '../../types/project';
 
 const room = { width: 300, depth: 400 };
@@ -78,5 +79,69 @@ describe('clampCentreToRoom — keeps the footprint inside while dragging', () =
 
   it('a centre already inside is unchanged', () => {
     expect(clampCentreToRoom(room, bounds, 0, { x: 150, z: 200 })).toEqual({ x: 150, z: 200 });
+  });
+});
+
+describe('placementElevationRects — project a product onto a wall plane', () => {
+  // One full-footprint sub-box (200 wide × 90 tall × 60 deep).
+  const fullBox: ProductSubBox[] = [{ x0: 0, x1: 200, y0: 0, y1: 90, z0: 0, z1: 60 }];
+  /** First projected rect (every fixture here has exactly one sub-box). */
+  const elev = (pl: ProductPlacement, boxes: ProductSubBox[], wall: RoomWall) =>
+    placementElevationRects(pl, boxes, bounds, wall, room)[0]!;
+
+  it('north: horizontal = X, vertical = Y from the floor', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'north', 0) };
+    expect(elev(pl, fullBox, 'north')).toMatchObject({ h0: 0, h1: 200, y0: 0, y1: 90 });
+  });
+
+  it('south: horizontal mirrors X (left↔right)', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'south', 0) };
+    const r = elev(pl, fullBox, 'south');
+    // product spans x 0..200 in a 300 room → mirrored to 100..300
+    expect(r.h0).toBeCloseTo(100, 5);
+    expect(r.h1).toBeCloseTo(300, 5);
+  });
+
+  it('west: horizontal = Z (depth runs along the wall), offset from the back', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'west', 50) };
+    const r = elev(pl, fullBox, 'west');
+    expect(r.h0).toBeCloseTo(50, 5);   // offset from back corner
+    expect(r.h1).toBeCloseTo(250, 5);  // + width 200
+  });
+
+  it('east: horizontal mirrors Z', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'east', 0) };
+    const r = elev(pl, fullBox, 'east');
+    expect(r.h0).toBeCloseTo(200, 5);  // depth 400 − z1(200)
+    expect(r.h1).toBeCloseTo(400, 5);  // depth 400 − z0(0)
+  });
+
+  it('position.y lifts the rect off the floor', () => {
+    const pl: ProductPlacement = { productId: 'x', position: { x: 100, z: 30, y: 50 }, rotationDeg: 0 };
+    const r = elev(pl, fullBox, 'north');
+    expect(r.y0).toBeCloseTo(50, 5);
+    expect(r.y1).toBeCloseTo(140, 5);  // 50 + 90
+  });
+
+  it('an offset sub-box keeps its offset under rotation (local +X → +Z on a quarter turn)', () => {
+    // Right-half box (local x 100..200) of a 200-wide / 60-deep product.
+    const rightHalf: ProductSubBox[] = [{ x0: 100, x1: 200, y0: 0, y1: 90, z0: 0, z1: 60 }];
+    // Placed flush to the west wall (rot 90): local +X maps to +Z, so the box
+    // sits at the FAR (high-Z) part of the wall span.
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'west', 0) };
+    const r = elev(pl, rightHalf, 'west');
+    // local x 100..200 (centre 150, half 50) about footprint centre 100 → +50,
+    // half-width 50 → z 100..200 along the wall.
+    expect(r.h0).toBeCloseTo(100, 5);
+    expect(r.h1).toBeCloseTo(200, 5);
+  });
+
+  it('depth key orders by distance from the viewer (farther = larger key)', () => {
+    // Viewed from north the viewer is on the +Z side, so a high-Z box is NEARER.
+    // The farther box gets the larger key → sorted descending it draws first
+    // (behind), leaving the nearer box on top.
+    const near: ProductPlacement = { productId: 'n', position: { x: 100, z: 300 }, rotationDeg: 0 };
+    const far: ProductPlacement = { productId: 'f', position: { x: 100, z: 30 }, rotationDeg: 0 };
+    expect(elev(far, fullBox, 'north').depth).toBeGreaterThan(elev(near, fullBox, 'north').depth);
   });
 });

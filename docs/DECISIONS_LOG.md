@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-06-15 — תצוגת חדר שלב 2: מודל sub-box כמקור-יחיד להיטלים (מבט-חזית)
+
+**ההקשר**: שלב 2 (מבט-חזית) דורש להציג כל מוצר עומד מול קיר בגובהו הנכון. שתי החלטות שאושרו ע"י הנגר (2 שאלות): (א) מטבח עם קלפה = **בסיס + עליון נפרד** עם הרווח האמיתי (לא תיבה אחת); (ב) עריכה בחזית = בחירה + **גובה-מהרצפה (Y)**, ללא גרירה.
+
+**ההחלטה — `productSubBoxes`**: מוצר מתפרק לרשימת תיבות מקומיות 3D (`ProductSubBox`: `x0..x1, y0..y1, z0..z1`). ארון = תיבה אחת מלאה; מטבח = **תיבה ליחידה** (בסיס על הרצפה, קלפה צפה ב-`WALL_BOTTOM_CM`). זה — ולא תיבת bounding-box אחת — המקור היחיד שמבט-החזית מקרין וה-3D יעשה לו extrusion.
+
+**למה תיבה-ליחידה ולא "תיבת בסיס אחת"** (סטייה מהתוכנית, התגלתה במימוש): תיבת בסיס שטוחה בגובה 92 היתה **משטחת מזווה גבוה (152)**. תיבה ליחידה שומרת על הגובה האמיתי של כל יחידה, מציגה את הרווח בסיס↔קלפה, והיא הפירוק הטבעי ל-3D (יחידה=mesh→extrusion של הלוחות בעתיד).
+
+**ההיטל `placementElevationRects`** (core טהור): local-box→room-AABB (סיבוב סביב Y, cardinal — מתאים לכיוון ה-SVG rotate של מבט-העל)→מישור הקיר. north/south = ציר X (south במראה), east/west = ציר Z (east במראה); `depth` = מפתח מיון occlusion (גדול=רחוק מהצופה). אותו local→room transform ישמש את ה-3D — ההיטל הסופי בלבד מוחלף.
+
+**חילוץ `kitchenElevationLayout` ל-core** (single source): פריסת החזית הפר-יחידתית (blocker-scan של קלפה מעל מזווה) ישבה רק ב-`KitchenOverview`. ההחלטה (א) חייבה את המיקומים האלה → חולצה ל-`kitchenFootprint.ts`, ו-`KitchenOverview` צורך אותה (אותו `positions` בדיוק). DESIGN_PRINCIPLES single-source: אסור לשכפל.
+
+**parity במקום גזירה**: `productBounds` (footprint למבט-העל) נשאר ללא שינוי — לא לסכן את מבט-העל המשוחרר. invariant: `union(productSubBoxes).{width,depth} == productBounds` (נבדק). הגובה **שונה בכוונה** — sub-boxes נאמנים לגובה הפר-יחידתי; ה-footprint משתמש בגובה-ייחוס (92/wallTop). שני הצירים הקריטיים למיקום (width,depth) מסכימים.
+
+**`position.y` ללא שינוי מודל**: השדה כבר היה ב-`ProductPlacement` ועובר round-trip ב-`serialize`. שלב 2 = תוסף בלבד (אין שינוי types/schema/migration/serialize/useProject).
+
+**טריידאוף**: מטבח עם קלפה רחבה מהבסיס → union.width עשוי לחרוג מ-`productBounds.width` (הקלפה גולשת). מקרה קצה נדיר; parity נבדק עם fixtures שבהן הקלפה ⊆ הבסיס. גרירה אופקית בחזית נדחתה (תוספת טהורה עתידית — אותו handler + מיפוי הפוך).
+
+**יישום**: `core/product/kitchenFootprint.ts` (`kitchenElevationLayout`), `core/room/productBounds.ts` (`productSubBoxes`), `core/room/roomGeometry.ts` (`placementElevationRects`), `RoomView.tsx` (toggle + חזית + Y field), i18n. בדיקות: kitchenElevationLayout, productSubBoxes+parity, placementElevationRects (4 קירות+סיבוב+Y). 721 עוברים.
+
+---
+
 ## 2026-06-15 — תצוגת חדר: data model 3D-native מההתחלה (שלב 1 מתוך רצף)
 
 **ההחלטה**: פיצ'ר "החדר" (הזנת מידות חדר + מיקום מוצרים בתוכו) נבנה ב-**רצף**: (1) data model + מבט-על → (2) מבט-חזית → (3) תלת-ממד. ה-data model נבנה **3D-native** כבר בשלב 1, גם כשרק מבט-על מיושם. דרישה מפורשת של הנגר: בסוף הדרך חייבים להגיע ל-3D קבוע.

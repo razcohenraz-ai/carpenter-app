@@ -5,6 +5,43 @@
   padding: var(--spacing-lg, 16px);
 }
 
+/* ── Room name ── */
+.roomNameRow {
+  margin-bottom: 2px;
+}
+
+.roomNameDisplay {
+  font-size: var(--font-size-lg, 1.1rem);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary, #222);
+  cursor: pointer;
+}
+
+.roomNameDisplay:hover .editHint,
+.editHint {
+  color: var(--color-text-secondary, #888);
+  font-weight: normal;
+  font-size: 0.85em;
+}
+
+.roomNameInput {
+  font-size: var(--font-size-lg, 1.1rem);
+  font-weight: var(--font-weight-bold, 700);
+  border: 1px solid var(--color-primary, #1f5c8b);
+  border-radius: var(--radius, 6px);
+  padding: 2px 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Placement warning ── */
+.placeWarning {
+  margin: 0;
+  padding: 4px 0;
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-danger, #c0392b);
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -172,4 +209,75 @@
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;
+}
+
+/* ── View switch + wall tabs ── */
+.viewToggle {
+  display: flex;
+  gap: 0;
+}
+
+.viewBtn {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #ccc);
+  background: var(--color-surface, #f7f7f7);
+  cursor: pointer;
+  color: var(--color-text-primary, #222);
+}
+
+.viewBtn:first-child { border-radius: var(--radius, 6px) 0 0 var(--radius, 6px); }
+.viewBtn:last-child  { border-radius: 0 var(--radius, 6px) var(--radius, 6px) 0; border-inline-start: none; }
+
+.viewBtnActive {
+  background: var(--color-primary, #1f5c8b);
+  color: #fff;
+  border-color: var(--color-primary, #1f5c8b);
+}
+
+.wallTabs {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+}
+
+.wallTab {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+  background: var(--color-surface, #f7f7f7);
+  cursor: pointer;
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-primary, #222);
+}
+
+.wallTabActive {
+  background: var(--color-primary, #1f5c8b);
+  color: #fff;
+  border-color: var(--color-primary, #1f5c8b);
+}
+
+/* ── Elevation drawing ── */
+.floorLine {
+  stroke: var(--color-text-primary, #333);
+  stroke-width: 2;
+}
+
+.refLine {
+  stroke: var(--color-text-secondary, #888);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.elevationRect {
+  fill: rgba(70, 130, 180, 0.35);
+  stroke: steelblue;
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.elevationSelected {
+  fill: rgba(70, 130, 180, 0.55);
+  stroke: #1f5c8b;
+  stroke-width: 2.5;
 }

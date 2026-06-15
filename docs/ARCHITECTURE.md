@@ -55,10 +55,10 @@ src/
 │   ├── product/
 │   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven/pantry/wall/pantry-top
 │   │   ├── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
-│   │   └── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint (חולץ מ-KitchenOverview)
+│   │   └── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint/kitchenElevationLayout (חולץ מ-KitchenOverview)
 │   ├── room/                     תצוגת חדר (floor plan) — core טהור
-│   │   ├── productBounds.ts      productBounds(product) → bounding box תלת-ממדי W×H×D
-│   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom
+│   │   ├── productBounds.ts      productBounds → bounding box W×H×D · productSubBoxes → תיבות מקומיות 3D (לחזית + 3D)
+│   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom / placementElevationRects (היטל חזית)
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן עבודה (לא מחובר ל-UI)
 │   ├── project/
@@ -93,7 +93,7 @@ src/
     └── components/
         ├── App.tsx               ניווט: project → (product | room) → kitchen unit
         ├── ProjectView.tsx       אזור חדרים + אזור products (הוספה/מחיקה/פתיחה)
-        ├── RoomView.tsx          floor plan (מבט-על): מידות חדר + מיקום מוצרים (snap מספרי + גרירה)
+        ├── RoomView.tsx          floor plan: toggle מבט-על/חזית · מבט-על (snap מספרי + גרירה) · חזית (בחירת קיר + sub-boxes + גובה-מהרצפה)
         ├── AddProductDialog.tsx  בחירת סוג מוצר (wardrobe / bookcase / sideboard / kitchen / free-build)
         ├── KitchenEditor.tsx     ניהול kitchen units (הוסף/הסר/סדר)
         ├── KitchenOverview.tsx   תצוגה מאוחדת של units עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); UnitsView + UnitFrontPanelsStandalone overlay

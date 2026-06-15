@@ -34,6 +34,9 @@ export interface Translations {
     width: string;
     depth: string;
     height: string;
+    topView: string;
+    elevation: string;
+    heightOffFloor: string;
     placeProduct: string;
     selectProduct: string;
     wall: string;
@@ -45,6 +48,8 @@ export interface Translations {
     openProduct: string;
     allPlaced: string;
     products: string;
+    productTooTall: (ph: number, rh: number) => string;
+    productDoesNotFit: (pw: number, pd: number, rw: number, rd: number) => string;
   };
 
   sketch: {
@@ -339,6 +344,9 @@ const he: Translations = {
     width: 'רוחב (ס"מ)',
     depth: 'עומק (ס"מ)',
     height: 'גובה (ס"מ)',
+    topView: 'מבט-על',
+    elevation: 'חזית',
+    heightOffFloor: 'גובה מהרצפה (ס"מ)',
     placeProduct: '+ הצב מוצר בחדר',
     selectProduct: 'בחר מוצר',
     wall: 'קיר',
@@ -350,6 +358,8 @@ const he: Translations = {
     openProduct: 'פתח לעריכה',
     allPlaced: 'כל המוצרים הוצבו',
     products: 'מוצרים',
+    productTooTall: (ph, rh) => `גובה המוצר (${ph} ס"מ) עולה על גובה החדר (${rh} ס"מ)`,
+    productDoesNotFit: (pw, pd, rw, rd) => `מוצר ${pw}×${pd} ס"מ לא נכנס לחדר ${rw}×${rd} ס"מ בשום סיבוב`,
   },
   appSubtitle: 'חישוב חיתוכים, דלתות ופרזולים',
   langToggle: 'English',
@@ -623,6 +633,9 @@ const en: Translations = {
     width: 'Width (cm)',
     depth: 'Depth (cm)',
     height: 'Height (cm)',
+    topView: 'Top view',
+    elevation: 'Elevation',
+    heightOffFloor: 'Height off floor (cm)',
     placeProduct: '+ Place product in room',
     selectProduct: 'Select product',
     wall: 'Wall',
@@ -634,6 +647,8 @@ const en: Translations = {
     openProduct: 'Open for editing',
     allPlaced: 'All products placed',
     products: 'Products',
+    productTooTall: (ph, rh) => `Product height (${ph} cm) exceeds room height (${rh} cm)`,
+    productDoesNotFit: (pw, pd, rw, rd) => `Product ${pw}×${pd} cm does not fit in room ${rw}×${rd} cm in any orientation`,
   },
   appSubtitle: 'Cuts, doors & hardware calculator',
   langToggle: 'עברית',

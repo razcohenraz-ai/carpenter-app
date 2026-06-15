@@ -17,7 +17,7 @@ export default function App(): React.JSX.Element {
     project, activeProductId,
     setActiveProduct, clearActiveProduct,
     addProduct, removeProduct, updateProductCabinet,
-    addRoom, removeRoom, updateRoomDims,
+    addRoom, removeRoom, renameRoom, updateRoomDims,
     placeProduct, updatePlacement, removePlacement,
     renameProject, newProject,
     exportProject, importProject,
@@ -179,6 +179,7 @@ export default function App(): React.JSX.Element {
             room={activeRoom}
             products={project.products}
             onUpdateDims={dims => updateRoomDims(activeRoom.id, dims)}
+            onRenameRoom={name => renameRoom(activeRoom.id, name)}
             onPlaceProduct={placement => placeProduct(activeRoom.id, placement)}
             onUpdatePlacement={(productId, patch) => updatePlacement(activeRoom.id, productId, patch)}
             onRemovePlacement={productId => removePlacement(activeRoom.id, productId)}
@@ -195,7 +196,9 @@ export default function App(): React.JSX.Element {
             onRemoveProduct={removeProduct}
             onOpenRoom={setActiveRoomId}
             onAddRoom={() => {
-              const id = addRoom(t.room.title);
+              const name = prompt(t.room.roomName, t.room.title);
+              if (name === null) return; // user cancelled
+              const id = addRoom(name.trim() || t.room.title);
               setActiveRoomId(id);
             }}
             onRemoveRoom={removeRoom}

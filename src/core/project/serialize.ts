@@ -147,6 +147,9 @@ function validatePlacement(pl: ProductPlacement, path: string): void {
   if (pl.anchorWall !== undefined && !['north', 'south', 'east', 'west'].includes(pl.anchorWall)) {
     throw new Error(`deserializeProject: ${path}.anchorWall must be north|south|east|west or undefined`);
   }
+  if (pl.anchorOffset !== undefined && typeof pl.anchorOffset !== 'number') {
+    throw new Error(`deserializeProject: ${path}.anchorOffset must be a number or undefined`);
+  }
 }
 
 function validateProductUnit(pu: ProductUnit, index: number): void {

@@ -1,5 +1,5 @@
 import type { ProductPlacement, Room } from '../../types/project';
-import type { ProductBounds } from './productBounds';
+import type { ProductBounds, ProductSubBox } from './productBounds';
 
 /** A wall of a rectangular room (see the coordinate system on
  *  {@link ProductPlacement}): north z=0, south z=depth, west x=0, east x=width. */
@@ -62,17 +62,17 @@ export function snapToWall(
   bounds: ProductBounds,
   wall: RoomWall,
   offset: number,
-): { position: { x: number; z: number }; rotationDeg: number; anchorWall: RoomWall } {
+): { position: { x: number; z: number }; rotationDeg: number; anchorWall: RoomWall; anchorOffset: number } {
   const { width: W, depth: D } = bounds;
   switch (wall) {
     case 'north': // back wall z=0, faces +Z
-      return { position: { x: offset + W / 2, z: D / 2 }, rotationDeg: 0, anchorWall: wall };
+      return { position: { x: offset + W / 2, z: D / 2 }, rotationDeg: 0, anchorWall: wall, anchorOffset: offset };
     case 'south': // front wall z=depth, faces -Z
-      return { position: { x: offset + W / 2, z: room.depth - D / 2 }, rotationDeg: 180, anchorWall: wall };
+      return { position: { x: offset + W / 2, z: room.depth - D / 2 }, rotationDeg: 180, anchorWall: wall, anchorOffset: offset };
     case 'west': // left wall x=0, turned a quarter (depth along X)
-      return { position: { x: D / 2, z: offset + W / 2 }, rotationDeg: 90, anchorWall: wall };
+      return { position: { x: D / 2, z: offset + W / 2 }, rotationDeg: 90, anchorWall: wall, anchorOffset: offset };
     case 'east': // right wall x=width
-      return { position: { x: room.width - D / 2, z: offset + W / 2 }, rotationDeg: 270, anchorWall: wall };
+      return { position: { x: room.width - D / 2, z: offset + W / 2 }, rotationDeg: 270, anchorWall: wall, anchorOffset: offset };
   }
 }
 
@@ -91,4 +91,73 @@ export function clampCentreToRoom(
     x: Math.min(Math.max(centre.x, halfW), Math.max(halfW, room.width - halfW)),
     z: Math.min(Math.max(centre.z, halfD), Math.max(halfD, room.depth - halfD)),
   };
+}
+
+// ── Elevation projection (X-Y / Z-Y) ─────────────────────────────────────────
+
+/** One product sub-box projected onto a wall's elevation plane. `h` runs left
+ *  →right along the viewed wall as the viewer sees it; `y` is height off the
+ *  floor; `depth` is a draw-order key — LARGER means farther from the viewer,
+ *  so a renderer sorts descending and draws nearest last (on top). */
+export interface ElevationRect {
+  h0: number; h1: number;
+  y0: number; y1: number;
+  depth: number;
+}
+
+/** Room-space AABB of a product's LOCAL sub-box, after centring the product's
+ *  footprint at `placement.position` and rotating it about the vertical Y axis.
+ *  Cardinal rotations (0/90/180/270 — the only ones the UI offers) keep the box
+ *  axis-aligned; any other angle falls back to 0°. The rotation direction
+ *  matches the top view's SVG `rotate(rotationDeg)`, so both views agree. This
+ *  generalises {@link placementAABB} (which is the full-footprint special case)
+ *  and is the same local→room transform the future 3D will reuse. */
+function subBoxRoomAABB(
+  box: ProductSubBox,
+  placement: ProductPlacement,
+  bounds: Pick<ProductBounds, 'width' | 'depth'>,
+): { x0: number; x1: number; z0: number; z1: number; y0: number; y1: number } {
+  const { width: W, depth: D } = bounds;
+  const rx = (box.x0 + box.x1) / 2 - W / 2;   // local centre, relative to footprint centre
+  const rz = (box.z0 + box.z1) / 2 - D / 2;
+  const hx = (box.x1 - box.x0) / 2;
+  const hz = (box.z1 - box.z0) / 2;
+  const r = (((placement.rotationDeg % 360) + 360) % 360);
+  let cx: number, cz: number, ex: number, ez: number;
+  if (r === 90)       { cx = -rz; cz =  rx; ex = hz; ez = hx; }
+  else if (r === 180) { cx = -rx; cz = -rz; ex = hx; ez = hz; }
+  else if (r === 270) { cx =  rz; cz = -rx; ex = hz; ez = hx; }
+  else                { cx =  rx; cz =  rz; ex = hx; ez = hz; }
+  const px = placement.position.x + cx;
+  const pz = placement.position.z + cz;
+  const y = placement.position.y ?? 0;
+  return { x0: px - ex, x1: px + ex, z0: pz - ez, z1: pz + ez, y0: y + box.y0, y1: y + box.y1 };
+}
+
+/** Projects every sub-box of a placed product onto the chosen wall's elevation.
+ *  `viewWall` names the wall the elevation depicts (architectural convention):
+ *    north (back z=0)  → horizontal = X;            span = room.width
+ *    south (front)     → horizontal = X mirrored;   span = room.width
+ *    west  (left x=0)  → horizontal = Z;            span = room.depth
+ *    east  (right)     → horizontal = Z mirrored;   span = room.depth
+ *  The mirror on south/east makes the far wall read left-to-right as the viewer
+ *  standing in the room sees it. The exact convention is pinned by tests. */
+export function placementElevationRects(
+  placement: ProductPlacement,
+  subBoxes: ProductSubBox[],
+  bounds: Pick<ProductBounds, 'width' | 'depth'>,
+  viewWall: RoomWall,
+  room: Pick<Room, 'width' | 'depth'>,
+): ElevationRect[] {
+  return subBoxes.map(box => {
+    const a = subBoxRoomAABB(box, placement, bounds);
+    const xc = (a.x0 + a.x1) / 2;
+    const zc = (a.z0 + a.z1) / 2;
+    switch (viewWall) {
+      case 'north': return { h0: a.x0, h1: a.x1, y0: a.y0, y1: a.y1, depth: -zc };
+      case 'south': return { h0: room.width - a.x1, h1: room.width - a.x0, y0: a.y0, y1: a.y1, depth: zc };
+      case 'west':  return { h0: a.z0, h1: a.z1, y0: a.y0, y1: a.y1, depth: -xc };
+      case 'east':  return { h0: room.depth - a.z1, h1: room.depth - a.z0, y0: a.y0, y1: a.y1, depth: xc };
+    }
+  });
 }
