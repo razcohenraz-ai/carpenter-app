@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-06-15 — תצוגת חדר: data model 3D-native מההתחלה (שלב 1 מתוך רצף)
+
+**ההחלטה**: פיצ'ר "החדר" (הזנת מידות חדר + מיקום מוצרים בתוכו) נבנה ב-**רצף**: (1) data model + מבט-על → (2) מבט-חזית → (3) תלת-ממד. ה-data model נבנה **3D-native** כבר בשלב 1, גם כשרק מבט-על מיושם. דרישה מפורשת של הנגר: בסוף הדרך חייבים להגיע ל-3D קבוע.
+
+**מערכת קואורדינטות אחת** (per-room, three.js-compatible, right-handed, Y-up, ס"מ): origin בפינה השמאלית-אחורית על הרצפה; X=רוחב, Y=גובה, Z=עומק. כל תצוגה היא **היטל**: top=X-Z, front=X-Y, 3D=הכל. אף תצוגה לא מאחסנת קואורדינטות משלה.
+
+**מודל המיקום**: `ProductPlacement.position` = **מרכז** ה-footprint (לא פינה), `rotationDeg` סביב הציר האנכי. נבחר מרכז כי סיבוב-סביב-מרכז הוא הסטנדרט של mesh ב-3D, וה-snap-to-wall + ה-AABB יוצאים נקיים (`placementAABB` מתחלף width↔depth בסיבוב 90/270 ללא תלות בכיוון).
+
+**`ProductBounds` תלת-ממדי** (W×H×D), לא footprint 2D — כך ה-3D וה-extrusion מ-`BoardModel` משתמשים בכל שלושת הצירים. ה-`BoardModel` כבר מחזיק `xFrom/xTo/yFrom/yTo/thickness` לכל לוח → ה-3D של מוצר = extrusion ישיר.
+
+**`Project.rooms[]` (כמה חדרים), products[] נשאר flat**: `placement` רק *מפנה* למוצר ב-`products[]` (לא מזיז אותו). נבחר על פני "products בתוך room" כי שומר על המבנה הקיים (backward-compat, אפס migration ל-products), ומאפשר מוצר לא-ממוקם / מעבר בין חדרים בקלות. `removeProduct` מנקה placements מיותמים.
+
+**הנימוק**:
+- **למנוע refactor כפול**: ה-3D דורש את ה-data model בכל מקרה. בנייה 2D-only היתה נזרקת. מערכת קואורדינטות + bounds תלת-ממדיים מההתחלה = ה-3D הוא "renderer נוסף", לא בנייה מחדש.
+- **ויזואל קודם, כמו BoardModel (2026-05-24)**: מבט-על זול מאמת את ה-data model ויזואלית לפני ההשקעה היקרה ב-3D.
+- **core טהור**: `roomGeometry` + `productBounds` ב-`core/` (ללא React) → נבדקים ב-Node ומשמשים את כל שלוש התצוגות.
+
+**טריידאוף**:
+- `position`=מרכז דורש חישוב חצי-footprint ל-snap/clamp (במקום פינה ישירה). מחיר זניח מול הרווח ב-3D ובסיבוב.
+- גרירה לא מנקה את `anchorWall` (בגלל `exactOptionalPropertyTypes` — אי אפשר `undefined` מפורש ב-patch). תוצאה: הפאנל עשוי להציג קיר ישן אחרי גרירה. minor; ה-offset המספרי עושה re-snap.
+
+**אלטרנטיבה שנדחתה — להתחיל מ-3D**: נדחתה כי ה-3D הוא פי-כמה מהמבט-על+חזית יחד (ספריית 3D, מצלמה, תאורה, meshes), וללא data model מאומת הסיכון גבוה. הרצף נותן ערך אצל הלקוח כבר בשלב 1.
+
+**יישום**: `types/project.ts` (Room/ProductPlacement/rooms), `migrations.ts` (v3), `serialize.ts` (validation), `core/product/kitchenFootprint.ts` (חולץ מ-KitchenOverview), `core/room/{productBounds,roomGeometry}.ts`, `useProject` (CRUD), `RoomView.tsx` + `ProjectView`/`App` ניווט. בדיקות: productBounds, roomGeometry, serialize round-trip + migration v2→v3. 706 עוברים.
+
+---
+
 ## 2026-06-14 — מעטפת עליון+תחתון לקלפה (envelope-bottom) — סגירת החוב מ-2026-06-11
 
 **ההחלטה**: ה-`envelope-bottom` מומש. השדה `CabinetInput.hasWallEnvelope?: boolean` (מטא-דאטה, ברירת מחדל false, מגודר ע"י `mount === 'wall'`) מפעיל **שני** לוחות מעטפת — עליון ותחתון — מחומר חזית, **בלי תלות ב-shell הצדדי**. ה-checkbox מופיע ב-`CabinetForm` רק לקלפות, מחליף את "מעטפת תקרה" הקיים (`hideEnvelopeTop` כבר מסתיר אותו לקלפות).

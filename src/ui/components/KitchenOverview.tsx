@@ -12,6 +12,10 @@ import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import { groupKitchenUnitsForPlinth, buildKitchenPlinthCuts, plinthPieceWidths, buildKitchenPlinthBoxes } from '../../core/product/kitchenPlinth';
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
+import {
+  effectiveUnitDims, unitOuterW, isWallUnit,
+  WALL_BOTTOM_CM, BASE_REF_H_CM, COUNTERTOP_CM,
+} from '../../core/product/kitchenFootprint';
 import type { BoxLevel } from '../../types/geometry';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import { useTranslation } from '../../i18n/LanguageContext';
@@ -50,15 +54,10 @@ const DRAW_H = OVERVIEW_H - PAD_TOP - PAD_BOT;
 
 /** Returns effective W/H/D for a unit, applying any boxDimensionOverrides.
  *  The override key is "single:single" (boxStableKey for a single-box cabinet). */
-function effectiveDims(unit: KitchenUnit): { W: number; H: number; D: number } {
-  const inp = unit.cabinet.input;
-  const ovr = unit.cabinet.state.boxDimensionOverrides?.['single:single'];
-  return {
-    W: ovr?.W ?? inp.W,
-    H: ovr?.H ?? inp.H,
-    D: ovr?.D ?? inp.D,
-  };
-}
+// Effective dims + the wall-cabinet predicate come from the shared kitchen
+// footprint module (single source — the room footprint reads the same).
+const effectiveDims = effectiveUnitDims;
+const isWall = isWallUnit;
 
 function computeScale(units: KitchenUnit[], availableW: number): number {
   if (units.length === 0) return 4;
@@ -782,19 +781,9 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
 
   // Wall (קלפה) vs base units. Wall cabinets hang above the countertop, so they
   // render in an upper row and never participate in the floor plinth.
-  const isWall = (u: KitchenUnit): boolean => (u.cabinet.input.mount ?? 'base') === 'wall';
+  // isWall / unitOuterW / WALL_BOTTOM_CM / BASE_REF_H_CM / COUNTERTOP_CM are
+  // imported from core/product/kitchenFootprint (shared with productBounds).
   const hasWall = units.some(isWall);
-  // Kitchen elevation reference heights (cm): a wall cabinet hangs
-  // WALL_BOTTOM_CM above the floor = base height + countertop + clearance.
-  const COUNTERTOP_CM = 2;
-  const BASE_REF_H_CM = 90;
-  const WALL_CLEARANCE_CM = 60;
-  const WALL_BOTTOM_CM = BASE_REF_H_CM + COUNTERTOP_CM + WALL_CLEARANCE_CM; // 152
-  function unitOuterW(u: KitchenUnit): number {
-    const sides = getShellSides(u.cabinet.input);
-    const tFront = getEffectiveMaterial(u.cabinet.input.frontMaterialId).thickness / 10;
-    return effectiveDims(u).W + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
-  }
 
   // Kitchen-level plinth splits — for each unit, which piece-boundary
   // offsets (in cm, measured from the unit's left edge) fall within its

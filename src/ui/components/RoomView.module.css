@@ -1,0 +1,175 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 16px);
+  padding: var(--spacing-lg, 16px);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 12px);
+}
+
+.backBtn {
+  background: none;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--color-text-primary, #222);
+}
+
+.title {
+  font-size: var(--font-size-xl, 1.5rem);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary, #222);
+  margin: 0;
+}
+
+.body {
+  display: flex;
+  gap: var(--spacing-xl, 24px);
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 12px);
+  min-width: 240px;
+}
+
+.dimsRow {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+}
+
+.dimField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--color-text-secondary, #555);
+}
+
+.dimField input {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+}
+
+.placeRow {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  align-items: center;
+}
+
+.placeRow select {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+}
+
+.placeRow button,
+.selectedActions button {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+  background: var(--color-surface, #f7f7f7);
+  cursor: pointer;
+}
+
+.placeRow button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.selectedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-md, 12px);
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+  background: var(--color-surface, #f7f7f7);
+}
+
+.selectedName {
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary, #222);
+}
+
+.field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  font-size: var(--font-size-sm, 0.85rem);
+}
+
+.field input,
+.field select {
+  width: 90px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+}
+
+.selectedActions {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  margin-top: 4px;
+}
+
+.removeBtn {
+  color: var(--color-danger, #c0392b);
+}
+
+.plan {
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius, 6px);
+  background: #fff;
+  touch-action: none;
+}
+
+.roomRect {
+  fill: #fafafa;
+  stroke: var(--color-text-primary, #333);
+  stroke-width: 2;
+}
+
+.dimLabel {
+  fill: var(--color-text-secondary, #666);
+  font-size: 13px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.productRect {
+  fill: rgba(70, 130, 180, 0.35);
+  stroke: steelblue;
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+.productRect:active {
+  cursor: grabbing;
+}
+
+.productSelected {
+  fill: rgba(70, 130, 180, 0.55);
+  stroke: #1f5c8b;
+  stroke-width: 2.5;
+}
+
+.productLabel {
+  fill: var(--color-text-primary, #222);
+  font-size: 12px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}

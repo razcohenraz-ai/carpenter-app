@@ -133,6 +133,44 @@ export interface ProductUnit {
   kitchenUnits?: KitchenUnit[];
 }
 
+// ── Room layout (floor plan) ──────────────────────────────────────────────────
+
+/** Per-room coordinate system (three.js-compatible, right-handed, Y-up, cm):
+ *  origin at the back-left floor corner; X = width along the back wall;
+ *  Y = height (floor → ceiling); Z = depth (back wall → forward). Every view
+ *  (top / elevation / 3D) is a projection of this single frame. */
+
+/** Where a product sits inside a room. `position` is the CENTRE of the
+ *  product's footprint on the floor (rotation pivots around it); `y` is
+ *  optional and defaults to 0 (the product's base rests on the floor).
+ *  `rotationDeg` rotates around the vertical (Y) axis — 0 = facing +Z
+ *  (forward, away from the back wall); 90/180/270 turn it toward the other
+ *  walls. Centre + pivot-around-centre matches how a 3D mesh is placed. */
+export interface ProductPlacement {
+  /** → {@link ProductUnit.id} of the product positioned here. */
+  productId: string;
+  position: { x: number; z: number; y?: number };
+  rotationDeg: number;
+  /** Snap hint for the UI only — the wall the product is anchored to. The
+   *  source of truth for geometry is `position` + `rotationDeg`. */
+  anchorWall?: 'north' | 'south' | 'east' | 'west';
+}
+
+/** A rectangular room measured at the client's home. References products from
+ *  the flat {@link Project.products} list by id via `placements` — a placement
+ *  only positions a product, it does not own it. */
+export interface Room {
+  id: string;
+  name: string;
+  /** cm. X axis — along the back wall. */
+  width: number;
+  /** cm. Z axis — front-to-back. */
+  depth: number;
+  /** cm. Y axis — floor to ceiling. */
+  height: number;
+  placements: ProductPlacement[];
+}
+
 // ── Project wrapper (cloud-save envelope) ─────────────────────────────────────
 
 /** The outermost envelope for a saved project. Designed so cloud save can
@@ -149,6 +187,9 @@ export interface Project {
   updatedAt?: string;
   /** All furniture units in this project (ordered by insertion). */
   products: ProductUnit[];
+  /** Rooms with product placements (floor plan). Optional — absent in
+   *  projects saved before the room feature (schema < 3). */
+  rooms?: Room[];
 }
 
 // ── App-level constants ───────────────────────────────────────────────────────

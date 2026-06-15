@@ -53,8 +53,12 @@ src/
 │   │   ├── interiorUtils.ts      init/preserve, redistributeShelves, defaultDrawerPlacement, defaultRodPlacement, equalizeExternalDrawersIfOverflow
 │   │   └── fixedShelfUtils.ts    syncFixedShelf — מדף קבוע מעל external drawers
 │   ├── product/
-│   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven
-│   │   └── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
+│   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven/pantry/wall/pantry-top
+│   │   ├── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
+│   │   └── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint (חולץ מ-KitchenOverview)
+│   ├── room/                     תצוגת חדר (floor plan) — core טהור
+│   │   ├── productBounds.ts      productBounds(product) → bounding box תלת-ממדי W×H×D
+│   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן עבודה (לא מחובר ל-UI)
 │   ├── project/
@@ -87,8 +91,9 @@ src/
     ├── pages/
     │   └── SettingsPage.tsx      דף הגדרות מלא: לכל חומר checkbox (כלול/לא ב-dropdown) + מחיר + תוספת custom material
     └── components/
-        ├── App.tsx               ניווט 3-רמתי: project → product → kitchen unit
-        ├── ProjectView.tsx       רשימת products + הוספה/מחיקה/פתיחה
+        ├── App.tsx               ניווט: project → (product | room) → kitchen unit
+        ├── ProjectView.tsx       אזור חדרים + אזור products (הוספה/מחיקה/פתיחה)
+        ├── RoomView.tsx          floor plan (מבט-על): מידות חדר + מיקום מוצרים (snap מספרי + גרירה)
         ├── AddProductDialog.tsx  בחירת סוג מוצר (wardrobe / bookcase / sideboard / kitchen / free-build)
         ├── KitchenEditor.tsx     ניהול kitchen units (הוסף/הסר/סדר)
         ├── KitchenOverview.tsx   תצוגה מאוחדת של units עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); UnitsView + UnitFrontPanelsStandalone overlay

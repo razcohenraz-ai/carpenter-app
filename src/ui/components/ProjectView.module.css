@@ -101,6 +101,13 @@
   padding: var(--spacing-xl) 0;
 }
 
+.sectionTitle {
+  font-size: var(--font-size-lg, 1.15rem);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary, #222);
+  margin: var(--spacing-lg, 16px) 0 var(--spacing-sm, 8px);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

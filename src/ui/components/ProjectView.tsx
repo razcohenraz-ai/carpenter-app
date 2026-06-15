@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import type { Project, ProductUnit } from '../../types';
-import type { ProductType } from '../../types/project';
+import type { ProductType, Room } from '../../types/project';
 import { useTranslation } from '../hooks/useTranslation';
 import { AddProductDialog } from './AddProductDialog';
 import styles from './ProjectView.module.css';
@@ -10,6 +10,9 @@ interface Props {
   onOpenProduct: (id: string) => void;
   onAddProduct: (type: ProductType, name: string) => void;
   onRemoveProduct: (id: string) => void;
+  onOpenRoom: (id: string) => void;
+  onAddRoom: () => void;
+  onRemoveRoom: (id: string) => void;
   onRenameProject: (name: string) => void;
   onNewProject: (name: string) => void;
   onExport: () => void;
@@ -18,6 +21,7 @@ interface Props {
 
 export function ProjectView({
   project, onOpenProduct, onAddProduct, onRemoveProduct,
+  onOpenRoom, onAddRoom, onRemoveRoom,
   onRenameProject, onNewProject, onExport, onImport,
 }: Props) {
   const { t } = useTranslation();
@@ -101,7 +105,28 @@ export function ProjectView({
         </div>
       )}
 
+      {/* Rooms */}
+      <h2 className={styles.sectionTitle}>{t.room.rooms}</h2>
+      {(project.rooms ?? []).length === 0 ? (
+        <p className={styles.empty}>{t.room.noRooms}</p>
+      ) : (
+        <div className={styles.grid}>
+          {(project.rooms ?? []).map(r => (
+            <RoomCard
+              key={r.id}
+              room={r}
+              onOpen={() => onOpenRoom(r.id)}
+              onDelete={() => { if (window.confirm(t.project.deleteConfirm)) onRemoveRoom(r.id); }}
+            />
+          ))}
+        </div>
+      )}
+      <button type="button" className={styles.addBtn} onClick={onAddRoom}>
+        {t.room.addRoom}
+      </button>
+
       {/* Products grid */}
+      <h2 className={styles.sectionTitle}>{t.room.products}</h2>
       {project.products.length === 0 ? (
         <p className={styles.empty}>{t.project.noProducts}</p>
       ) : (
@@ -135,6 +160,27 @@ export function ProjectView({
           onClose={() => setShowAddDialog(false)}
         />
       )}
+    </div>
+  );
+}
+
+function RoomCard({ room, onOpen, onDelete }: {
+  room: Room;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardType}>{t.room.title}</div>
+      <div className={styles.cardName}>{room.name}</div>
+      <div className={styles.cardDims}>
+        {room.width} × {room.depth} × {room.height} ס"מ · {room.placements.length}
+      </div>
+      <div className={styles.cardActions}>
+        <button type="button" className={styles.openBtn} onClick={onOpen}>{t.project.kitchenEditUnit}</button>
+        <button type="button" className={styles.deleteBtn} onClick={onDelete}>✕</button>
+      </div>
     </div>
   );
 }

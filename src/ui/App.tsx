@@ -4,6 +4,7 @@ import { useProject } from './hooks/useProject';
 import { useSettings } from './hooks/useSettings';
 import { ProjectView } from './components/ProjectView';
 import { KitchenEditor } from './components/KitchenEditor';
+import { RoomView } from './components/RoomView';
 import { SettingsPage } from './pages/SettingsPage';
 import CabinetForm from './components/CabinetForm';
 import type { CabinetInput } from '../types/cabinet';
@@ -16,6 +17,8 @@ export default function App(): React.JSX.Element {
     project, activeProductId,
     setActiveProduct, clearActiveProduct,
     addProduct, removeProduct, updateProductCabinet,
+    addRoom, removeRoom, updateRoomDims,
+    placeProduct, updatePlacement, removePlacement,
     renameProject, newProject,
     exportProject, importProject,
     addKitchenUnit, removeKitchenUnit, updateKitchenUnit, reorderKitchenUnit,
@@ -35,10 +38,16 @@ export default function App(): React.JSX.Element {
 
   // Active kitchen unit id (third navigation level)
   const [activeKitchenUnitId, setActiveKitchenUnitId] = useState<string | null>(null);
+  // Active room id (floor-plan navigation level, parallel to activeProductId)
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [showSettingsPage, setShowSettingsPage] = useState(false);
 
   const activeProduct = activeProductId
     ? project.products.find(p => p.id === activeProductId) ?? null
+    : null;
+
+  const activeRoom = activeRoomId
+    ? (project.rooms ?? []).find(r => r.id === activeRoomId) ?? null
     : null;
 
   const isKitchen = activeProduct?.productType === 'kitchen';
@@ -52,18 +61,22 @@ export default function App(): React.JSX.Element {
   function headerTitle() {
     if (activeKitchenUnit) return activeKitchenUnit.name;
     if (activeProduct) return activeProduct.name;
+    if (activeRoom) return activeRoom.name;
     return t.appTitle;
   }
 
   function handleBack() {
     if (activeKitchenUnit) {
       setActiveKitchenUnitId(null);
-    } else {
+    } else if (activeProduct) {
+      // Returns to the room if the product was opened from a room, else project.
       clearActiveProduct();
+    } else {
+      setActiveRoomId(null);
     }
   }
 
-  const showBack = !!activeProduct;
+  const showBack = !!activeProduct || !!activeRoom;
 
   // If settings page is open, show it fullscreen instead of the main content
   if (showSettingsPage) {
@@ -160,13 +173,32 @@ export default function App(): React.JSX.Element {
           />
         )}
 
+        {/* Level 1b: room floor plan (active when a room is open and no product is) */}
+        {!activeProduct && activeRoom && (
+          <RoomView
+            room={activeRoom}
+            products={project.products}
+            onUpdateDims={dims => updateRoomDims(activeRoom.id, dims)}
+            onPlaceProduct={placement => placeProduct(activeRoom.id, placement)}
+            onUpdatePlacement={(productId, patch) => updatePlacement(activeRoom.id, productId, patch)}
+            onRemovePlacement={productId => removePlacement(activeRoom.id, productId)}
+            onOpenProduct={setActiveProduct}
+          />
+        )}
+
         {/* Level 1: project view */}
-        {!activeProduct && (
+        {!activeProduct && !activeRoom && (
           <ProjectView
             project={project}
             onOpenProduct={setActiveProduct}
             onAddProduct={addProduct}
             onRemoveProduct={removeProduct}
+            onOpenRoom={setActiveRoomId}
+            onAddRoom={() => {
+              const id = addRoom(t.room.title);
+              setActiveRoomId(id);
+            }}
+            onRemoveRoom={removeRoom}
             onRenameProject={renameProject}
             onNewProject={newProject}
             onExport={exportProject}

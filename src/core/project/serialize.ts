@@ -1,5 +1,5 @@
 import type { Cabinet, CabinetInput, ProductUnit, Project, SavedCabinetState } from '../../types';
-import type { ProductType } from '../../types/project';
+import type { ProductType, Room, ProductPlacement } from '../../types/project';
 import { CURRENT_SCHEMA_VERSION, migrate } from './migrations';
 
 // ── Required field manifests ─────────────────────────────────────────────────
@@ -95,11 +95,57 @@ function validateProject(p: Project): void {
     throw new Error('deserializeProject: products must be an array');
   }
   p.products.forEach((pu, i) => validateProductUnit(pu as ProductUnit, i));
+  if (p.rooms !== undefined) {
+    if (!Array.isArray(p.rooms)) {
+      throw new Error('deserializeProject: rooms must be an array');
+    }
+    p.rooms.forEach((r, i) => validateRoom(r as Room, i));
+  }
   if (p.createdAt !== undefined && typeof p.createdAt !== 'string') {
     throw new Error('deserializeProject: createdAt must be an ISO 8601 string');
   }
   if (p.updatedAt !== undefined && typeof p.updatedAt !== 'string') {
     throw new Error('deserializeProject: updatedAt must be an ISO 8601 string');
+  }
+}
+
+function validateRoom(r: Room, index: number): void {
+  const path = `rooms[${index}]`;
+  if (typeof r.id !== 'string' || r.id === '') {
+    throw new Error(`deserializeProject: ${path}.id must be a non-empty string`);
+  }
+  if (typeof r.name !== 'string') {
+    throw new Error(`deserializeProject: ${path}.name must be a string`);
+  }
+  for (const key of ['width', 'depth', 'height'] as const) {
+    if (typeof r[key] !== 'number') {
+      throw new Error(`deserializeProject: ${path}.${key} must be a number`);
+    }
+  }
+  if (!Array.isArray(r.placements)) {
+    throw new Error(`deserializeProject: ${path}.placements must be an array`);
+  }
+  r.placements.forEach((pl, i) => validatePlacement(pl as ProductPlacement, `${path}.placements[${i}]`));
+}
+
+function validatePlacement(pl: ProductPlacement, path: string): void {
+  if (typeof pl.productId !== 'string' || pl.productId === '') {
+    throw new Error(`deserializeProject: ${path}.productId must be a non-empty string`);
+  }
+  if (pl.position === null || typeof pl.position !== 'object') {
+    throw new Error(`deserializeProject: ${path}.position must be an object`);
+  }
+  if (typeof pl.position.x !== 'number' || typeof pl.position.z !== 'number') {
+    throw new Error(`deserializeProject: ${path}.position.x and .z must be numbers`);
+  }
+  if (pl.position.y !== undefined && typeof pl.position.y !== 'number') {
+    throw new Error(`deserializeProject: ${path}.position.y must be a number or undefined`);
+  }
+  if (typeof pl.rotationDeg !== 'number') {
+    throw new Error(`deserializeProject: ${path}.rotationDeg must be a number`);
+  }
+  if (pl.anchorWall !== undefined && !['north', 'south', 'east', 'west'].includes(pl.anchorWall)) {
+    throw new Error(`deserializeProject: ${path}.anchorWall must be north|south|east|west or undefined`);
   }
 }
 

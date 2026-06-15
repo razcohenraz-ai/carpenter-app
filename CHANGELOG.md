@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### נוסף — תצוגת חדר (floor plan) — שלב 1: data model 3D-ready + מבט-על
+
+הנגר יכול להזין מידות חדר (אורך×רוחב×גובה) ולמקם בתוכו מוצרים (מטבח/ארון) במבט-על. שלב ראשון מתוך רצף מתוכנן: (1) מבט-על → (2) מבט-חזית → (3) תלת-ממד. ה-data model **3D-native** — שלוש התצוגות הן היטל של מערכת קואורדינטות אחת, כך שה-3D יתחבר בלי refactor.
+
+**מערכת קואורדינטות** (per-room, תואמת three.js, Y-up, ס"מ): origin בפינה השמאלית-אחורית על הרצפה; X=רוחב (לאורך הקיר האחורי), Y=גובה, Z=עומק. מבט-על = מישור X-Z; מבט-חזית = X-Y; 3D = הכל.
+
+**data model** (`types/project.ts`): `Room { id, name, width, depth, height, placements }`, `ProductPlacement { productId, position:{x,z,y?}, rotationDeg, anchorWall? }` (position = **מרכז** ה-footprint, סיבוב סביב הציר האנכי). `Project.rooms?` — אופציונלי, **כמה חדרים לפרויקט**, כל אחד מפנה למוצרים מ-`products[]` ה-flat.
+
+**persistence**: schema v2→**v3** (migration additive — `rooms:[]`), ולידציה ב-`serialize`. backward-compatible: פרויקטים ישנים נטענים ללא חדר.
+
+**core** (`core/room/`): `productBounds(product)` — bounding box תלת-ממדי (מטבח = `kitchenFootprint`: Σ רוחבי base × max depth × גובה שורת קיר; אחר = W×H×D). `roomGeometry` — `snapToWall` (הצמדה לקיר + offset), `placementRectTopView`, `placementAABB`, `clampCentreToRoom`. הקבועים + `unitOuterW` חולצו מ-`KitchenOverview` ל-`core/product/kitchenFootprint.ts` (single source).
+
+**UI**: רמת ניווט חדשה `RoomView` (מקבילה ל-product) — מבט-על SVG, **מיקום היברידי**: הצמדה-לקיר מספרית (קיר + offset + סיבוב) **וגם** גרירה (clamp לתוך החדר). `ProjectView` קיבל אזור "חדרים". `useProject` קיבל CRUD לחדרים+placements (כולל ניקוי placements מיותמים כשמוחקים מוצר). i18n דו-לשוני.
+
 ### תוקן — יחידת מגירות התפצלה ל-2 חזיתות + הפרדת `singleFront` מ-`mount`
 
 יחידת מגירות (`drawers` module) ברוחב 90 ס"מ (override מ-60) הציגה **שתי** חזיתות מגירה כי `frontColumnsForBox` חישב `ceil(90/60) = 2`. אבל יחידת מגירות אמיתית היא תמיד **בנק אחד של מגירות** — חזית מלאת רוחב.

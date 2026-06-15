@@ -14,13 +14,16 @@
 
 **State hooks (כל אחד עומד בפני עצמו):**
 - `useCabinet` — state של cabinet יחיד פעיל: `calculate()`, interior, doors, overrides (board / boxDimension / bodyEdging).
-- `useProject` — Project כולל `products: ProductUnit[]`, kitchen units, שמירה ב-localStorage.
+- `useProject` — Project כולל `products: ProductUnit[]`, kitchen units, **`rooms: Room[]`** (floor plan — CRUD לחדרים + placements), שמירה ב-localStorage.
 - `useSettings` — AppSettings: `customMaterials[]`, `bodyEnabledMaterialIds[]`, `frontEnabledMaterialIds[]`, price overrides — localStorage key `'carpenter-settings-v2'`.
 
-**Navigation ב-`App.tsx`** — 3 רמות:
-1. **Project** → `ProjectView` (רשימת products + ⚙️ → SettingsPage).
-2. **Product** → `CabinetForm` (single product) או `KitchenEditor` (kitchen).
+**Navigation ב-`App.tsx`** — Project + 2 רמות מקבילות:
+1. **Project** → `ProjectView` (אזור חדרים + אזור products + ⚙️ → SettingsPage).
+2a. **Product** → `CabinetForm` (single product) או `KitchenEditor` (kitchen).
+2b. **Room** → `RoomView` (floor plan, מבט-על). פתיחת מוצר מתוכו → רמת Product.
 3. **Kitchen unit** → `CabinetForm` עם kitchen flags (`hideMainDimensions`, `hideDoorsPerColumn`, `hideEnvelopeTop`, `splitShellSides`).
+
+**מערכת קואורדינטות חדר** (3D-native, three.js-compatible, Y-up, ס"מ): origin בפינה השמאלית-אחורית על הרצפה; X=רוחב, Y=גובה, Z=עומק. כל תצוגה (top/front/3D) = היטל. `core/room/{productBounds,roomGeometry}.ts` — bounds תלת-ממדי + snap/projection (core טהור). ראה DECISIONS_LOG 2026-06-15.
 
 **Compute pathways:**
 - `useCabinet.calculate(input)` — cabinet יחיד פעיל; מעדכן refs ו-result.
@@ -42,7 +45,8 @@
 - **חלוקת מדפים חכמה** — round-robin בין אזורים ≥25 ס"מ, hanger logic, אזהרות `small_zone` / `rod_low` / `rod_drawer_close`.
 - **מגירות חיצוניות** — חזיתות עצמאיות, `coversSkirt` עובר לתחתונה, מדף קבוע (`syncFixedShelf`), drawer-box visualization (צר ב-2.5, נמוך ב-5), `equalizeExternalDrawersIfOverflow` כשהstack חורג.
 - **מעטפת** — `hasShell` (סימטרי) או `hasShellLeft`/`hasShellRight` (kitchen — `splitShellSides`); `getShellSides` מאחד.
-- **ניהול פרויקטים** — `useProject` שומר ב-localStorage; ייצוא/יבוא קבצים; ריבוי products במקביל.
+- **ניהול פרויקטים** — `useProject` שומר ב-localStorage; ייצוא/יבוא קבצים; ריבוי products במקביל; **ריבוי חדרים** (`rooms[]`).
+- **תצוגת חדר (floor plan) — שלב 1** — `RoomView`: הזנת מידות חדר מלבני + מיקום מוצרים במבט-על (הצמדה-לקיר מספרית + גרירה). data model 3D-native (`Room`/`ProductPlacement`, schema v3). מבט-חזית + 3D = שלבים 2-3.
 - **מטבחים** — מודולי `drawers`/`shelves`/`sink`/`dishwasher`/`oven`/`pantry` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
 - **חומר גלובלי למטבח** — `KitchenEditor` חושף בורר חומר גוף + חזיתות שחל על כל הגופים. נגזר מהגופים (חומר משותף / "מעורב"), כותב לכולם דרך `onUpdateUnit`; גוף חדש יורש את החומר המשותף. עקיפה פר-גוף דרך עורך הגוף.
 - **sink module** — `topVariant='sink-open'`: אין top board, שני traverse boards (front+back), sink basin overlay בסקיצה.

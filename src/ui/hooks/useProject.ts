@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Cabinet, Project, ProductUnit, MaterialId } from '../../types';
-import type { ProductType } from '../../types/project';
+import type { ProductType, Room, ProductPlacement } from '../../types/project';
 import { serializeProject, deserializeProject } from '../../core/project/serialize';
 import { CURRENT_SCHEMA_VERSION } from '../../core/project/migrations';
 import { defaultInputForType, emptyCabinetState } from '../../core/product/productDefaults';
@@ -20,7 +20,13 @@ function emptyProject(name: string): Project {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     projectName: name,
     products: [],
+    rooms: [],
   };
+}
+
+/** A fresh room with sensible default dimensions (cm). */
+function emptyRoom(name: string): Room {
+  return { id: generateId(), name, width: 300, depth: 400, height: 250, placements: [] };
 }
 
 function loadFromStorage(): Project | null {
@@ -46,6 +52,14 @@ export interface UseProjectReturn {
   reorderKitchenUnit: (productId: string, unitId: string, direction: 'left' | 'right') => void;
   removeProduct: (id: string) => void;
   updateProductCabinet: (id: string, cabinet: Cabinet) => void;
+  // ── Rooms (floor plan) ──
+  addRoom: (name: string) => string;
+  removeRoom: (id: string) => void;
+  renameRoom: (id: string, name: string) => void;
+  updateRoomDims: (id: string, dims: { width?: number; depth?: number; height?: number }) => void;
+  placeProduct: (roomId: string, placement: ProductPlacement) => void;
+  updatePlacement: (roomId: string, productId: string, patch: Partial<ProductPlacement>) => void;
+  removePlacement: (roomId: string, productId: string) => void;
   renameProject: (name: string) => void;
   renameProduct: (id: string, name: string) => void;
   newProject: (name: string) => void;
@@ -163,8 +177,72 @@ export function useProject(): UseProjectReturn {
   }, []);
 
   const removeProduct = useCallback((id: string) => {
-    setProject(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
+    // Also drop any room placements that referenced the deleted product, so no
+    // placement is left pointing at a product that no longer exists.
+    setProject(prev => ({
+      ...prev,
+      products: prev.products.filter(p => p.id !== id),
+      rooms: (prev.rooms ?? []).map(r => ({
+        ...r,
+        placements: r.placements.filter(pl => pl.productId !== id),
+      })),
+    }));
     setActiveProductId(cur => (cur === id ? null : cur));
+  }, []);
+
+  // ── Rooms (floor plan) ──────────────────────────────────────────────────────
+  const addRoom = useCallback((name: string): string => {
+    const room = emptyRoom(name);
+    setProject(prev => ({ ...prev, rooms: [...(prev.rooms ?? []), room] }));
+    return room.id;
+  }, []);
+
+  const removeRoom = useCallback((id: string) => {
+    setProject(prev => ({ ...prev, rooms: (prev.rooms ?? []).filter(r => r.id !== id) }));
+  }, []);
+
+  const renameRoom = useCallback((id: string, name: string) => {
+    setProject(prev => ({
+      ...prev,
+      rooms: (prev.rooms ?? []).map(r => r.id === id ? { ...r, name } : r),
+    }));
+  }, []);
+
+  const updateRoomDims = useCallback((id: string, dims: { width?: number; depth?: number; height?: number }) => {
+    setProject(prev => ({
+      ...prev,
+      rooms: (prev.rooms ?? []).map(r => r.id === id ? { ...r, ...dims } : r),
+    }));
+  }, []);
+
+  const placeProduct = useCallback((roomId: string, placement: ProductPlacement) => {
+    setProject(prev => ({
+      ...prev,
+      rooms: (prev.rooms ?? []).map(r => {
+        if (r.id !== roomId) return r;
+        // One placement per product: replace if already placed, else append.
+        const others = r.placements.filter(p => p.productId !== placement.productId);
+        return { ...r, placements: [...others, placement] };
+      }),
+    }));
+  }, []);
+
+  const updatePlacement = useCallback((roomId: string, productId: string, patch: Partial<ProductPlacement>) => {
+    setProject(prev => ({
+      ...prev,
+      rooms: (prev.rooms ?? []).map(r => r.id === roomId
+        ? { ...r, placements: r.placements.map(p => p.productId === productId ? { ...p, ...patch } : p) }
+        : r),
+    }));
+  }, []);
+
+  const removePlacement = useCallback((roomId: string, productId: string) => {
+    setProject(prev => ({
+      ...prev,
+      rooms: (prev.rooms ?? []).map(r => r.id === roomId
+        ? { ...r, placements: r.placements.filter(p => p.productId !== productId) }
+        : r),
+    }));
   }, []);
 
   const updateProductCabinet = useCallback((id: string, cabinet: Cabinet) => {
@@ -218,6 +296,8 @@ export function useProject(): UseProjectReturn {
     project, activeProductId,
     setActiveProduct, clearActiveProduct,
     addProduct, removeProduct, updateProductCabinet,
+    addRoom, removeRoom, renameRoom, updateRoomDims,
+    placeProduct, updatePlacement, removePlacement,
     addKitchenUnit, removeKitchenUnit, updateKitchenUnit, renameKitchenUnit, reorderKitchenUnit,
     renameProject, renameProduct,
     newProject, exportProject, importProject,

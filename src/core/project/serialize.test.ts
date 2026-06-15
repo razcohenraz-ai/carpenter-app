@@ -196,24 +196,37 @@ describe('serializeProject — timestamps', () => {
 // ── Migration behavior ───────────────────────────────────────────────────────
 
 describe('migrate — schema version handling', () => {
-  it('גרסה נוכחית (v2) עוברת ללא שינוי', () => {
+  it('גרסה נוכחית עוברת ללא שינוי', () => {
     const p = mkProject({ projectName: 'בדיקה' });
     expect(migrate(p)).toEqual(p);
   });
 
-  it('v1 → v2: cabinet יחיד נהפך ל-products array עם wardrobe', () => {
+  it('v1 → current: cabinet יחיד נהפך ל-products array עם wardrobe', () => {
     const v1 = {
       schemaVersion: 1,
       projectName: 'ישן',
       cabinet: { input: basicInput(), state: emptyState() },
     };
     const result = migrate(v1);
-    expect(result.schemaVersion).toBe(2);
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(result.projectName).toBe('ישן');
     expect(Array.isArray(result.products)).toBe(true);
     expect(result.products).toHaveLength(1);
     expect(result.products[0]!.productType).toBe('wardrobe');
     expect(result.products[0]!.cabinet).toEqual(v1.cabinet);
+  });
+
+  it('v2 → v3: מוסיף rooms ריק ושומר את כל שאר השדות', () => {
+    const v2 = {
+      schemaVersion: 2,
+      projectName: 'מטבח',
+      products: [{ id: 'p1', name: 'ארון', productType: 'wardrobe' as const, cabinet: { input: basicInput(), state: emptyState() } }],
+    };
+    const result = migrate(v2);
+    expect(result.schemaVersion).toBe(3);
+    expect(result.projectName).toBe('מטבח');
+    expect(result.products).toHaveLength(1);
+    expect(result.rooms).toEqual([]);
   });
 
   it('v1 ללא projectName: projectName מקבל ברירת מחדל', () => {
@@ -305,5 +318,51 @@ describe('deserializeProject — validation', () => {
     });
     const back = deserializeProject(serializeProject(p));
     expect(back.products).toHaveLength(3);
+  });
+});
+
+// ── Rooms (floor plan, schema v3) ─────────────────────────────────────────────
+
+describe('rooms — round-trip + validation', () => {
+  const roomWithPlacement = {
+    id: 'r1', name: 'מטבח', width: 300, depth: 400, height: 250,
+    placements: [
+      { productId: 'a', position: { x: 100, z: 30 }, rotationDeg: 0, anchorWall: 'north' as const },
+      { productId: 'b', position: { x: 30, z: 200, y: 0 }, rotationDeg: 90 },
+    ],
+  };
+
+  it('round-trip של project עם rooms שומר את כל המיקומים', () => {
+    const p = mkProject({ products: [mkProduct({ id: 'a' }), mkProduct({ id: 'b' })], rooms: [roomWithPlacement] });
+    const back = deserializeProject(serializeProject(p));
+    expect(back.rooms).toEqual([roomWithPlacement]);
+  });
+
+  it('project ללא rooms (פרויקט ישן) נטען ללא שגיאה', () => {
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [] });
+    expect(() => deserializeProject(json)).not.toThrow();
+  });
+
+  it('זורק שגיאה אם rooms אינו array', () => {
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [], rooms: {} });
+    expect(() => deserializeProject(json)).toThrow(/rooms/);
+  });
+
+  it('זורק שגיאה אם מידת חדר אינה number', () => {
+    const bad = { ...roomWithPlacement, width: 'wide' };
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [], rooms: [bad] });
+    expect(() => deserializeProject(json)).toThrow(/width/);
+  });
+
+  it('זורק שגיאה אם placement.productId חסר', () => {
+    const bad = { ...roomWithPlacement, placements: [{ position: { x: 1, z: 2 }, rotationDeg: 0 }] };
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [], rooms: [bad] });
+    expect(() => deserializeProject(json)).toThrow(/productId/);
+  });
+
+  it('זורק שגיאה אם anchorWall לא תקין', () => {
+    const bad = { ...roomWithPlacement, placements: [{ productId: 'a', position: { x: 1, z: 2 }, rotationDeg: 0, anchorWall: 'up' }] };
+    const json = JSON.stringify({ schemaVersion: CURRENT_SCHEMA_VERSION, projectName: 'x', products: [], rooms: [bad] });
+    expect(() => deserializeProject(json)).toThrow(/anchorWall/);
   });
 });

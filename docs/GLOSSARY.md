@@ -326,3 +326,22 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 - `hasFronts=false`: מעמיד `hasDoor:false` לכל הדלתות → `buildDoorCutItems` מדלג עליהן (אין cut מקבוצת 'door'), מחביא כפתורי עריכה פנימית ב-`BoxInteriorEditor`. חזיתות מגירות חיצוניות **לא מושפעות** (מגיעות מ-`calcExternalDrawerFrontCuts`).
 - `hasBack=false`: לא נפלט לוח גב. `backThickness` עדיין משמש בנוסחת `carcassD`.
 - `hasBottom=false`: לא נפלט לוח תחתון. הדפנות מתארכות ל-`H − t − LEVELER_GAP_CM` (רגלי בונד). ב-`CabinetForm` גם מחביא כפתורי עריכה פנימית.
+
+---
+
+## מונחי חדר (floor plan)
+
+### Room / חדר
+`Project.rooms?: Room[]` (schema v3). מלבן: `{ id, name, width, depth, height, placements }` בס"מ. **כמה חדרים לפרויקט**. מערכת קואורדינטות 3D-native (three.js, Y-up): origin בפינה השמאלית-אחורית על הרצפה; X=width (קיר אחורי), Y=height, Z=depth. כל תצוגה (top/front/3D) היא היטל.
+
+### ProductPlacement
+מיקום מוצר בחדר: `{ productId, position:{x,z,y?}, rotationDeg, anchorWall? }`. `position` = **מרכז** ה-footprint (סיבוב סביב הציר האנכי). `productId` מפנה ל-`Project.products[]` (flat — placement לא מזיז את המוצר). `anchorWall` = רמז snap ל-UI (north/south/east/west); מקור-האמת הוא position+rotation.
+
+### productBounds (`core/room/productBounds.ts`)
+`productBounds(product) → { width, height, depth }` — bounding box תלת-ממדי בס"מ. מטבח: `kitchenFootprint` (Σ רוחבי base × max depth × גובה שורת קיר). אחר: `input.W × H × D`. המקור היחיד לכל שלוש התצוגות.
+
+### roomGeometry (`core/room/roomGeometry.ts`)
+core טהור: `snapToWall(room, bounds, wall, offset)` → position+rotation צמוד לקיר; `placementRectTopView` → spec לציור מבט-על; `placementAABB` → footprint axis-aligned (מתחלף W↔D בסיבוב 90/270); `clampCentreToRoom` → השארת המוצר בתוך החדר בזמן גרירה.
+
+### kitchenFootprint (`core/product/kitchenFootprint.ts`)
+חולץ מ-`KitchenOverview` (single source): `WALL_BOTTOM_CM=152` וקבועי elevation, `effectiveUnitDims`, `unitOuterW`, `isWallUnit`, `kitchenFootprint(units)`. נצרך גם ע"י `productBounds` וגם ע"י `KitchenOverview`.

@@ -25,6 +25,28 @@ export interface Translations {
     kitchenEditUnit: string;
   };
 
+  room: {
+    title: string;
+    rooms: string;
+    addRoom: string;
+    noRooms: string;
+    roomName: string;
+    width: string;
+    depth: string;
+    height: string;
+    placeProduct: string;
+    selectProduct: string;
+    wall: string;
+    walls: Record<string, string>;
+    offsetFromCorner: string;
+    rotation: string;
+    removeFromRoom: string;
+    unplacedProducts: string;
+    openProduct: string;
+    allPlaced: string;
+    products: string;
+  };
+
   sketch: {
     preview: string;
     invalidDimensions: string;
@@ -308,6 +330,27 @@ const he: Translations = {
       'free-build': 'בנייה חופשית',
     },
   },
+  room: {
+    title: 'תצוגת חדר',
+    rooms: 'חדרים',
+    addRoom: '+ הוסף חדר',
+    noRooms: 'אין חדרים עדיין.',
+    roomName: 'שם החדר',
+    width: 'רוחב (ס"מ)',
+    depth: 'עומק (ס"מ)',
+    height: 'גובה (ס"מ)',
+    placeProduct: '+ הצב מוצר בחדר',
+    selectProduct: 'בחר מוצר',
+    wall: 'קיר',
+    walls: { north: 'אחורי', south: 'קדמי', east: 'ימין', west: 'שמאל' },
+    offsetFromCorner: 'מרחק מהפינה (ס"מ)',
+    rotation: 'סיבוב (°)',
+    removeFromRoom: 'הסר מהחדר',
+    unplacedProducts: 'מוצרים שלא הוצבו',
+    openProduct: 'פתח לעריכה',
+    allPlaced: 'כל המוצרים הוצבו',
+    products: 'מוצרים',
+  },
   appSubtitle: 'חישוב חיתוכים, דלתות ופרזולים',
   langToggle: 'English',
 
@@ -570,6 +613,27 @@ const en: Translations = {
       kitchen: 'Kitchen',
       'free-build': 'Free Build',
     },
+  },
+  room: {
+    title: 'Room View',
+    rooms: 'Rooms',
+    addRoom: '+ Add Room',
+    noRooms: 'No rooms yet.',
+    roomName: 'Room name',
+    width: 'Width (cm)',
+    depth: 'Depth (cm)',
+    height: 'Height (cm)',
+    placeProduct: '+ Place product in room',
+    selectProduct: 'Select product',
+    wall: 'Wall',
+    walls: { north: 'Back', south: 'Front', east: 'Right', west: 'Left' },
+    offsetFromCorner: 'Offset from corner (cm)',
+    rotation: 'Rotation (°)',
+    removeFromRoom: 'Remove from room',
+    unplacedProducts: 'Unplaced products',
+    openProduct: 'Open for editing',
+    allPlaced: 'All products placed',
+    products: 'Products',
   },
   appSubtitle: 'Cuts, doors & hardware calculator',
   langToggle: 'עברית',

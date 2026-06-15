@@ -4,7 +4,7 @@ import type { Project } from '../../types';
  *  the {@link Project} shape changes in an incompatible way, and add a
  *  corresponding migration to {@link migrations} that converts the previous
  *  version to the new one. */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /** Migration from version `n` to `n + 1`. Input is typed `unknown` because
  *  by definition it is in the OLD shape; each migration is responsible for
@@ -42,11 +42,24 @@ const migrateV1toV2: Migration = (data: unknown): unknown => {
   };
 };
 
+/** v2 → v3: adds the optional `rooms` array (floor-plan feature). Purely
+ *  additive — every existing field is preserved and an empty `rooms` list is
+ *  introduced so older projects open without a room. */
+const migrateV2toV3: Migration = (data: unknown): unknown => {
+  const d = data as Record<string, unknown>;
+  return {
+    ...d,
+    schemaVersion: 3,
+    rooms: Array.isArray(d.rooms) ? d.rooms : [],
+  };
+};
+
 /** Registry of upgrade migrations. Keyed by SOURCE version (the version of
  *  the data passed in). Add an entry here when bumping
  *  {@link CURRENT_SCHEMA_VERSION}. */
 export const migrations: Readonly<Record<number, Migration>> = {
   1: migrateV1toV2,
+  2: migrateV2toV3,
 };
 
 /** Upgrades `data` (with a numeric `schemaVersion` field) to
