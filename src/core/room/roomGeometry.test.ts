@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   snapToWall, placementRectTopView, placementAABB, clampCentreToRoom,
-  placementElevationRects, placementSubBoxAABBs, maxWallOffset, type RoomWall,
+  placementElevationRects, placementSubBoxAABBs, maxWallOffset, facesWall, type RoomWall,
 } from './roomGeometry';
 import type { ProductSubBox } from './productBounds';
 import type { ProductPlacement } from '../../types/project';
@@ -83,6 +83,26 @@ describe('maxWallOffset — furthest a wall-snapped product can slide', () => {
 
   it('never negative — a product wider than the wall yields 0', () => {
     expect(maxWallOffset(room, 'north', { width: 500 })).toBe(0); // 300 − 500 → 0
+  });
+});
+
+describe('facesWall — parallel to the wall = detail, perpendicular = silhouette', () => {
+  it('north/south: detail at 0/180, silhouette at 90/270', () => {
+    for (const w of ['north', 'south'] as const) {
+      expect(facesWall(0, w)).toBe(true);
+      expect(facesWall(180, w)).toBe(true);
+      expect(facesWall(90, w)).toBe(false);
+      expect(facesWall(270, w)).toBe(false);
+    }
+  });
+
+  it('east/west: detail at 90/270, silhouette at 0/180', () => {
+    for (const w of ['east', 'west'] as const) {
+      expect(facesWall(90, w)).toBe(true);
+      expect(facesWall(270, w)).toBe(true);
+      expect(facesWall(0, w)).toBe(false);
+      expect(facesWall(180, w)).toBe(false);
+    }
   });
 });
 

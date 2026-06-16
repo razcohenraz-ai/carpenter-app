@@ -4,22 +4,20 @@ import type { MaterialId, CustomMaterial } from '../../types/materials';
 import type { CutItem } from '../../types/cuts';
 import type { HardwareLineItem } from '../../types/hardware';
 import { calcDoors } from '../../core/doors/doorCalc';
-import { computeRowFrontLayout, computeFrontGeometry, getTotalFrontsInRow, groupBoxesByRow, frontColumnsForBox, type RowFrontLayout } from '../../core/geometry/frontGeometry';
-import { decomposeBoxes } from '../../core/geometry/boxDecomposition';
-import type { InteriorItem, InteriorById, CellInteriorById } from '../../types/interior';
-import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { computeRowFrontLayout, computeFrontGeometry } from '../../core/geometry/frontGeometry';
+import { computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
 import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import { groupKitchenUnitsForPlinth, buildKitchenPlinthCuts, plinthPieceWidths, buildKitchenPlinthBoxes } from '../../core/product/kitchenPlinth';
-import { boxStableKey } from '../../core/interior/interiorUtils';
+import { buildCabinetSketchModel } from '../../core/product/cabinetSketchModel';
 import { getShellSides } from '../../types/cabinet';
 import {
   effectiveUnitDims, isWallUnit, kitchenElevationLayout,
   BASE_REF_H_CM, COUNTERTOP_CM,
 } from '../../core/product/kitchenFootprint';
-import type { BoxLevel } from '../../types/geometry';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import { useTranslation } from '../../i18n/LanguageContext';
 import CabinetSketch from './CabinetSketch';
+import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
 import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
 import PlinthEditor from './PlinthEditor';
@@ -78,111 +76,13 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
   viewBoxW: number;  // cm — outerCabW (effW + envelopes)
   viewBoxH: number;  // cm — effH
 }): React.JSX.Element | null {
-  const inp = unit.cabinet.input;
-  // hasFronts=false means no door panel (dishwasher, oven). External-drawer
-  // fronts are still shown — so we only bail out when there are no drawers either.
-  const noFronts = (inp.hasFronts ?? true) === false;
-
-  // Extract external drawers early so the early-return can check them.
-  const slotKey = 'single:single';
-  const savedItems = unit.cabinet.state.interior[slotKey] ?? [];
-  const extDrawers = (savedItems as import('../../types/interior').InteriorItem[])
-    .filter((it): it is import('../../types/interior').DrawerItem =>
-      it.type === 'drawer' && it.mount === 'external')
-    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
-
-  // Appliance bays with no external drawers (dishwasher) → nothing to show.
-  if (noFronts && extDrawers.length === 0) return null;
-
-  const { W: effW, H: effH } = effectiveDims(unit);
-  const tFront = getEffectiveMaterial(inp.frontMaterialId).thickness / 10;
-  const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
-  const sides = getShellSides(inp);
-  const hasAnyShell = sides.left || sides.right;
-  const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
-                       inp.lowerDoorH, hasAnyShell, tFront, forceRows, inp.doorGapMm / 10);
-  // No computed door rows AND no external drawers → nothing to render.
-  if (dl.n === 0 && extDrawers.length === 0) return null;
-
-  const bodyH = effH - inp.plinth;
-  const gapCm = inp.doorGapMm / 10;
-  // Left offset of the first front (cm from cabinet outer left edge):
-  // = left-envelope width (if present). Inside-the-box layout is symmetric
-  // around the box, so fronts span the box width (= effW).
-  const leftEnvCm = sides.left ? tFront : 0;
-  // Front COLUMN count comes from the unit's OWN maxDoorWidth via the shared
-  // frontColumnsForBox helper — calcDoors uses the global APP_DEFAULTS
-  // maxDoorWidth (60) and would over-split a wide single-front unit. The helper
-  // also pins wall cabinets to a single front whatever their width (lift-up
-  // flap, not a hinged pair). `dl` is still used below for the door-ROW heights.
-  const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount, inp.singleFront);
-  const frontLayout = computeRowFrontLayout({
-    cabinetW: effW,
-    hasOuterShell: false,  // we handle envelopes ourselves via leftEnvCm
-    shellThicknessCm: 0,
-    totalFrontsInRow: numFronts,
-    gapCm,
-  });
-
-  const panels: React.ReactElement[] = [];
-
-  function pushFrontRow(key: string, heightCm: number, yFromBodyBottom: number) {
-    const panelY = bodyH - (yFromBodyBottom + heightCm);
-    const nFronts = numFronts;
-    for (let fi = 0; fi < nFronts; fi++) {
-      const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
-      panels.push(
-        <rect
-          key={`${key}-fi${fi}`}
-          x={leftEnvCm + frontLayout.cabinetLeftOffset + fp.x}
-          y={panelY}
-          width={Math.max(fp.width, 0)}
-          height={Math.max(heightCm, 0)}
-          fill="var(--color-fronts, #e8934a)"
-          stroke="var(--color-border, #ccc)"
-          strokeWidth={0.1}
-          opacity={0.9}
-        />
-      );
-    }
-  }
-
-  let totalDrawerH = 0;
-  extDrawers.forEach((d, di) => {
-    const gap = gapCm / 2;
-    pushFrontRow(`drw${di}`, d.drawerHeight - gap, d.heightFromFloor + gap / 2);
-    totalDrawerH = Math.max(totalDrawerH, d.heightFromFloor + d.drawerHeight);
-  });
-
-  const doorStartFromBodyBottom = dl.doorStart - inp.plinth;
-  const doorTopFromBodyBottom = doorStartFromBodyBottom + (dl.lowerH ?? 0);
-
-  // Door panels: only when hasFronts is not suppressed.
-  if (!noFronts && extDrawers.length === 0) {
-    const rows: { h: number; yFromBodyBottom: number }[] = [];
-    if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
-    if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
-    if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
-    rows.forEach((r, ri) => pushFrontRow(`door${ri}`, r.h, r.yFromBodyBottom));
-  } else if (!noFronts && totalDrawerH < doorTopFromBodyBottom - 3) {
-    const remainH = doorTopFromBodyBottom - totalDrawerH;
-    pushFrontRow('doorAbove', remainH, totalDrawerH);
-  }
-
   return (
-    <svg
-      viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
-      preserveAspectRatio="none"
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-      }}
-    >
-      {panels}
-    </svg>
+    <CabinetFrontsOverlay
+      input={unit.cabinet.input}
+      state={unit.cabinet.state}
+      viewBoxW={viewBoxW}
+      viewBoxH={viewBoxH}
+    />
   );
 }
 
@@ -862,86 +762,21 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
         )}
         {units.map((unit, i) => {
         const inp = unit.cabinet.input;
-        const { W: effW, H: effH } = effectiveDims(unit);
         const st = unit.cabinet.state;
         const isSelected = unit.id === selectedUnitId;
-
-        // Compute frontLayoutByRow + numFrontsPerBox so the embedded sketch
-        // can render fronts correctly (it skips fronts in bodies mode but
-        // needs these for external drawer geometry).
         const customMaterials = settings?.customMaterials ?? [];
-        const bodyMat = getMaterialWithCustom(inp.bodyMaterialId, customMaterials);
-        const frontMat = getMaterialWithCustom(inp.frontMaterialId, customMaterials);
-        const tBody = bodyMat.thickness / 10;
-        const tFront = frontMat.thickness / 10;
-        const sides = getShellSides(inp);
-        const hasAnyShell = sides.left || sides.right;
-        // Decompose at the INPUT dimensions, THEN apply per-body overrides —
-        // mirrors useCabinet/cabinetCompute and the body editor. Decomposing at
-        // effW/effH (post-override) would re-split a single body whose width was
-        // overridden past MAX_BOX_W (100) into two boxes — drawing a phantom
-        // centre divider the body editor never shows, and orphaning the
-        // 'single:single' override since neither half is 'single' anymore.
-        const innerW = computeInnerWidth(inp.W, sides, tFront);
-        const carcassD = computeCarcassDepth(inp.D, inp.backThickness, HINGE_GAP_CM, tFront);
-        const envelopeTopH = (inp.hasEnvelopeTop && hasAnyShell) ? tFront : 0;
-        const boxDimensionOverrides = new Map(Object.entries(st.boxDimensionOverrides ?? {}));
-        const rawBoxes = decomposeBoxes(innerW, inp.H, carcassD, inp.lowerDoorH, inp.plinth, inp.doorsPerColumn, inp.middleDoorH, envelopeTopH);
-        const boxes = boxDimensionOverrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
-          const o = boxDimensionOverrides.get(boxStableKey(box));
-          if (!o) return box;
-          return {
-            ...box,
-            ...(o.W !== undefined ? { W: o.W } : {}),
-            ...(o.H !== undefined ? { H: o.H } : {}),
-            ...(o.D !== undefined ? { D: o.D } : {}),
-          };
-        });
-        const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
-        const numFrontsPerBox = new Map<string, number>();
-        for (const box of bodyBoxes) {
-          numFrontsPerBox.set(box.id, frontColumnsForBox(box.W, inp.maxDoorWidth, inp.mount, inp.singleFront));
-        }
-        const cabinetGapCm = inp.doorGapMm / 10;
-        const rowsByLevel = groupBoxesByRow(bodyBoxes);
-        const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
-        for (const [level, rowBoxes] of rowsByLevel) {
-          const totalFronts = getTotalFrontsInRow(rowBoxes, numFrontsPerBox);
-          layoutByRow.set(level, computeRowFrontLayout({
-            cabinetW: effW,
-            hasOuterShell: hasAnyShell,
-            // Asymmetric shell support — mirrors useCabinet/cabinetCompute.
-            shellSides: sides,
-            shellThicknessCm: tFront,
-            totalFrontsInRow: totalFronts,
-            gapCm: cabinetGapCm,
-          }));
-        }
-        void tBody; // referenced for completeness; not used directly here
 
-        // Translate saved-state Records (keyed by BoxSlotId/boxStableKey) to
-        // runtime Maps keyed by the ad-hoc box.id that the current decomposeBoxes
-        // call produced. Without this, CabinetSketch can't find interior items
-        // / partitions for any body and renders an empty carcass.
-        const interiorById: InteriorById = {};
-        const cellInteriorById: CellInteriorById = {};
-        const partitionsById = new Map<string, boolean>();
-        for (const box of bodyBoxes) {
-          const slotKey = boxStableKey(box);
-          const items = st.interior[slotKey];
-          if (items) interiorById[box.id] = items as InteriorItem[];
-          const cells = st.cellInterior[slotKey];
-          if (cells) cellInteriorById[box.id] = cells as InteriorItem[][];
-          if (st.partitions[slotKey]) partitionsById.set(box.id, true);
-        }
-        const boardOverrides = new Map(Object.entries(st.boardOverrides ?? {}));
+        // Single source for the embedded-sketch props (interior maps, front
+        // layout, overrides, effective/outer dims) — shared with the room's
+        // detailed elevation. See core/product/cabinetSketchModel.
+        const {
+          interiorById, cellInteriorById, partitionsById,
+          frontLayoutByRow: layoutByRow, numFrontsPerBox, boardOverrides,
+          boxDimensionOverrides, effW, effH, outerCabW, tFront, sides, hasAnyShell,
+        } = buildCabinetSketchModel(inp, st, customMaterials);
 
-        // Render the unit at its REAL OUTER dimensions × shared `scale`.
-        // The cabinet outer width includes envelope panels (per side), so the
-        // wrapper div must match the SVG's effective cabinet width — otherwise
-        // the SVG's preserveAspectRatio compresses the height to fit a narrower
-        // container, making the unit look shorter than its neighbours.
-        const outerCabW = effW + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+        // The cabinet outer width includes envelope panels, so the wrapper div
+        // matches the SVG's effective cabinet width (preserveAspectRatio).
         const unitWpx = outerCabW * scale;
         const unitHpx = effH * scale;
 

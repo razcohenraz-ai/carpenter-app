@@ -108,6 +108,18 @@ export function maxWallOffset(
   return Math.max(0, span - bounds.width);
 }
 
+/** True when the product's front/back plane is PARALLEL to the viewed wall — so
+ *  its detailed front elevation can be drawn — and false when a side faces the
+ *  wall (perpendicular → draw a plain silhouette instead). north/south read the
+ *  X axis, so a product is parallel when un-turned (0°/180°); east/west read Z,
+ *  so parallel when quarter-turned (90°/270°). Cardinal rotations only; any
+ *  other angle reports "not parallel" (silhouette). */
+export function facesWall(rotationDeg: number, viewWall: RoomWall): boolean {
+  const r = ((Math.round(rotationDeg) % 360) + 360) % 360;
+  const parallelToXWalls = r === 0 || r === 180; // front runs along X
+  return viewWall === 'north' || viewWall === 'south' ? parallelToXWalls : !parallelToXWalls;
+}
+
 // ── Elevation projection (X-Y / Z-Y) ─────────────────────────────────────────
 
 /** One product sub-box projected onto a wall's elevation plane. `h` runs left

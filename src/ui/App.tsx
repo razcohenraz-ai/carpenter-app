@@ -184,6 +184,7 @@ export default function App(): React.JSX.Element {
             onUpdatePlacement={(productId, patch) => updatePlacement(activeRoom.id, productId, patch)}
             onRemovePlacement={productId => removePlacement(activeRoom.id, productId)}
             onOpenProduct={setActiveProduct}
+            customMaterials={settings?.customMaterials ?? []}
           />
         )}
 

@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### נוסף — תצוגת חדר: חזית מפורטת בלוחות + פנים + toggle גופים/חזיתות
+
+- **מבט-חזית בפירוט מלא**: מוצרים שחזיתם מקבילה לקיר הנצפה מוצגים כעת עם **כל הפירוט** — לוחות (דפנות/עליון/תחתון), מדפים, מגירות, מוטות תליה — בדיוק כמו בתצוגת הפריט. מוצרים שצדם פונה לקיר ממשיכים להיות מוצגים כצללית.
+- **toggle גופים / חזיתות**: בוחר בין תצוגת גוף+פנים לתצוגת פאנלי חזית (מלבנים בצבע חזית על גבי הגוף) — זמין רק במצב elevation.
+- **`ProductElevation`** (חדש, `src/ui/components/ProductElevation.tsx`): קומפוננטה שמקבלת `ProductUnit + mode + customMaterials + mirrored`, מרנדרת HTML-overlay: גוף בודד (ארון/ספריה/כוננית/free-build) = `CabinetSketch embedded`; מטבח = כל יחידה `CabinetSketch embedded` ממוקמת לפי `kitchenElevationLayout`. מצב fronts = `CabinetFrontsOverlay` על גבי כל גוף.
+- **`CabinetFrontsOverlay`** (חדש, `src/ui/components/CabinetFrontsOverlay.tsx`): מקור יחיד לאוברליי פאנלי חזית — חולץ מ-`UnitFrontPanelsStandalone` ב-KitchenOverview כך שגם `KitchenOverview` וגם `ProductElevation` צורכים אותה (ביטול שכפול). תקבל `CabinetInput + SavedCabinetState + customMaterials + viewBoxW/viewBoxH`.
+- **`buildCabinetSketchModel`** (חדש, `src/core/product/cabinetSketchModel.ts`): פונקציה טהורה שבונה את כל ה-props של `CabinetSketch` ממקור יחיד — `KitchenOverview.UnitsView` ו-`ProductElevation` צורכים אותה ומבטלים ~75 שורות שכפול.
+- **`facesWall`** (חדש, `src/core/room/roomGeometry.ts`): מחשבת האם חזית המוצר מקבילה לקיר הנצפה (→ פירוט) או הצד פונה (→ צללית).
+- Mirror ל-south/east: `ProductElevation` מקבל `mirrored` prop → `scaleX(-1)` CSS.
+- `customMaterials` נוסף כ-prop ל-`RoomView` ומועבר מ-`App.tsx` (מ-`settings.customMaterials`).
+
 ### תוקן — תצוגת חדר: אזור התצוגה לא קופץ במעבר מבט/קיר + פריסה צד-לצד
 
 - לכל מבט גודל SVG אחר (north/south=רוחב, west/east=עומק; top≠elevation), וב-`.body` שהוא flex זה הזיז את כל הפאנל. שלושת המבטים (top/elevation/3D) עטופים כעת ב**במה בגודל קבוע** (`MAX_W+PAD*2 × MAX_H+PAD*2`) וה-SVG/קנבס מתמרכז בתוכה — מיקום אזור התצוגה יציב במעבר בין מבטים וקירות. `.canvas3d` ממלא את הבמה.

@@ -1,12 +1,14 @@
 import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import type { Room, ProductUnit, ProductPlacement } from '../../types/project';
+import type { CustomMaterial } from '../../types/materials';
 import { useTranslation } from '../hooks/useTranslation';
 import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import {
   snapToWall, placementRectTopView, clampCentreToRoom, maxWallOffset,
-  placementElevationRects, type RoomWall,
+  placementElevationRects, facesWall, type RoomWall,
 } from '../../core/room/roomGeometry';
 import { BASE_REF_H_CM, WALL_BOTTOM_CM } from '../../core/product/kitchenFootprint';
+import { ProductElevation } from './ProductElevation';
 import styles from './RoomView.module.css';
 
 // 3D view pulls in three.js (~900 kB) — load it only when the tab is opened.
@@ -22,6 +24,8 @@ interface Props {
   onUpdatePlacement: (productId: string, patch: Partial<ProductPlacement>) => void;
   onRemovePlacement: (productId: string) => void;
   onOpenProduct: (productId: string) => void;
+  /** Needed to resolve custom-material thicknesses in the elevation detail view. */
+  customMaterials?: CustomMaterial[];
 }
 
 type ViewMode = 'top' | 'elevation' | '3d';
@@ -34,11 +38,13 @@ const MAX_H = 480;    // px — max drawable height  sits beside the controls, n
 export function RoomView({
   room, products, onUpdateDims, onRenameRoom,
   onPlaceProduct, onUpdatePlacement, onRemovePlacement, onOpenProduct,
+  customMaterials = [],
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('top');
   const [viewWall, setViewWall] = useState<RoomWall>('north');
+  const [elevDetail, setElevDetail] = useState<'bodies' | 'fronts'>('bodies');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickProductId, setPickProductId] = useState<string>('');
   const dragRef = useRef<{ productId: string } | null>(null);
@@ -178,6 +184,14 @@ export function RoomView({
   const hasKitchen = elevItems.some(it => it.product.productType === 'kitchen');
   const refLines = hasKitchen ? [BASE_REF_H_CM, WALL_BOTTOM_CM].filter(y => y < room.height) : [];
 
+  // Products whose front face is parallel to the viewed wall get full detail;
+  // side-facing products show a plain silhouette.
+  const facingIds = new Set(
+    elevItems
+      .filter(it => facesWall(it.pl.rotationDeg, viewWall))
+      .map(it => it.pl.productId)
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.body}>
@@ -223,6 +237,17 @@ export function RoomView({
                   className={`${styles.wallTab} ${viewWall === w ? styles.wallTabActive : ''}`}
                   onClick={() => setViewWall(w)}>{t.room.walls[w]}</button>
               ))}
+            </div>
+          )}
+
+          {viewMode === 'elevation' && (
+            <div className={styles.viewToggle}>
+              <button type="button"
+                className={`${styles.viewBtn} ${elevDetail === 'bodies' ? styles.viewBtnActive : ''}`}
+                onClick={() => setElevDetail('bodies')}>{t.doors.bodies}</button>
+              <button type="button"
+                className={`${styles.viewBtn} ${elevDetail === 'fronts' ? styles.viewBtnActive : ''}`}
+                onClick={() => setElevDetail('fronts')}>{t.doors.fronts}</button>
             </div>
           )}
 
@@ -359,46 +384,92 @@ export function RoomView({
           </svg>
         )}
         {viewMode === 'elevation' && (
-          <svg className={styles.plan} width={elevSvgW} height={elevSvgH}>
-            {/* Wall backdrop */}
-            <rect x={pxH(0)} y={pxY(room.height)} width={elevSpan * elevScale} height={room.height * elevScale}
-              className={styles.roomRect} onClick={() => setSelectedId(null)} />
-            {/* Reference guides (countertop / wall-mount heights) */}
-            {refLines.map(y => (
-              <line key={y} x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(y)} y2={pxY(y)} className={styles.refLine} />
-            ))}
-            {/* Floor line */}
-            <line x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(0)} y2={pxY(0)} className={styles.floorLine} />
-            {/* Dimension labels */}
-            <text x={pxH(elevSpan / 2)} y={elevSvgH - 6} className={styles.dimLabel}>{elevSpan}</text>
-            <text x={PAD - 8} y={pxY(room.height / 2)} className={styles.dimLabel} transform={`rotate(-90 ${PAD - 8} ${pxY(room.height / 2)})`}>{room.height}</text>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <svg className={styles.plan} width={elevSvgW} height={elevSvgH}>
+              {/* Wall backdrop */}
+              <rect x={pxH(0)} y={pxY(room.height)} width={elevSpan * elevScale} height={room.height * elevScale}
+                className={styles.roomRect} onClick={() => setSelectedId(null)} />
+              {/* Reference guides (countertop / wall-mount heights) */}
+              {refLines.map(y => (
+                <line key={y} x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(y)} y2={pxY(y)} className={styles.refLine} />
+              ))}
+              {/* Floor line */}
+              <line x1={pxH(0)} x2={pxH(elevSpan)} y1={pxY(0)} y2={pxY(0)} className={styles.floorLine} />
+              {/* Dimension labels */}
+              <text x={pxH(elevSpan / 2)} y={elevSvgH - 6} className={styles.dimLabel}>{elevSpan}</text>
+              <text x={PAD - 8} y={pxY(room.height / 2)} className={styles.dimLabel} transform={`rotate(-90 ${PAD - 8} ${pxY(room.height / 2)})`}>{room.height}</text>
 
-            {/* Product sub-boxes (depth-sorted, nearest on top) */}
-            {elevRects.map(({ r, productId }, i) => {
-              const isSel = productId === selectedId;
-              return (
-                <rect key={i}
-                  x={pxH(Math.min(r.h0, r.h1))} y={pxY(r.y1)}
-                  width={Math.abs(r.h1 - r.h0) * elevScale} height={(r.y1 - r.y0) * elevScale}
-                  className={`${styles.elevationRect} ${isSel ? styles.elevationSelected : ''}`}
-                  onClick={() => setSelectedId(productId)}
-                  onDoubleClick={() => onOpenProduct(productId)}
-                />
-              );
-            })}
+              {/* Non-facing product silhouettes (depth-sorted, nearest on top) */}
+              {elevRects
+                .filter(({ productId }) => !facingIds.has(productId))
+                .map(({ r, productId }, i) => {
+                  const isSel = productId === selectedId;
+                  return (
+                    <rect key={i}
+                      x={pxH(Math.min(r.h0, r.h1))} y={pxY(r.y1)}
+                      width={Math.abs(r.h1 - r.h0) * elevScale} height={(r.y1 - r.y0) * elevScale}
+                      className={`${styles.elevationRect} ${isSel ? styles.elevationSelected : ''}`}
+                      onClick={() => setSelectedId(productId)}
+                      onDoubleClick={() => onOpenProduct(productId)}
+                    />
+                  );
+                })}
 
-            {/* One label per product, at the centre of its silhouette */}
-            {elevItems.map(it => {
-              const hMin = Math.min(...it.rects.map(r => Math.min(r.h0, r.h1)));
-              const hMax = Math.max(...it.rects.map(r => Math.max(r.h0, r.h1)));
-              const yMin = Math.min(...it.rects.map(r => r.y0));
-              const yMax = Math.max(...it.rects.map(r => r.y1));
-              return (
-                <text key={it.pl.productId} x={pxH((hMin + hMax) / 2)} y={pxY((yMin + yMax) / 2)}
-                  className={styles.productLabel}>{it.product.name}</text>
-              );
-            })}
-          </svg>
+              {/* Labels for non-facing products only (facing products are covered by overlay) */}
+              {elevItems
+                .filter(it => !facingIds.has(it.pl.productId))
+                .map(it => {
+                  const hMin = Math.min(...it.rects.map(r => Math.min(r.h0, r.h1)));
+                  const hMax = Math.max(...it.rects.map(r => Math.max(r.h0, r.h1)));
+                  const yMin = Math.min(...it.rects.map(r => r.y0));
+                  const yMax = Math.max(...it.rects.map(r => r.y1));
+                  return (
+                    <text key={it.pl.productId} x={pxH((hMin + hMax) / 2)} y={pxY((yMin + yMax) / 2)}
+                      className={styles.productLabel}>{it.product.name}</text>
+                  );
+                })}
+            </svg>
+
+            {/* Full-detail overlay for facing products */}
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+              {elevItems
+                .filter(it => facingIds.has(it.pl.productId))
+                .map(it => {
+                  const hMin = Math.min(...it.rects.map(r => Math.min(r.h0, r.h1)));
+                  const hMax = Math.max(...it.rects.map(r => Math.max(r.h0, r.h1)));
+                  const yMin = Math.min(...it.rects.map(r => r.y0));
+                  const yMax = Math.max(...it.rects.map(r => r.y1));
+                  const isSel = it.pl.productId === selectedId;
+                  const mirrored = viewWall === 'south' || viewWall === 'east';
+                  return (
+                    <div
+                      key={it.pl.productId}
+                      style={{
+                        position: 'absolute',
+                        left: pxH(hMin),
+                        top: pxY(yMax),
+                        width: (hMax - hMin) * elevScale,
+                        height: (yMax - yMin) * elevScale,
+                        pointerEvents: 'all',
+                        cursor: 'pointer',
+                        outline: isSel ? '2px solid var(--color-primary, #1f5c8b)' : undefined,
+                        outlineOffset: '-1px',
+                        boxSizing: 'border-box',
+                      }}
+                      onClick={() => setSelectedId(it.pl.productId)}
+                      onDoubleClick={() => onOpenProduct(it.pl.productId)}
+                    >
+                      <ProductElevation
+                        product={it.product}
+                        mode={elevDetail}
+                        customMaterials={customMaterials}
+                        mirrored={mirrored}
+                      />
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         )}
         {viewMode === '3d' && (
           <Suspense fallback={<div className={styles.canvas3d} />}>
