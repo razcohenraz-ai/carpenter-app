@@ -36,6 +36,7 @@ export interface Translations {
     height: string;
     topView: string;
     elevation: string;
+    view3d: string;
     heightOffFloor: string;
     placeProduct: string;
     selectProduct: string;
@@ -346,6 +347,7 @@ const he: Translations = {
     height: 'גובה (ס"מ)',
     topView: 'מבט-על',
     elevation: 'חזית',
+    view3d: 'תלת-ממד',
     heightOffFloor: 'גובה מהרצפה (ס"מ)',
     placeProduct: '+ הצב מוצר בחדר',
     selectProduct: 'בחר מוצר',
@@ -635,6 +637,7 @@ const en: Translations = {
     height: 'Height (cm)',
     topView: 'Top view',
     elevation: 'Elevation',
+    view3d: '3D',
     heightOffFloor: 'Height off floor (cm)',
     placeProduct: '+ Place product in room',
     selectProduct: 'Select product',

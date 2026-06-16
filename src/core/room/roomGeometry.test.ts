@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   snapToWall, placementRectTopView, placementAABB, clampCentreToRoom,
-  placementElevationRects, type RoomWall,
+  placementElevationRects, placementSubBoxAABBs, maxWallOffset, type RoomWall,
 } from './roomGeometry';
 import type { ProductSubBox } from './productBounds';
 import type { ProductPlacement } from '../../types/project';
@@ -67,6 +67,22 @@ describe('placementAABB — footprint swaps on a quarter turn', () => {
     const turned = placementAABB({ productId: 'x', position: { x: 30, z: 100 }, rotationDeg: 90 }, bounds);
     expect(turned.x1 - turned.x0).toBeCloseTo(60, 5);
     expect(turned.z1 - turned.z0).toBeCloseTo(200, 5);
+  });
+});
+
+describe('maxWallOffset — furthest a wall-snapped product can slide', () => {
+  it('north/south span = room.width − product width', () => {
+    expect(maxWallOffset(room, 'north', bounds)).toBeCloseTo(100, 5); // 300 − 200
+    expect(maxWallOffset(room, 'south', bounds)).toBeCloseTo(100, 5);
+  });
+
+  it('east/west span = room.depth − product width', () => {
+    expect(maxWallOffset(room, 'west', bounds)).toBeCloseTo(200, 5); // 400 − 200
+    expect(maxWallOffset(room, 'east', bounds)).toBeCloseTo(200, 5);
+  });
+
+  it('never negative — a product wider than the wall yields 0', () => {
+    expect(maxWallOffset(room, 'north', { width: 500 })).toBe(0); // 300 − 500 → 0
   });
 });
 
@@ -143,5 +159,44 @@ describe('placementElevationRects — project a product onto a wall plane', () =
     const near: ProductPlacement = { productId: 'n', position: { x: 100, z: 300 }, rotationDeg: 0 };
     const far: ProductPlacement = { productId: 'f', position: { x: 100, z: 30 }, rotationDeg: 0 };
     expect(elev(far, fullBox, 'north').depth).toBeGreaterThan(elev(near, fullBox, 'north').depth);
+  });
+});
+
+describe('placementSubBoxAABBs — local sub-box → room coordinates (3D source)', () => {
+  const fullBox: ProductSubBox[] = [{ x0: 0, x1: 200, y0: 0, y1: 90, z0: 0, z1: 60 }];
+  const aabb = (pl: ProductPlacement, boxes: ProductSubBox[]) =>
+    placementSubBoxAABBs(pl, boxes, bounds)[0]!;
+
+  it('north (rot 0): box spans its footprint in room X/Z, on the floor', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'north', 0) };
+    const a = aabb(pl, fullBox);
+    expect(a).toMatchObject({ x0: 0, x1: 200, z0: 0, z1: 60, y0: 0, y1: 90 });
+  });
+
+  it('west (rot 90): depth runs along X, width along Z, back flush at x=0', () => {
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'west', 50) };
+    const a = aabb(pl, fullBox);
+    expect(a.x0).toBeCloseTo(0, 5);
+    expect(a.x1).toBeCloseTo(60, 5);    // depth along X
+    expect(a.z0).toBeCloseTo(50, 5);    // offset from back
+    expect(a.z1).toBeCloseTo(250, 5);   // + width 200
+  });
+
+  it('position.y lifts the box off the floor', () => {
+    const pl: ProductPlacement = { productId: 'x', position: { x: 100, z: 30, y: 50 }, rotationDeg: 0 };
+    const a = aabb(pl, fullBox);
+    expect(a.y0).toBeCloseTo(50, 5);
+    expect(a.y1).toBeCloseTo(140, 5);
+  });
+
+  it('agrees with the elevation projection (north: AABB x → elevation h)', () => {
+    // The elevation must be a pure projection of these AABBs — same source.
+    const pl = { productId: 'x', ...snapToWall(room, bounds, 'north', 30) };
+    const a = placementSubBoxAABBs(pl, fullBox, bounds)[0]!;
+    const e = placementElevationRects(pl, fullBox, bounds, 'north', room)[0]!;
+    expect(e.h0).toBeCloseTo(a.x0, 5);
+    expect(e.h1).toBeCloseTo(a.x1, 5);
+    expect(e.y0).toBeCloseTo(a.y0, 5);
+    expect(e.y1).toBeCloseTo(a.y1, 5);
   });
 });

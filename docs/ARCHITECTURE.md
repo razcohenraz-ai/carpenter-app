@@ -58,7 +58,7 @@ src/
 │   │   └── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint/kitchenElevationLayout (חולץ מ-KitchenOverview)
 │   ├── room/                     תצוגת חדר (floor plan) — core טהור
 │   │   ├── productBounds.ts      productBounds → bounding box W×H×D · productSubBoxes → תיבות מקומיות 3D (לחזית + 3D)
-│   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom / placementElevationRects (היטל חזית)
+│   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom · placementSubBoxAABBs → RoomAABB[] (מקור: top/elevation/3D) · placementElevationRects (היטל חזית)
 │   ├── pricing/
 │   │   └── laborCalc.ts          אומדן עבודה (לא מחובר ל-UI)
 │   ├── project/
@@ -93,7 +93,8 @@ src/
     └── components/
         ├── App.tsx               ניווט: project → (product | room) → kitchen unit
         ├── ProjectView.tsx       אזור חדרים + אזור products (הוספה/מחיקה/פתיחה)
-        ├── RoomView.tsx          floor plan: toggle מבט-על/חזית · מבט-על (snap מספרי + גרירה) · חזית (בחירת קיר + sub-boxes + גובה-מהרצפה)
+        ├── RoomView.tsx          floor plan: toggle מבט-על/חזית/3D · מבט-על (snap מספרי + גרירה) · חזית (בחירת קיר + sub-boxes + גובה-מהרצפה)
+        ├── RoomView3D.tsx        מבט תלת-ממד (react-three-fiber, lazy) · תיבה לכל sub-box מ-placementSubBoxAABBs · OrbitControls
         ├── AddProductDialog.tsx  בחירת סוג מוצר (wardrobe / bookcase / sideboard / kitchen / free-build)
         ├── KitchenEditor.tsx     ניהול kitchen units (הוסף/הסר/סדר)
         ├── KitchenOverview.tsx   תצוגה מאוחדת של units עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); UnitsView + UnitFrontPanelsStandalone overlay

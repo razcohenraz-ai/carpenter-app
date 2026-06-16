@@ -6,6 +6,8 @@ import { CURRENT_SCHEMA_VERSION } from '../../core/project/migrations';
 import { defaultInputForType, emptyCabinetState } from '../../core/product/productDefaults';
 import { kitchenModuleInput, kitchenModuleState, type KitchenModuleType } from '../../core/product/kitchenModules';
 import type { KitchenUnit } from '../../types/project';
+import { productBounds } from '../../core/room/productBounds';
+import { clampCentreToRoom, snapToWall, maxWallOffset } from '../../core/room/roomGeometry';
 
 const STORAGE_KEY = 'carpenter-project-v2';
 
@@ -209,10 +211,39 @@ export function useProject(): UseProjectReturn {
   }, []);
 
   const updateRoomDims = useCallback((id: string, dims: { width?: number; depth?: number; height?: number }) => {
-    setProject(prev => ({
-      ...prev,
-      rooms: (prev.rooms ?? []).map(r => r.id === id ? { ...r, ...dims } : r),
-    }));
+    setProject(prev => {
+      const rooms = (prev.rooms ?? []).map(r => {
+        if (r.id !== id) return r;
+        const newRoom = { ...r, ...dims };
+        const placements = r.placements.map(pl => {
+          const product = prev.products.find(p => p.id === pl.productId);
+          if (!product) return pl;
+          const bounds = productBounds(product);
+          let newPl: ProductPlacement;
+          if (pl.anchorWall) {
+            // Re-snap to the wall in the resized room, clamping the offset so the
+            // product doesn't slide past the end of the wall.
+            const offset = Math.min(pl.anchorOffset ?? 0, maxWallOffset(newRoom, pl.anchorWall, bounds));
+            const snap = snapToWall(newRoom, bounds, pl.anchorWall, offset);
+            const y = pl.position.y;
+            newPl = { ...pl, ...snap, position: y !== undefined ? { ...snap.position, y } : snap.position };
+          } else {
+            const clamped = clampCentreToRoom(newRoom, bounds, pl.rotationDeg, pl.position);
+            newPl = { ...pl, position: { ...pl.position, ...clamped } };
+          }
+          // Clamp height off floor when ceiling lowers.
+          if (newPl.position.y !== undefined) {
+            const maxY = Math.max(0, newRoom.height - bounds.height);
+            if (newPl.position.y > maxY) {
+              newPl = { ...newPl, position: { ...newPl.position, y: maxY } };
+            }
+          }
+          return newPl;
+        });
+        return { ...newRoom, placements };
+      });
+      return { ...prev, rooms };
+    });
   }, []);
 
   const placeProduct = useCallback((roomId: string, placement: ProductPlacement) => {

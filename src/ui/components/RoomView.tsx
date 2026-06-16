@@ -1,13 +1,16 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import type { Room, ProductUnit, ProductPlacement } from '../../types/project';
 import { useTranslation } from '../hooks/useTranslation';
 import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import {
-  snapToWall, placementRectTopView, clampCentreToRoom,
+  snapToWall, placementRectTopView, clampCentreToRoom, maxWallOffset,
   placementElevationRects, type RoomWall,
 } from '../../core/room/roomGeometry';
 import { BASE_REF_H_CM, WALL_BOTTOM_CM } from '../../core/product/kitchenFootprint';
 import styles from './RoomView.module.css';
+
+// 3D view pulls in three.js (~900 kB) — load it only when the tab is opened.
+const RoomView3D = lazy(() => import('./RoomView3D').then(m => ({ default: m.RoomView3D })));
 
 interface Props {
   room: Room;
@@ -21,7 +24,7 @@ interface Props {
   onOpenProduct: (productId: string) => void;
 }
 
-type ViewMode = 'top' | 'elevation';
+type ViewMode = 'top' | 'elevation' | '3d';
 
 const WALLS: RoomWall[] = ['north', 'south', 'east', 'west'];
 const PAD = 28;       // px margin around the drawing
@@ -61,6 +64,19 @@ export function RoomView({
     return null;
   }
 
+  function placedFitWarning(placement: ProductPlacement, product: ProductUnit): string | null {
+    const b = productBounds(product);
+    const turned = placement.rotationDeg === 90 || placement.rotationDeg === 270;
+    const effW = turned ? b.depth : b.width;
+    const effD = turned ? b.width : b.depth;
+    if (effW > room.width || effD > room.depth) {
+      return t.room.productDoesNotFit(b.width, b.depth, room.width, room.depth);
+    }
+    const y = placement.position.y ?? 0;
+    if (y + b.height > room.height) return t.room.productTooTall(b.height, room.height);
+    return null;
+  }
+
   const productById = new Map(products.map(p => [p.id, p]));
   const placedIds = new Set(room.placements.map(p => p.productId));
   const unplaced = products.filter(p => !placedIds.has(p.id));
@@ -84,7 +100,9 @@ export function RoomView({
     const product = productById.get(pickProductId);
     if (!product) return;
     const bounds = productBounds(product);
-    const snap = snapToWall(room, bounds, 'north', 0);
+    const canFit0 = bounds.width <= room.width && bounds.depth <= room.depth;
+    const wall: RoomWall = canFit0 ? 'north' : 'west';
+    const snap = snapToWall(room, bounds, wall, 0);
     onPlaceProduct({ productId: product.id, ...snap });
     setSelectedId(product.id);
     setPickProductId('');
@@ -94,7 +112,11 @@ export function RoomView({
     const product = productById.get(productId);
     const placement = room.placements.find(p => p.productId === productId);
     if (!product) return;
-    const snap = snapToWall(room, productBounds(product), wall, offset);
+    const bounds = productBounds(product);
+    // Clamp the offset so the product slides up to — but not past — the wall's
+    // far corner (the wall analogue of the height-off-floor clamp).
+    const clampedOffset = Math.min(Math.max(0, offset), maxWallOffset(room, wall, bounds));
+    const snap = snapToWall(room, bounds, wall, clampedOffset);
     // Preserve height-off-floor (y) across wall/offset changes.
     const y = placement?.position.y;
     onUpdatePlacement(productId, {
@@ -189,6 +211,9 @@ export function RoomView({
             <button type="button"
               className={`${styles.viewBtn} ${viewMode === 'elevation' ? styles.viewBtnActive : ''}`}
               onClick={() => setViewMode('elevation')}>{t.room.elevation}</button>
+            <button type="button"
+              className={`${styles.viewBtn} ${viewMode === '3d' ? styles.viewBtnActive : ''}`}
+              onClick={() => setViewMode('3d')}>{t.room.view3d}</button>
           </div>
 
           {viewMode === 'elevation' && (
@@ -277,6 +302,10 @@ export function RoomView({
                   {[0, 90, 180, 270].map(d => <option key={d} value={d}>{d}°</option>)}
                 </select>
               </label>
+              {(() => {
+                const w = placedFitWarning(selected, selectedProduct);
+                return w ? <p className={styles.placeWarning}>{w}</p> : null;
+              })()}
               <div className={styles.selectedActions}>
                 <button type="button" onClick={() => onOpenProduct(selected.productId)}>{t.room.openProduct}</button>
                 <button type="button" className={styles.removeBtn} onClick={() => { onRemovePlacement(selected.productId); setSelectedId(null); }}>
@@ -288,7 +317,7 @@ export function RoomView({
         </div>
 
         {/* ── Right: the drawing ── */}
-        {viewMode === 'top' ? (
+        {viewMode === 'top' && (
           <svg
             ref={svgRef}
             className={styles.plan}
@@ -326,7 +355,8 @@ export function RoomView({
               );
             })}
           </svg>
-        ) : (
+        )}
+        {viewMode === 'elevation' && (
           <svg className={styles.plan} width={elevSvgW} height={elevSvgH}>
             {/* Wall backdrop */}
             <rect x={pxH(0)} y={pxY(room.height)} width={elevSpan * elevScale} height={room.height * elevScale}
@@ -367,6 +397,17 @@ export function RoomView({
               );
             })}
           </svg>
+        )}
+        {viewMode === '3d' && (
+          <Suspense fallback={<div className={styles.canvas3d} />}>
+            <RoomView3D
+              room={room}
+              products={products}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onOpenProduct={onOpenProduct}
+            />
+          </Suspense>
         )}
       </div>
     </div>

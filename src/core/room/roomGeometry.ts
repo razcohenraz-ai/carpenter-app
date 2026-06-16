@@ -93,6 +93,21 @@ export function clampCentreToRoom(
   };
 }
 
+/** Largest wall-offset that still keeps a wall-snapped product fully inside the
+ *  room: the wall's span minus the product's along-wall width (never negative).
+ *  In every {@link snapToWall} case the product's WIDTH runs along the wall, so
+ *  the span is room.width for north/south and room.depth for east/west. Callers
+ *  clamp a requested offset to [0, this] — the wall analogue of the height-off-
+ *  floor clamp. An oversized product (wider than the wall) yields 0. */
+export function maxWallOffset(
+  room: Pick<Room, 'width' | 'depth'>,
+  wall: RoomWall,
+  bounds: Pick<ProductBounds, 'width'>,
+): number {
+  const span = wall === 'north' || wall === 'south' ? room.width : room.depth;
+  return Math.max(0, span - bounds.width);
+}
+
 // ── Elevation projection (X-Y / Z-Y) ─────────────────────────────────────────
 
 /** One product sub-box projected onto a wall's elevation plane. `h` runs left
@@ -105,18 +120,28 @@ export interface ElevationRect {
   depth: number;
 }
 
+/** A product sub-box expressed in room coordinates (cm): X along the back wall,
+ *  Y up from the floor, Z front-to-back. A 3D renderer places a box mesh centred
+ *  at ((x0+x1)/2, (y0+y1)/2, (z0+z1)/2) sized (x1−x0, y1−y0, z1−z0); the
+ *  elevation projects it onto a wall plane. Single source for both views. */
+export interface RoomAABB {
+  x0: number; x1: number;
+  y0: number; y1: number;
+  z0: number; z1: number;
+}
+
 /** Room-space AABB of a product's LOCAL sub-box, after centring the product's
  *  footprint at `placement.position` and rotating it about the vertical Y axis.
  *  Cardinal rotations (0/90/180/270 — the only ones the UI offers) keep the box
  *  axis-aligned; any other angle falls back to 0°. The rotation direction
  *  matches the top view's SVG `rotate(rotationDeg)`, so both views agree. This
  *  generalises {@link placementAABB} (which is the full-footprint special case)
- *  and is the same local→room transform the future 3D will reuse. */
+ *  and is the same local→room transform the 3D view reuses. */
 function subBoxRoomAABB(
   box: ProductSubBox,
   placement: ProductPlacement,
   bounds: Pick<ProductBounds, 'width' | 'depth'>,
-): { x0: number; x1: number; z0: number; z1: number; y0: number; y1: number } {
+): RoomAABB {
   const { width: W, depth: D } = bounds;
   const rx = (box.x0 + box.x1) / 2 - W / 2;   // local centre, relative to footprint centre
   const rz = (box.z0 + box.z1) / 2 - D / 2;
@@ -134,6 +159,17 @@ function subBoxRoomAABB(
   return { x0: px - ex, x1: px + ex, z0: pz - ez, z1: pz + ez, y0: y + box.y0, y1: y + box.y1 };
 }
 
+/** Every sub-box of a placed product, transformed into room coordinates (cm).
+ *  The 3D view renders these as box meshes directly; the elevation projects
+ *  them. The single local→room transform lives here, so all views agree. */
+export function placementSubBoxAABBs(
+  placement: ProductPlacement,
+  subBoxes: ProductSubBox[],
+  bounds: Pick<ProductBounds, 'width' | 'depth'>,
+): RoomAABB[] {
+  return subBoxes.map(box => subBoxRoomAABB(box, placement, bounds));
+}
+
 /** Projects every sub-box of a placed product onto the chosen wall's elevation.
  *  `viewWall` names the wall the elevation depicts (architectural convention):
  *    north (back z=0)  → horizontal = X;            span = room.width
@@ -149,8 +185,7 @@ export function placementElevationRects(
   viewWall: RoomWall,
   room: Pick<Room, 'width' | 'depth'>,
 ): ElevationRect[] {
-  return subBoxes.map(box => {
-    const a = subBoxRoomAABB(box, placement, bounds);
+  return placementSubBoxAABBs(placement, subBoxes, bounds).map(a => {
     const xc = (a.x0 + a.x1) / 2;
     const zc = (a.z0 + a.z1) / 2;
     switch (viewWall) {
