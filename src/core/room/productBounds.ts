@@ -42,8 +42,13 @@ export function productBounds(product: ProductUnit): ProductBounds {
  *  extruded across its own depth); anything else is one full-size box. */
 export function productSubBoxes(product: ProductUnit): ProductSubBox[] {
   if (product.productType === 'kitchen') {
-    return kitchenElevationLayout(product.kitchenUnits ?? []).map(b => ({
-      x0: b.xCm, x1: b.xCm + b.w,
+    const layout = kitchenElevationLayout(product.kitchenUnits ?? []);
+    const totalW = Math.max(1, ...layout.map(b => b.xCm + b.w));
+    // Mirror the unit order to match the kitchen product view (RTL — unit 1 on
+    // the right), so the room's top/elevation/3D read the same handedness as
+    // KitchenOverview instead of a left-right flip.
+    return layout.map(b => ({
+      x0: totalW - (b.xCm + b.w), x1: totalW - b.xCm,
       y0: b.yBottomCm, y1: b.yBottomCm + b.h,
       z0: 0, z1: b.depth,
     }));

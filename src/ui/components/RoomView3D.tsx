@@ -3,13 +3,27 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html } from '@react-three/drei';
 import { DoubleSide } from 'three';
 import type { Room, ProductUnit } from '../../types/project';
+import type { CustomMaterial } from '../../types/materials';
 import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import { placementSubBoxAABBs } from '../../core/room/roomGeometry';
+import { productBoardBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
 import styles from './RoomView.module.css';
 
-/** Distinct fill colours cycled per placed product (selected overrides). */
+/** Distinct fill colours cycled per placed product (used by the fallback
+ *  simple-box render; the detailed render colours by board role). */
 const PALETTE = ['#6b8cae', '#b08968', '#7a9e7e', '#a87ca0', '#c0a062', '#8a8a8a'];
 const SELECTED_COLOR = '#e07a3c';
+
+/** Wood-tone palette by board role family — reads as carpentry in the 3D view. */
+function colorForRole(role: BoardBox3D['role']): string {
+  if (role === 'rod') return '#9aa0a6';        // brushed metal
+  if (role === 'drawer-box') return '#b59f82'; // greyer tray
+  if (role === 'back') return '#9c7f55';
+  if (role === 'shelf' || role === 'fixed-shelf' || role === 'internal-shelf') return '#d8bb8a';
+  if (role.startsWith('envelope')) return '#b89668';
+  if (role.startsWith('plinth')) return '#8a6f4a';
+  return '#c8a877'; // sides / top / bottom / partition / traverses
+}
 
 interface Props {
   room: Room;
@@ -17,6 +31,7 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onOpenProduct: (id: string) => void;
+  customMaterials?: CustomMaterial[];
 }
 
 /** Rough 3D view of the room: floor + back/left walls for spatial reference,
@@ -24,7 +39,7 @@ interface Props {
  *  the elevation projects, so the three views render one model — this is the
  *  validation pass that exercises depth and height together (which the flat
  *  views structurally cannot). Click selects; double-click opens the product. */
-export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct }: Props): React.JSX.Element {
+export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct, customMaterials = [] }: Props): React.JSX.Element {
   const productById = new Map(products.map(p => [p.id, p]));
   const { width: W, height: H, depth: D } = room;
   const center: [number, number, number] = [W / 2, H / 2, D / 2];
@@ -56,33 +71,69 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           <meshStandardMaterial color="#d6d2ca" transparent opacity={0.4} side={DoubleSide} />
         </mesh>
 
-        {/* Products — one box mesh per sub-box (base units, wall cabinets, …) */}
+        {/* Products — every carcass board as its own thin mesh (sides, top,
+            bottom, shelves, partition, back, envelope, plinth). Falls back to
+            one box per sub-box when no board model is available. Both paths use
+            the SAME placementSubBoxAABBs transform, so they agree with the
+            top/elevation views. */}
         {room.placements.map((pl, pi) => {
           const product = productById.get(pl.productId);
           if (!product) return null;
-          const boxes = placementSubBoxAABBs(pl, productSubBoxes(product), productBounds(product));
-          if (boxes.length === 0) return null;
+          const bounds = productBounds(product);
           const isSel = pl.productId === selectedId;
-          const color = isSel ? SELECTED_COLOR : PALETTE[pi % PALETTE.length]!;
-          const labelX = (Math.min(...boxes.map(b => b.x0)) + Math.max(...boxes.map(b => b.x1))) / 2;
-          const labelZ = (Math.min(...boxes.map(b => b.z0)) + Math.max(...boxes.map(b => b.z1))) / 2;
-          const labelTop = Math.max(...boxes.map(b => b.y1));
+
+          const boards = productBoardBoxes(product, customMaterials);
+          const detailed = boards.length > 0;
+          const local = detailed ? boards : productSubBoxes(product);
+          const aabbs = placementSubBoxAABBs(pl, local, bounds);
+          if (aabbs.length === 0) return null;
+
+          const labelX = (Math.min(...aabbs.map(b => b.x0)) + Math.max(...aabbs.map(b => b.x1))) / 2;
+          const labelZ = (Math.min(...aabbs.map(b => b.z0)) + Math.max(...aabbs.map(b => b.z1))) / 2;
+          const labelTop = Math.max(...aabbs.map(b => b.y1));
+          const fallbackColor = isSel ? SELECTED_COLOR : PALETTE[pi % PALETTE.length]!;
+
           return (
             <group key={pl.productId}>
-              {boxes.map((b, i) => (
-                <mesh key={i}
-                  position={[(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2]}
-                  onClick={e => { e.stopPropagation(); onSelect(pl.productId); }}
-                  onDoubleClick={e => { e.stopPropagation(); onOpenProduct(pl.productId); }}
-                >
-                  <boxGeometry args={[
-                    Math.max(b.x1 - b.x0, 0.1),
-                    Math.max(b.y1 - b.y0, 0.1),
-                    Math.max(b.z1 - b.z0, 0.1),
-                  ]} />
-                  <meshStandardMaterial color={color} transparent opacity={isSel ? 0.95 : 0.85} />
-                </mesh>
-              ))}
+              {aabbs.map((b, i) => {
+                const role = detailed ? boards[i]!.role : undefined;
+                const color = isSel
+                  ? SELECTED_COLOR
+                  : role ? colorForRole(role) : fallbackColor;
+                const center: [number, number, number] = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2];
+                const onClick = (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect(pl.productId); };
+                const onDoubleClick = (e: { stopPropagation: () => void }) => { e.stopPropagation(); onOpenProduct(pl.productId); };
+
+                // Hanging rod → a round bar along its longer horizontal axis.
+                if (role === 'rod') {
+                  const dx = b.x1 - b.x0;
+                  const dz = b.z1 - b.z0;
+                  const alongX = dx >= dz;
+                  const length = Math.max(alongX ? dx : dz, 0.1);
+                  const radius = Math.max(Math.min(b.y1 - b.y0, alongX ? dz : dx) / 2, 0.4);
+                  const rotation: [number, number, number] = alongX ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0];
+                  return (
+                    <mesh key={i} position={center} rotation={rotation} onClick={onClick} onDoubleClick={onDoubleClick}>
+                      <cylinderGeometry args={[radius, radius, length, 12]} />
+                      <meshStandardMaterial color={isSel ? SELECTED_COLOR : '#9aa0a6'} metalness={0.6} roughness={0.4} />
+                    </mesh>
+                  );
+                }
+
+                return (
+                  <mesh key={i} position={center} onClick={onClick} onDoubleClick={onDoubleClick}>
+                    <boxGeometry args={[
+                      Math.max(b.x1 - b.x0, 0.1),
+                      Math.max(b.y1 - b.y0, 0.1),
+                      Math.max(b.z1 - b.z0, 0.1),
+                    ]} />
+                    <meshStandardMaterial
+                      color={color}
+                      {...(detailed ? {} : { transparent: true, opacity: isSel ? 0.95 : 0.85 })}
+                    />
+                  </mesh>
+                );
+              })}
               <Html position={[labelX, labelTop + 5, labelZ]} center style={{ pointerEvents: 'none' }}>
                 <div className={styles.label3d}>{product.name}</div>
               </Html>

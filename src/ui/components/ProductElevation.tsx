@@ -113,7 +113,10 @@ function KitchenElevation({
             key={unit.id}
             style={{
               position: 'absolute',
-              left: `${(box.xCm / totalW) * 100}%`,
+              // Mirror the unit order (RTL — unit 1 on the right) to match
+              // KitchenOverview and the room top/3D; the unit's own sketch
+              // stays left-to-right.
+              left: `${((totalW - box.xCm - box.w) / totalW) * 100}%`,
               bottom: `${(box.yBottomCm / totalH) * 100}%`,
               width: `${(box.w / totalW) * 100}%`,
               height: `${(box.h / totalH) * 100}%`,

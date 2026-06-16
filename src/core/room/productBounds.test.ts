@@ -55,11 +55,14 @@ describe('productSubBoxes', () => {
     expect(productSubBoxes(wardrobe)).toEqual([{ x0: 0, x1: 100, y0: 0, y1: 220, z0: 0, z1: 60 }]);
   });
 
-  it('base-only kitchen → one floor box per base unit at its real height', () => {
+  it('base-only kitchen → one floor box per base unit, mirrored to the RTL product order', () => {
+    // Unit order mirrors the kitchen product view (unit 1 on the right): the
+    // first unit (60) sits at the right end (x 80..140), the second (80) at the
+    // left (x 0..80).
     const boxes = productSubBoxes(mkKitchen([mkKitchenUnit('drawers', 60), mkKitchenUnit('drawers', 80)]));
     expect(boxes).toHaveLength(2);
-    expect(boxes[0]).toMatchObject({ x0: 0, x1: 60, y0: 0, y1: 90, z0: 0, z1: 60 });
-    expect(boxes[1]).toMatchObject({ x0: 60, x1: 140, y0: 0, y1: 90 });
+    expect(boxes[0]).toMatchObject({ x0: 80, x1: 140, y0: 0, y1: 90, z0: 0, z1: 60 });
+    expect(boxes[1]).toMatchObject({ x0: 0, x1: 80, y0: 0, y1: 90 });
   });
 
   it('kitchen with a wall cabinet → floor box + floating wall box with a real open gap', () => {

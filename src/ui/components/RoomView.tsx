@@ -479,6 +479,7 @@ export function RoomView({
               selectedId={selectedId}
               onSelect={setSelectedId}
               onOpenProduct={onOpenProduct}
+              customMaterials={customMaterials}
             />
           </Suspense>
         )}
