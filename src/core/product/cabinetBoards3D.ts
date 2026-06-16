@@ -14,6 +14,7 @@ import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
 import { kitchenElevationLayout } from './kitchenFootprint';
+import { cabinetFrontPanels } from './cabinetFronts';
 
 /** One board of a product, expressed as a thin axis-aligned box in the
  *  product's LOCAL frame (cm) — the same frame as {@link ProductSubBox}
@@ -22,9 +23,10 @@ import { kitchenElevationLayout } from './kitchenFootprint';
  *  3D renderer can colour it. Because it extends `ProductSubBox`, the existing
  *  `placementSubBoxAABBs` transform maps it into room space unchanged — a board
  *  is just a very thin sub-box. */
-/** Tag for the non-board interior fixtures the 3D view also draws. A drawer is
- *  rendered as its inner tray box; a rod as a slender horizontal bar. */
-export type FixtureRole = 'drawer-box' | 'rod';
+/** Tag for the non-board pieces the 3D view also draws. A drawer is rendered as
+ *  its inner tray box; a rod as a slender horizontal bar; a front as a flat
+ *  door / drawer-front panel at the cabinet face (fronts view). */
+export type FixtureRole = 'drawer-box' | 'rod' | 'front';
 
 export interface BoardBox3D extends ProductSubBox {
   role: BoardRole | FixtureRole;
@@ -187,6 +189,10 @@ export function cabinetBoardBoxes(
     });
 
     for (const board of boards) {
+      // Envelope (outer shell) panels are emitted once at cabinet level below,
+      // spanning the FULL cabinet height — a per-body envelope board only spans
+      // one body's height, which left the top cap proud of the side panels.
+      if (board.role.startsWith('envelope')) continue;
       const { z0, z1 } = boardDepthRange(board, box, backT, fullD);
       out.push({
         x0: xLeft + board.xFrom,
@@ -261,27 +267,53 @@ export function cabinetBoardBoxes(
     }
   }
 
-  // ── Plinth — front / back / gable-A as standing panels at the base ──────────
+  // ── Outer shell envelope — emitted at cabinet level so the side panels run
+  //    the FULL cabinet height and the top cap sits flush between them (matching
+  //    the cut list / 2D sketch). The body was decomposed with envelopeTopH, so
+  //    the carcass top already sits a cap-thickness below the cabinet top. ──────
+  if (hasAnyShell) {
+    const outerW = innerW + leftEnv + (sides.right ? tF : 0);
+    const frontMatId = frontMat.id;
+    if (sides.left) {
+      out.push({ x0: 0, x1: tF, y0: 0, y1: input.H, z0: 0, z1: fullD, role: 'envelope-left', materialId: frontMatId });
+    }
+    if (sides.right) {
+      out.push({ x0: outerW - tF, x1: outerW, y0: 0, y1: input.H, z0: 0, z1: fullD, role: 'envelope-right', materialId: frontMatId });
+    }
+    if (input.hasEnvelopeTop) {
+      out.push({ x0: leftEnv, x1: leftEnv + innerW, y0: input.H - tF, y1: input.H, z0: 0, z1: fullD, role: 'envelope-top', materialId: frontMatId });
+    }
+  }
+
+  // ── Plinth — kick-board base under the carcass (recess-aware) ───────────────
   if (plinth > 0) {
     const outerCabW = bodyBoxes
       .filter(b => b.level === 'bottom' || b.level === 'single')
       .reduce((s, b) => s + b.W, 0) + leftEnv + (sides.right ? tF : 0);
     const bottomRow = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    const gableOverrides = new Map(Object.entries(state.plinthGableOverrides ?? {}));
     const plinthBoards = buildPlinthBoardModel({
       cabinetW: outerCabW || input.W,
-      cabinetD: fullD,
+      cabinetD: carcassD,
       plinthHeight: plinth,
       bodyMaterial: bodyMat,
+      frontMaterial: frontMat,
       boxes: bottomRow,
+      ...(gableOverrides.size > 0 ? { gableOverrides } : {}),
+      ...(input.plinthRecess > 0 ? { recessCm: input.plinthRecess } : {}),
     });
     const panelH = Math.max(0, plinth - LEVELER_GAP_CM);
     for (const board of plinthBoards) {
       if (board.role === 'plinth-gable-b') continue; // flat cap — skip in this pass
       out.push({
-        // Plinth boards use TOP-VIEW coords: xFrom/xTo = X, yFrom/yTo = DEPTH.
+        // Plinth boards are TOP-VIEW (xFrom/xTo = X, yFrom/yTo = DEPTH with
+        // y=0 at the FRONT). Map depth into the room frame (z=0 = back wall),
+        // sitting the plinth under the carcass: z = backT + carcassD − y. The
+        // front kick-board lands at the carcass front; a recess sets it back,
+        // visibly, instead of being buried at the back.
         x0: board.xFrom, x1: board.xTo,
         y0: plinth - panelH, y1: plinth,
-        z0: board.yFrom, z1: board.yTo,
+        z0: backT + carcassD - board.yTo, z1: backT + carcassD - board.yFrom,
         role: board.role,
         materialId: board.materialId,
       });
@@ -302,6 +334,47 @@ export function productBoardBoxes(
   if (product.productType !== 'kitchen') {
     return cabinetBoardBoxes(product.cabinet.input, product.cabinet.state, customMaterials);
   }
+  return kitchenLayoutBoxes(product, b => cabinetBoardBoxes(b.input, b.state, customMaterials));
+}
+
+/** Door / drawer-front faces of a whole product as flat panels at the cabinet
+ *  face, in PRODUCT-LOCAL 3D coordinates — the 'fronts' view of the 3D scene.
+ *  Each face is a thin box at the front of its cabinet (z = D − tFront … D). */
+export function productFrontBoxes(
+  product: ProductUnit,
+  customMaterials: CustomMaterial[],
+): BoardBox3D[] {
+  if (product.productType !== 'kitchen') {
+    return cabinetFrontBoxes(product.cabinet.input, product.cabinet.state, customMaterials);
+  }
+  return kitchenLayoutBoxes(product, b => cabinetFrontBoxes(b.input, b.state, customMaterials));
+}
+
+/** A single cabinet's front faces as thin boxes at its front plane. */
+function cabinetFrontBoxes(
+  input: CabinetInput,
+  state: SavedCabinetState,
+  customMaterials: CustomMaterial[],
+): BoardBox3D[] {
+  const panels = cabinetFrontPanels(input, state, customMaterials);
+  if (panels.length === 0) return [];
+  const frontMat = getMaterialWithCustom(input.frontMaterialId, customMaterials);
+  const tF = frontMat.thickness / 10;
+  const fullD = input.D;
+  return panels.map(p => ({
+    x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1,
+    z0: fullD - tF, z1: fullD,
+    role: 'front' as const, materialId: frontMat.id,
+  }));
+}
+
+/** Lays a per-cabinet box builder over a kitchen's units: mirrors each unit's
+ *  position (RTL, to match KitchenOverview) and translates the unit's local
+ *  boxes into the product frame. Internal box order stays left-to-right. */
+function kitchenLayoutBoxes(
+  product: ProductUnit,
+  build: (cabinet: { input: CabinetInput; state: SavedCabinetState }) => BoardBox3D[],
+): BoardBox3D[] {
   const units = product.kitchenUnits ?? [];
   const layout = kitchenElevationLayout(units);
   const posById = new Map(layout.map(b => [b.unitId, b] as const));
@@ -310,10 +383,7 @@ export function productBoardBoxes(
   for (const unit of units) {
     const pos = posById.get(unit.id);
     if (!pos) continue;
-    const local = cabinetBoardBoxes(unit.cabinet.input, unit.cabinet.state, customMaterials);
-    // Mirror the UNIT position (RTL, to match KitchenOverview) while keeping
-    // each unit's internal board order left-to-right — units are drawn LTR in
-    // the product view, only their order is right-to-left.
+    const local = build(unit.cabinet);
     const mirroredLeft = totalW - pos.xCm - pos.w;
     for (const b of local) {
       out.push({

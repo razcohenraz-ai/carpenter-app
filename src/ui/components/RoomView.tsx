@@ -240,7 +240,7 @@ export function RoomView({
             </div>
           )}
 
-          {viewMode === 'elevation' && (
+          {(viewMode === 'elevation' || viewMode === '3d') && (
             <div className={styles.viewToggle}>
               <button type="button"
                 className={`${styles.viewBtn} ${elevDetail === 'bodies' ? styles.viewBtnActive : ''}`}
@@ -480,6 +480,7 @@ export function RoomView({
               onSelect={setSelectedId}
               onOpenProduct={onOpenProduct}
               customMaterials={customMaterials}
+              detailMode={elevDetail}
             />
           </Suspense>
         )}

@@ -57,7 +57,8 @@ src/
 │   │   ├── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
 │   │   ├── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint/kitchenElevationLayout (חולץ מ-KitchenOverview)
 │   │   ├── cabinetSketchModel.ts buildCabinetSketchModel — props של CabinetSketch ממקור יחיד (UnitsView + ProductElevation)
-│   │   └── cabinetBoards3D.ts    cabinetBoardBoxes/productBoardBoxes → BoardBox3D[] (לוח=sub-box דק; מקור למבט-3D המפורט)
+│   │   ├── cabinetFronts.ts      cabinetFrontPanels → FrontPanel[] (door/drawer faces, floor-up) — מקור יחיד ל-CabinetFrontsOverlay (2D) ולמבט-חזית 3D
+│   │   └── cabinetBoards3D.ts    cabinetBoardBoxes/productBoardBoxes (carcass+פנים) + productFrontBoxes (חזיתות) → BoardBox3D[] (מקור למבט-3D המפורט)
 │   ├── room/                     תצוגת חדר (floor plan) — core טהור
 │   │   ├── productBounds.ts      productBounds → bounding box W×H×D · productSubBoxes → תיבות מקומיות 3D (לחזית + 3D)
 │   │   └── roomGeometry.ts       snapToWall / placementRectTopView / placementAABB / clampCentreToRoom · placementSubBoxAABBs → RoomAABB[] (מקור: top/elevation/3D) · placementElevationRects (היטל חזית)
@@ -96,7 +97,7 @@ src/
         ├── App.tsx               ניווט: project → (product | room) → kitchen unit
         ├── ProjectView.tsx       אזור חדרים + אזור products (הוספה/מחיקה/פתיחה)
         ├── RoomView.tsx          floor plan: toggle מבט-על/חזית/3D · מבט-על (snap מספרי + גרירה) · חזית (בחירת קיר + sub-boxes + גובה-מהרצפה)
-        ├── RoomView3D.tsx        מבט תלת-ממד (react-three-fiber, lazy) · mesh לכל לוח מ-productBoardBoxes (fallback: תיבה לכל sub-box) · OrbitControls
+        ├── RoomView3D.tsx        מבט תלת-ממד (react-three-fiber, lazy) · mesh לכל לוח מ-productBoardBoxes; toggle גופים/חזיתות (productFrontBoxes) · fallback: תיבה לכל sub-box · OrbitControls
         ├── AddProductDialog.tsx  בחירת סוג מוצר (wardrobe / bookcase / sideboard / kitchen / free-build)
         ├── KitchenEditor.tsx     ניהול kitchen units (הוסף/הסר/סדר)
         ├── KitchenOverview.tsx   תצוגה מאוחדת של units עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); UnitsView + UnitFrontPanelsStandalone overlay

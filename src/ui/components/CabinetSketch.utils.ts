@@ -155,14 +155,16 @@ export function computeSketchGeometry(
   const sides = shellSides ?? { left: tEnvelope !== undefined, right: tEnvelope !== undefined };
   const innerW = computeInnerWidth(W, sides, envelopeCm);
 
-  // Wall envelope shrinks the body in decompose (mirrors useCabinet path) so
-  // box.H and yLevels stay consistent with the cuts. `hasEnvelopeTop` (shell)
-  // is left out of the decompose here — that path renders as overlay (legacy
-  // behaviour for base cabinets with shell + envelope-top).
+  // Both the wall envelope (top+bottom caps) AND the shell envelope-top shrink
+  // the body in decompose — mirroring useCabinet (envelopeTopH), so the sketch's
+  // box heights and y-levels match the cut list. Without the shell-top reduction
+  // the top box stayed full-height and the cap board (drawn above the box top)
+  // floated proud of the side panels.
+  const topEnvCm = wallEnvelopeCm > 0 ? wallEnvelopeCm : (hasEnvelopeTop ? envelopeCm : 0);
+  const botEnvCm = wallEnvelopeCm > 0 ? wallEnvelopeCm : 0;
   const rawBoxes = decomposeBoxes(
     innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH,
-    wallEnvelopeCm > 0 ? wallEnvelopeCm : 0,
-    wallEnvelopeCm > 0 ? wallEnvelopeCm : 0,
+    topEnvCm, botEnvCm,
   );
   const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
     ? rawBoxes.map(box => {
@@ -238,8 +240,10 @@ export function computeSketchGeometry(
   const activeLevels = LEVEL_ORDER.filter(l => levelHeightMap.has(l));
 
   // ── Horizontal split lines between adjacent levels ────────────────────────────
+  // Start below the reserved top envelope band so splits line up with the boxes
+  // (which also start at `topEnvCm`).
   const splitLines: SketchLine[] = [];
-  let cumH = 0;
+  let cumH = topEnvCm;
   for (let i = 0; i < activeLevels.length - 1; i++) {
     cumH += levelHeightMap.get(activeLevels[i]!)!;
     const splitY = cabY + cumH * scale;
@@ -288,11 +292,11 @@ export function computeSketchGeometry(
   // ── Box SVG rects: one per non-plinth box ─────────────────────────────────
   const boxSvgRects: Record<string, BoxSvgRect> = {};
   {
-    // Level y-offsets from top of body area (top → down). Start below the
-    // wall envelope top cap when present (the cap occupies the first
-    // wallEnvelopeCm of the cabinet height).
+    // Level y-offsets from top of body area (top → down). Start below the top
+    // envelope band (wall cap OR shell envelope-top) — it occupies the first
+    // `topEnvCm` of the cabinet height, and the body boxes sit under it.
     const levelYOffset: Partial<Record<BoxLevel, number>> = {};
-    let cumLevelH = wallEnvelopeCm > 0 ? wallEnvelopeCm : 0;
+    let cumLevelH = topEnvCm;
     for (const level of activeLevels) {
       levelYOffset[level] = cumLevelH;
       cumLevelH += levelHeightMap.get(level)!;

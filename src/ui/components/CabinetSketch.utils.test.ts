@@ -253,4 +253,22 @@ describe('computeSketchGeometry', () => {
       expect(cap.y + cap.h).toBeCloseTo(g.cabinet.y + g.cabinet.h, 3);
     });
   });
+
+  // ── Shell envelope-top (מעטפת תקרה) ───────────────────────────────────────
+  describe('shell envelope-top band', () => {
+    it('reserves a top band so the body box sits below the cap (cap no longer proud)', () => {
+      // tEnvelope=1.8, hasEnvelopeTop=true, shell both sides.
+      const g = computeSketchGeometry(
+        100, 200, 35, 0, undefined, 'auto', undefined,
+        1.8, true, undefined, { left: true, right: true }, 0,
+      );
+      expect(g.envelopeTopPanel).not.toBeNull();
+      const boxes = Object.values(g.boxSvgRects);
+      const topBox = boxes.reduce((a, b) => (b.y < a.y ? b : a)); // topmost
+      // The top body box now starts a cap-thickness below the cabinet top; the
+      // envelope-top board fills that band, flush with the full-height sides.
+      expect(topBox.y).toBeCloseTo(g.cabinet.y + g.envelopeTopPanel!.h, 2);
+      expect(topBox.y).toBeGreaterThan(g.cabinet.y + 0.5);
+    });
+  });
 });

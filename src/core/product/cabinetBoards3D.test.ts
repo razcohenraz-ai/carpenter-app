@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cabinetBoardBoxes, productBoardBoxes } from './cabinetBoards3D';
+import { cabinetBoardBoxes, productBoardBoxes, productFrontBoxes } from './cabinetBoards3D';
 import { productBounds, productSubBoxes } from '../room/productBounds';
 import { defaultInputForType, emptyCabinetState } from './productDefaults';
 import type { CabinetInput, SavedCabinetState } from '../../types';
@@ -61,6 +61,41 @@ describe('cabinetBoardBoxes', () => {
     expect(left.y0).toBeGreaterThanOrEqual(input.plinth - 0.01); // sits on the plinth
   });
 
+  it('front faces sit at the cabinet front plane (z = D − tFront … D), within the width', () => {
+    const input = singleBodyInput();
+    const fronts = productFrontBoxes(
+      { id: 'p', name: 'ארון', productType: 'wardrobe', cabinet: { input, state: state() } } as ProductUnit,
+      [],
+    );
+    expect(fronts.length).toBeGreaterThan(0);
+    for (const f of fronts) {
+      expect(f.role).toBe('front');
+      expect(f.z1).toBeCloseTo(input.D, 5);        // at the very front
+      expect(f.z0).toBeLessThan(f.z1);             // a real (thin) panel
+      expect(f.z1 - f.z0).toBeLessThan(3);         // front-material thickness
+      expect(f.x0).toBeGreaterThanOrEqual(-0.01);
+      expect(f.x1).toBeLessThanOrEqual(input.W + 0.01);
+    }
+  });
+
+  it('outer shell: side panels reach the cabinet top, flush with the envelope-top cap', () => {
+    const input = { ...singleBodyInput(), hasShell: true, hasEnvelopeTop: true };
+    const boards = cabinetBoardBoxes(input, state(), []);
+    const left = boards.find(b => b.role === 'envelope-left')!;
+    const top = boards.find(b => b.role === 'envelope-top')!;
+    expect(left).toBeDefined();
+    expect(top).toBeDefined();
+    // Cap top and side top are both the cabinet top — no proud cap.
+    expect(top.y1).toBeCloseTo(input.H, 5);
+    expect(left.y1).toBeCloseTo(input.H, 5);
+    // Side runs the full height; cap is just the top band.
+    expect(left.y0).toBeCloseTo(0, 5);
+    expect(top.y0).toBeLessThan(top.y1);
+    // Cap sits between the sides (inner width), sides at the outer edges.
+    expect(left.x0).toBeCloseTo(0, 5);
+    expect(top.x0).toBeGreaterThanOrEqual(left.x1 - 1e-6);
+  });
+
   it('a hanging rod becomes a slender bar at its height, spanning the inner width', () => {
     const rod: RodItem = { id: 'r1', type: 'rod', heightFromFloor: 150 };
     const st = { ...emptyCabinetState(), interior: { 'single:single': [rod] } } as unknown as SavedCabinetState;
@@ -71,6 +106,19 @@ describe('cabinetBoardBoxes', () => {
     expect(yMid).toBeCloseTo(input.plinth + 150, 1);     // body-bottom relative
     expect(bar.x1 - bar.x0).toBeGreaterThan(input.W * 0.7); // runs across the inside
     expect(bar.y1 - bar.y0).toBeLessThan(5);             // thin
+  });
+
+  it('the plinth renders, and a recess sets the kick-board back in depth (not buried)', () => {
+    const flush = cabinetBoardBoxes({ ...singleBodyInput(), plinth: 10, plinthRecess: 0 }, state(), []);
+    const recessed = cabinetBoardBoxes({ ...singleBodyInput(), plinth: 10, plinthRecess: 4 }, state(), []);
+    const flushFront = flush.find(b => b.role === 'plinth-front')!;
+    const recessedFront = recessed.find(b => b.role === 'plinth-front')!;
+    expect(flushFront).toBeDefined();        // plinth shows
+    expect(recessedFront).toBeDefined();
+    // The kick-board's front face (max z) is the same axis in both; recess
+    // pushes it back toward the wall by ~4 cm — and it stays in front of the back.
+    expect(flushFront.z1 - recessedFront.z1).toBeCloseTo(4, 1);
+    expect(recessedFront.z1).toBeGreaterThan(0);
   });
 
   it('an internal drawer becomes a tray box, inset from the carcass sides', () => {

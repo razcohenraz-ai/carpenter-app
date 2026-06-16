@@ -6,7 +6,7 @@ import type { Room, ProductUnit } from '../../types/project';
 import type { CustomMaterial } from '../../types/materials';
 import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import { placementSubBoxAABBs } from '../../core/room/roomGeometry';
-import { productBoardBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
+import { productBoardBoxes, productFrontBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
 import styles from './RoomView.module.css';
 
 /** Distinct fill colours cycled per placed product (used by the fallback
@@ -14,8 +14,12 @@ import styles from './RoomView.module.css';
 const PALETTE = ['#6b8cae', '#b08968', '#7a9e7e', '#a87ca0', '#c0a062', '#8a8a8a'];
 const SELECTED_COLOR = '#e07a3c';
 
+/** Interior pieces hidden behind closed doors — dropped in the fronts view. */
+const INTERIOR_ROLES = new Set<BoardBox3D['role']>(['rod', 'drawer-box', 'shelf', 'fixed-shelf', 'internal-shelf']);
+
 /** Wood-tone palette by board role family — reads as carpentry in the 3D view. */
 function colorForRole(role: BoardBox3D['role']): string {
+  if (role === 'front') return '#e8934a';      // door / drawer face
   if (role === 'rod') return '#9aa0a6';        // brushed metal
   if (role === 'drawer-box') return '#b59f82'; // greyer tray
   if (role === 'back') return '#9c7f55';
@@ -32,6 +36,8 @@ interface Props {
   onSelect: (id: string | null) => void;
   onOpenProduct: (id: string) => void;
   customMaterials?: CustomMaterial[];
+  /** 'bodies' = carcass + interior (open); 'fronts' = shell + closed doors. */
+  detailMode?: 'bodies' | 'fronts';
 }
 
 /** Rough 3D view of the room: floor + back/left walls for spatial reference,
@@ -39,7 +45,7 @@ interface Props {
  *  the elevation projects, so the three views render one model — this is the
  *  validation pass that exercises depth and height together (which the flat
  *  views structurally cannot). Click selects; double-click opens the product. */
-export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct, customMaterials = [] }: Props): React.JSX.Element {
+export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct, customMaterials = [], detailMode = 'bodies' }: Props): React.JSX.Element {
   const productById = new Map(products.map(p => [p.id, p]));
   const { width: W, height: H, depth: D } = room;
   const center: [number, number, number] = [W / 2, H / 2, D / 2];
@@ -82,9 +88,17 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           const bounds = productBounds(product);
           const isSel = pl.productId === selectedId;
 
-          const boards = productBoardBoxes(product, customMaterials);
-          const detailed = boards.length > 0;
-          const local = detailed ? boards : productSubBoxes(product);
+          const carcass = productBoardBoxes(product, customMaterials);
+          const detailed = carcass.length > 0;
+          // Fronts view: shell + closed door/drawer faces (interior hidden);
+          // bodies view: full carcass + interior. Fall back to one box per
+          // sub-box when there is no board model.
+          const local: BoardBox3D[] | ReturnType<typeof productSubBoxes> = !detailed
+            ? productSubBoxes(product)
+            : detailMode === 'fronts'
+              ? [...carcass.filter(b => !INTERIOR_ROLES.has(b.role)), ...productFrontBoxes(product, customMaterials)]
+              : carcass;
+          const roles = detailed ? (local as BoardBox3D[]).map(b => b.role) : null;
           const aabbs = placementSubBoxAABBs(pl, local, bounds);
           if (aabbs.length === 0) return null;
 
@@ -96,7 +110,7 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           return (
             <group key={pl.productId}>
               {aabbs.map((b, i) => {
-                const role = detailed ? boards[i]!.role : undefined;
+                const role = roles ? roles[i]! : undefined;
                 const color = isSel
                   ? SELECTED_COLOR
                   : role ? colorForRole(role) : fallbackColor;
