@@ -28,8 +28,8 @@ type ViewMode = 'top' | 'elevation' | '3d';
 
 const WALLS: RoomWall[] = ['north', 'south', 'east', 'west'];
 const PAD = 28;       // px margin around the drawing
-const MAX_W = 720;    // px — max drawable width
-const MAX_H = 520;    // px — max drawable height/depth
+const MAX_W = 600;    // px — max drawable width  (kept compact so the drawing
+const MAX_H = 480;    // px — max drawable height  sits beside the controls, no wrap)
 
 export function RoomView({
   room, products, onUpdateDims, onRenameRoom,
@@ -316,7 +316,9 @@ export function RoomView({
           )}
         </div>
 
-        {/* ── Right: the drawing ── */}
+        {/* ── Right: the drawing — fixed-size stage so switching view/wall
+              never shifts the layout; the inner SVG just centres within it. ── */}
+        <div className={styles.stage} style={{ width: MAX_W + PAD * 2, height: MAX_H + PAD * 2 }}>
         {viewMode === 'top' && (
           <svg
             ref={svgRef}
@@ -409,6 +411,7 @@ export function RoomView({
             />
           </Suspense>
         )}
+        </div>
       </div>
     </div>
   );
