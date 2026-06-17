@@ -100,14 +100,19 @@ export function cabinetBoardBoxes(
   const hasAnyShell = sides.left || sides.right;
   const fullD = input.D;
 
+  // Wall cabinet (קלפה): top + bottom front-material caps, independent of the
+  // side shell, gated by mount==='wall' — mirrors useCabinet's `wallEnv`.
+  const wallEnv = input.hasWallEnvelope === true && input.mount === 'wall';
+
   const innerW = computeInnerWidth(input.W, sides, tF);
   const carcassD = computeCarcassDepth(input.D, input.backThickness, HINGE_GAP_CM, tF);
-  const envelopeTopH = (input.hasEnvelopeTop && hasAnyShell) ? tF : 0;
+  const envelopeTopH = ((input.hasEnvelopeTop && hasAnyShell) || wallEnv) ? tF : 0;
+  const envelopeBottomH = wallEnv ? tF : 0;
 
   const overrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
   const rawBoxes = decomposeBoxes(
     innerW, input.H, carcassD, input.lowerDoorH, input.plinth,
-    input.doorsPerColumn, input.middleDoorH, envelopeTopH,
+    input.doorsPerColumn, input.middleDoorH, envelopeTopH, envelopeBottomH,
   );
   const boxes = overrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
     const o = overrides.get(boxStableKey(box));
@@ -130,7 +135,9 @@ export function cabinetBoardBoxes(
   const activeLevels = LEVEL_ORDER.filter(l => levelHeight.has(l));
   const bottomFromFloor = new Map<BoxLevel, number>();
   {
-    let cumY = plinth;
+    // Bodies sit above the plinth AND above the wall-cabinet bottom cap (קלפה),
+    // so the bottom envelope band (envelopeBottomH) fits below the carcass.
+    let cumY = plinth + envelopeBottomH;
     for (const level of [...activeLevels].reverse()) {
       bottomFromFloor.set(level, cumY);
       cumY += levelHeight.get(level)!;
@@ -267,11 +274,13 @@ export function cabinetBoardBoxes(
     }
   }
 
-  // ── Outer shell envelope — emitted at cabinet level so the side panels run
-  //    the FULL cabinet height and the top cap sits flush between them (matching
-  //    the cut list / 2D sketch). The body was decomposed with envelopeTopH, so
-  //    the carcass top already sits a cap-thickness below the cabinet top. ──────
-  if (hasAnyShell) {
+  // ── Outer shell + wall envelope — emitted at cabinet level so the side panels
+  //    run the FULL cabinet height and the caps sit flush (matching the cut list
+  //    / 2D sketch). The body was decomposed with envelopeTopH / envelopeBottomH,
+  //    so the carcass already sits a cap-thickness below the top and above the
+  //    bottom band. The wall-cabinet (קלפה) caps wrap the body with no side
+  //    shell — full external width, top AND bottom. ─────────────────────────────
+  if (hasAnyShell || wallEnv) {
     const outerW = innerW + leftEnv + (sides.right ? tF : 0);
     const frontMatId = frontMat.id;
     if (sides.left) {
@@ -280,8 +289,13 @@ export function cabinetBoardBoxes(
     if (sides.right) {
       out.push({ x0: outerW - tF, x1: outerW, y0: 0, y1: input.H, z0: 0, z1: fullD, role: 'envelope-right', materialId: frontMatId });
     }
-    if (input.hasEnvelopeTop) {
+    // Top cap: shell envelope-top (needs a side shell) OR wall-cabinet top cap.
+    if ((input.hasEnvelopeTop && hasAnyShell) || wallEnv) {
       out.push({ x0: leftEnv, x1: leftEnv + innerW, y0: input.H - tF, y1: input.H, z0: 0, z1: fullD, role: 'envelope-top', materialId: frontMatId });
+    }
+    // Bottom cap: wall cabinet only (base cabinets sit on a plinth, not a cap).
+    if (wallEnv) {
+      out.push({ x0: leftEnv, x1: leftEnv + innerW, y0: plinth, y1: plinth + tF, z0: 0, z1: fullD, role: 'envelope-bottom', materialId: frontMatId });
     }
   }
 

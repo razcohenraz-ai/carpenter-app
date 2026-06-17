@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### תוקן — מעטפת עליון+תחתון של קלפה (`hasWallEnvelope`) חסרה בתלת-ממד וצבועה בצבע גוף ב-2D
+
+- **המידות בגזירה (cut list) תקינות** — באג תצוגה בלבד. מסלול הייצור (`useCabinet`/`cabinetCompute`) משחיל נכון את דגל `wallEnv`; שני מסלולי הרינדור החדשים לא.
+- **תלת-ממד (`cabinetBoards3D`)**: הקובץ התעלם לחלוטין מ-`hasWallEnvelope` — `envelopeTopH` ללא `wallEnv`, `decomposeBoxes` ללא `envelopeBottomH`, ופליטת המעטפת מגודרת ב-`hasAnyShell` (shell צדדי) ופולטת רק top. לקלפה (בלי shell צדדי) **שום מעטפת לא נפלטה** → מכסה עליון+תחתון נעלמו. תוקן: `wallEnv` מושחל כמו ב-`useCabinet` — `envelopeBottomH` ל-decompose, הגוף מוסט מעל המכסה התחתון (`plinth + envelopeBottomH`), והמעטפת נפלטת ברמת-הארון עם `top` (כש-`(hasEnvelopeTop && hasAnyShell) || wallEnv`) ו-`bottom` (כש-`wallEnv`), מלאי-רוחב.
+- **2D מפורט (`CabinetSketch`)**: שני ניתוקים במסירת הדגלים. (1) `deriveEnvelopeFlags` נקרא עם 3 ארגומנטים בלבד (חסר `wallEnv`) → ה-flags של הקלפה לא חושבו. (2) קריאת `buildBoardModel` העבירה רק `hasEnvelopeTop` ולא `hasEnvelopeBottom` — לכן גם אחרי תיקון (1), המכסה **התחתון** עדיין לא נפלט (`hasEnvelopeBottom` ברירת-מחדל false). בשני המקרים רצועת המכסה השמורה נשארה ריקה ולוחות ה-`top`/`bottom` של הגוף (צבע גוף, `--color-surface-raised`) נקראו כמכסה במקום צבע חזית (`--color-fronts`). תוקן: הועבר ארגומנט רביעי `(wallEnvelopeCm ?? 0) > 0` ל-`deriveEnvelopeFlags`, וגם `hasEnvelopeBottom: env.hasEnvelopeBottom` ל-`buildBoardModel` — בדיוק כמו מסלול הייצור (`useCabinet`). שני המכסים נפלטים כלוחות חזית (class `envelopeBoard`).
+- בדיקות: מקרה קלפה ל-`cabinetBoards3D.test.ts` — `top`+`bottom` נפלטים, בלי דפנות צד, הגוף בין המכסים. **משפיע על התצוגה בלבד; ה-cut list לא נגע.**
+
 ### תוקן — מעטפת תקרה (envelope-top) הוצגה גבוהה מהמעטפת הצדדית בכל התצוגות
 
 - **המידות בגזירה (cut list) היו תקינות** — באג ויזואלי בלבד במיקום, לא בנתונים.

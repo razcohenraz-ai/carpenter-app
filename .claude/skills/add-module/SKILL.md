@@ -28,9 +28,11 @@ description: >
    drawers / shelves / shell / plinth / appliance bays).
 3. אם המודול משנה `CabinetInput`/`SavedCabinetState` — קרא `docs/ARCHITECTURE.md`.
 
-**גודל המשימה:** מודול שמשתמש בדגלים קיימים = משימה בינונית. מודול שדורש שדה
-חדש ב-`CabinetInput` או דגל חדש ב-`buildBoardModel` = משימה גדולה (גע ב-core +
-טסטים + ARCHITECTURE).
+**גודל המשימה:** מודול שמשתמש בדגלים קיימים = משימה בינונית (נכנס אוטומטית לכל
+התצוגות — כולל תצוגת ה-3D של החדר — דרך אותו single source). מודול שדורש שדה
+חדש ב-`CabinetInput` או דגל חדש ב-`buildBoardModel` = משימה גדולה: גע ב-core +
+טסטים + ARCHITECTURE, ו**הַשְׁחֵל את הדגל בכל שלושת אתרי בניית-הלוחות** (ראה
+Gotcha #8) — `useCabinet` (חיתוכים), `CabinetSketch` (2D), `cabinetBoards3D` (3D).
 
 ---
 
@@ -193,7 +195,9 @@ npx vitest run
 לא לאמת בדפדפן עצמאית. בסיום, בקש מהמשתמש לבדוק (לפי `feedback_no_browser_verify`):
 1. המודול מופיע ב-picker עם השם והרוחב הנכונים.
 2. תצוגת גוף + תצוגת מטבח ראשית + רשימת חיתוכים תואמים זה לזה.
-3. אם אפליאנס: אין חזיתות/גב/תחתון מיותרים; צוקל מקוטע נכון.
+3. **תצוגת החדר (3D)**: המוצר מרונדר עם אותם לוחות/פנים כמו ה-2D (זהה דרך single
+   source). אם הוספת דגל גאומטריה חדש — ודא שהוא משתקף גם כאן (ראה Gotcha #8).
+4. אם אפליאנס: אין חזיתות/גב/תחתון מיותרים; צוקל מקוטע נכון.
 
 **commit + push רק אחרי אישור מפורש של המשתמש.** סיים את הודעת ה-commit ב:
 `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
@@ -235,6 +239,21 @@ npx vitest run
    המגירה הפנימית מקוצץ אופקית בין הדפנות אבל היה ללא קיצוץ אנכי — פס אטום מ-
    `hff` עד `hff+drawerHeight` שמכסה את הלוחות בקצוות. הפתרון: לצייר מגירה פנימית
    כ**תיבה מוקטנת** דרך `internalDrawerBoxBoundsCm` + `DRAWER_BOX_*_GAP_CM`
-   (`CabinetSketch.utils.ts`), בדיוק כמו תיבת המגירה החיצונית. חל ב-3 אתרים:
-   `CabinetSketch` (גוף מלא + תא) ו-`BoxBodySketch`. מודול חדש שממלא את הגוף
-   במגירות פנימיות — ודא שהלוחות עדיין נראים בכל שלוש התצוגות.
+   (`CabinetSketch.utils.ts`), בדיוק כמו תיבת המגירה החיצונית. חל ב-2 אתרי 2D:
+   `CabinetSketch` (גוף מלא + תא) ו-`BoxBodySketch` (וב-3D דרך `cabinetBoards3D`,
+   ראה Gotcha #8). מודול חדש שממלא את הגוף במגירות פנימיות — ודא שהלוחות עדיין
+   נראים בכל התצוגות, 2D ו-3D.
+
+8. **דגל גאומטריה חדש חייב להגיע לכל שלושת אתרי בניית-הלוחות** — הם נגזרים
+   במקביל ויכולים להיסחף. `buildBoardModel` נקרא **עצמאית** מ-3 מקומות:
+   `useCabinet.ts`/`cabinetCompute.ts` (רשימת חיתוך — **מקור האמת**),
+   `CabinetSketch.tsx` (סקיצת 2D מפורטת), ו-`cabinetBoards3D.ts` (תצוגת 3D בחדר).
+   מודול שמשתמש בדגלים קיימים מרונדר בכל השלושה אוטומטית (single source). אבל
+   דגל **חדש** שמשנה decompose/envelope/board חייב להיות מושחל לכל השלושה — ואם
+   זה דגל מעטפת, גם לפליטת המעטפת **ברמת-הארון** ב-`cabinetBoards3D` (`hasAnyShell
+   || wallEnv`, עם `envelope-top`/`envelope-bottom`). באג אמיתי: `hasWallEnvelope`
+   (מכסי עליון+תחתון של קלפה) טופל ב-`useCabinet` אך **נשמט** ב-2D (קריאת
+   `buildBoardModel` לא העבירה `hasEnvelopeBottom`) וב-3D (ללא `envelopeBottomH`
+   ובלי מכסה תחתון) — המכסים הופיעו בצבע גוף ב-2D ונעלמו לגמרי ב-3D עד שהושחל
+   בשלושתם. שים לב גם ל-Gotcha #2 (`CabinetForm` עלול לאבד את הדגל החדש בבנייה
+   מחדש מהטופס).

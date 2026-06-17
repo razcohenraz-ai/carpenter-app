@@ -184,8 +184,11 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
       const items = interiorById![box.id] ?? [];
       // Centralised envelope-flag derivation handles unit_* positions too —
       // the legacy inline check missed unit_1 / unit_N (only 'left' / 'right'
-      // / 'single' got envelope panels).
-      const env = deriveEnvelopeFlags(box, shellSides, !!hasEnvelopeTop);
+      // / 'single' got envelope panels). The 4th arg threads the wall-cabinet
+      // (קלפה) flag so envelope-top + envelope-bottom caps emit as front-material
+      // boards (otherwise the caps stayed un-drawn and the body's carcass top /
+      // bottom read as a body-coloured cap).
+      const env = deriveEnvelopeFlags(box, shellSides, !!hasEnvelopeTop, (wallEnvelopeCm ?? 0) > 0);
       const boards = buildBoardModel({
         box,
         bodyMaterial: bodyMat!,
@@ -193,6 +196,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         hasEnvelopeLeft: env.hasEnvelopeLeft,
         hasEnvelopeRight: env.hasEnvelopeRight,
         hasEnvelopeTop: env.hasEnvelopeTop,
+        hasEnvelopeBottom: env.hasEnvelopeBottom,
         items,
         hasPartition,
         ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),

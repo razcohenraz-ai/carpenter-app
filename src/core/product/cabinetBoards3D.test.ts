@@ -96,6 +96,29 @@ describe('cabinetBoardBoxes', () => {
     expect(top.x0).toBeGreaterThanOrEqual(left.x1 - 1e-6);
   });
 
+  it('wall cabinet (קלפה): top + bottom front caps wrap the body, no side shell', () => {
+    const input = { ...singleBodyInput(), mount: 'wall' as const, hasWallEnvelope: true, plinth: 0 };
+    const boards = cabinetBoardBoxes(input, state(), []);
+    const top = boards.find(b => b.role === 'envelope-top');
+    const bottom = boards.find(b => b.role === 'envelope-bottom');
+    expect(top).toBeDefined();
+    expect(bottom).toBeDefined();
+    // A wall cabinet has no side shell.
+    expect(boards.find(b => b.role === 'envelope-left')).toBeUndefined();
+    expect(boards.find(b => b.role === 'envelope-right')).toBeUndefined();
+    // Caps sit at the very top and the very bottom, full external width.
+    expect(top!.y1).toBeCloseTo(input.H, 5);
+    expect(bottom!.y0).toBeCloseTo(0, 5);
+    expect(top!.x0).toBeCloseTo(0, 5);
+    expect(top!.x1).toBeCloseTo(input.W, 5);
+    // The body is sandwiched between the caps — a cap-thickness band each end.
+    const tF = top!.y1 - top!.y0;
+    expect(bottom!.y1 - bottom!.y0).toBeCloseTo(tF, 5);
+    const side = boards.find(b => b.role === 'side-left')!;
+    expect(side.y1).toBeCloseTo(input.H - tF, 1);   // under the top cap
+    expect(side.y0).toBeCloseTo(tF, 1);             // above the bottom cap
+  });
+
   it('a hanging rod becomes a slender bar at its height, spanning the inner width', () => {
     const rod: RodItem = { id: 'r1', type: 'rod', heightFromFloor: 150 };
     const st = { ...emptyCabinetState(), interior: { 'single:single': [rod] } } as unknown as SavedCabinetState;
