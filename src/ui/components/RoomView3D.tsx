@@ -12,7 +12,7 @@ import styles from './RoomView.module.css';
 /** Distinct fill colours cycled per placed product (used by the fallback
  *  simple-box render; the detailed render colours by board role). */
 const PALETTE = ['#6b8cae', '#b08968', '#7a9e7e', '#a87ca0', '#c0a062', '#8a8a8a'];
-const SELECTED_COLOR = '#e07a3c';
+const SELECTED_COLOR = '#f5a662';
 
 /** Interior pieces hidden behind closed doors — dropped in the fronts view. */
 const INTERIOR_ROLES = new Set<BoardBox3D['role']>(['rod', 'drawer-box', 'shelf', 'fixed-shelf', 'internal-shelf']);
@@ -69,6 +69,22 @@ function hingeTrianglePoints(b: Aabb, rotationDeg: number, hingeEdge: 'left' | '
   const apexZ = hingeAtZ0 ? b.z1 : b.z0;
   const openZ = hingeAtZ0 ? b.z0 : b.z1;
   return [[xFace, yTop, openZ], [xFace, yMid, apexZ], [xFace, yBot, openZ]];
+}
+
+/** The outward-facing rectangle of a front panel, in ROOM coordinates, lifted
+ *  just off the face. Drawn as a faint line it emphasises the reveal gaps
+ *  between adjacent doors/drawers (and the door↔carcass edges). Returns 5
+ *  points (closed loop). The facing axis is fixed by the placement rotation,
+ *  same convention as `subBoxRoomAABB` / `hingeTrianglePoints`. */
+function frontFaceOutline(b: Aabb, rotationDeg: number): Vec3[] {
+  const r = ((rotationDeg % 360) + 360) % 360;
+  const eps = 0.3;
+  if (r === 0 || r === 180) {
+    const z = r === 180 ? b.z0 - eps : b.z1 + eps;
+    return [[b.x0, b.y0, z], [b.x1, b.y0, z], [b.x1, b.y1, z], [b.x0, b.y1, z], [b.x0, b.y0, z]];
+  }
+  const x = r === 90 ? b.x0 - eps : b.x1 + eps;
+  return [[x, b.y0, b.z0], [x, b.y0, b.z1], [x, b.y1, b.z1], [x, b.y1, b.z0], [x, b.y0, b.z0]];
 }
 
 interface Props {
@@ -192,18 +208,31 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
                   </mesh>
                 );
 
-                // Door face → overlay the elevation hinge-marking triangle.
-                if (hingeSide) {
+                // Front faces (fronts view) → outline the reveal gaps; doors
+                // additionally get the elevation hinge-marking triangle.
+                const isFrontFace = detailMode === 'fronts' && role === 'front';
+                if (isFrontFace || hingeSide) {
                   return (
                     <group key={i}>
                       {faceMesh}
-                      <Line
-                        points={hingeTrianglePoints(b, pl.rotationDeg, hingeSide)}
-                        color="#8a8a8a"
-                        lineWidth={1}
-                        transparent
-                        opacity={0.65}
-                      />
+                      {isFrontFace && (
+                        <Line
+                          points={frontFaceOutline(b, pl.rotationDeg)}
+                          color="#6b5840"
+                          lineWidth={1}
+                          transparent
+                          opacity={0.6}
+                        />
+                      )}
+                      {hingeSide && (
+                        <Line
+                          points={hingeTrianglePoints(b, pl.rotationDeg, hingeSide)}
+                          color="#8a8a8a"
+                          lineWidth={1}
+                          transparent
+                          opacity={0.65}
+                        />
+                      )}
                     </group>
                   );
                 }
@@ -216,7 +245,7 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           );
         })}
 
-        <OrbitControls target={center} makeDefault />
+        <OrbitControls target={center} makeDefault zoomToCursor />
       </Canvas>
     </div>
   );
