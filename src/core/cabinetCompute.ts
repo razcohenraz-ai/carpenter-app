@@ -15,6 +15,7 @@
 
 import { decomposeBoxes } from './index';
 import { buildDoorCutItems } from './cuts/doorCuts';
+import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/cornerModule';
 import { boxStableKey } from './interior/interiorUtils';
 import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
 import {
@@ -146,6 +147,7 @@ export function computeUnitCutsAndHardware(
   const rawBoxes = decomposeBoxes(
     innerW, H, carcassD,
     lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH, envelopeBottomH,
+    isCorner(input), // corner (פינה): one wide carcass, no 100 cm column split
   );
 
   // Apply box dimension overrides from saved state
@@ -240,7 +242,11 @@ export function computeUnitCutsAndHardware(
     const hasTopGap = box.level === 'top' || box.level === 'single';
 
     const rowLayout = layoutByRow.get(box.level);
-    const frontW = rowLayout?.frontWidth ?? 0;
+    // Corner unit (פינה): the single door is a fixed `doorWidthCm` at the chosen
+    // edge (not the equal-split row width), and its hinges always land on the
+    // filler side. See core/product/cornerModule.ts.
+    const cornerCf = isCorner(input) ? input.cornerFiller! : null;
+    const frontW = cornerCf ? cornerCf.doorWidthCm : (rowLayout?.frontWidth ?? 0);
 
     for (let fi = 0; fi < numFronts; fi++) {
       const doorId = makeDoorId(box.id, fi);
@@ -250,9 +256,11 @@ export function computeUnitCutsAndHardware(
       const skirtDrawer = getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt);
       const coversSkirt = originalCoversSkirt && skirtDrawer === null;
 
-      const hingeSide = numFronts > 1
-        ? salonHingeSide(fi, numFronts)
-        : defaultHingeSide(box.position, allPositions);
+      const hingeSide = cornerCf
+        ? cornerHingeSide(cornerCf)
+        : numFronts > 1
+          ? salonHingeSide(fi, numFronts)
+          : defaultHingeSide(box.position, allPositions);
 
       // For pure compute (no preservation of user-edited hinges), use defaults.
       // Lift-mechanism cabinets (קלפה) open with a single hinged-from-top panel,
@@ -273,7 +281,7 @@ export function computeUnitCutsAndHardware(
         newDoors[doorId] = {
           id: doorId, boxId: box.id, frontIndex: fi,
           height: panelH, width: frontW,
-          hingeSide: savedDoor.hingeSide,
+          hingeSide: cornerCf ? cornerHingeSide(cornerCf) : savedDoor.hingeSide,
           hingeCount: isWall ? 0 : savedDoor.hingeCount,
           hinges,
           hasDoor: savedDoor.hasDoor,
@@ -304,6 +312,20 @@ export function computeUnitCutsAndHardware(
   const doorCuts = buildDoorCutItems({
     doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
   });
+
+  // ── Corner filler (פינה): face flange + perpendicular hinge-post return ──
+  const cornerFillerCuts: CutItem[] = [];
+  if (isCorner(input)) {
+    const cornerBox = bodyBoxes[0];
+    const cornerDoor = cornerBox ? newDoors[makeDoorId(cornerBox.id, 0)] : undefined;
+    if (cornerBox && cornerDoor) {
+      cornerFillerCuts.push(...cornerFillerCutItems({
+        cabinetWcm: cornerBox.W, gapCm: cabinetGapCm, cf: input.cornerFiller!,
+        doorHeightCm: cornerDoor.height, innerHeightCm: Math.max(0, cornerBox.H - 2 * tBody),
+        edging: cabinetEdging,
+      }));
+    }
+  }
 
   // ── External-drawer front cuts ─────────────────────────────────────────────
   const externalDrawerCuts: CutItem[] = [];
@@ -428,6 +450,7 @@ export function computeUnitCutsAndHardware(
 
   const allCuts = [
     ...enrich(doorCuts),
+    ...enrich(cornerFillerCuts),
     ...boardCuts,
     ...enrich(partitionCuts),
     ...enrich(externalDrawerCuts),

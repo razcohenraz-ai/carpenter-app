@@ -13,6 +13,19 @@ import type { BoxLevel } from '../../types/geometry';
 import styles from './CabinetFrontsSketch.module.css';
 import sketchStyles from './CabinetSketch.module.css';
 import type { DoorById, DrawerFrontById, DrawerFront } from '../../types/doors';
+import type { CabinetInput } from '../../types/cabinet';
+import { cornerFrontXLayout } from '../../core/product/cornerModule';
+
+/** Points for the elevation hinge-marking triangle (SVG coords, yTop < yBot).
+ *  The apex points to the OPENING side (opposite the hinge edge); 'top' = a
+ *  lift-up door → apex points down. */
+function hingeMarkPoints(x0: number, x1: number, yTop: number, yBot: number, edge: 'left' | 'right' | 'top'): string {
+  const mid = (yTop + yBot) / 2;
+  const midX = (x0 + x1) / 2;
+  if (edge === 'top') return `${x0},${yTop} ${midX},${yBot} ${x1},${yTop}`;
+  if (edge === 'left') return `${x0},${yTop} ${x1},${mid} ${x0},${yBot}`;
+  return `${x1},${yTop} ${x0},${mid} ${x1},${yBot}`; // hinge right → apex left
+}
 
 interface Props {
   W: string;
@@ -41,12 +54,19 @@ interface Props {
   /** Wall-cabinet top+bottom envelope cap thickness (cm). When > 0, the outline
    *  + body rects shrink to leave room for the caps. 0 / omit for base cabinets. */
   wallEnvelopeCm?: number;
+  /** Corner unit (פינה): when present, the front is ONE fixed door at the chosen
+   *  edge + a filler face covering the rest (not the equal-split door layout).
+   *  Also keeps the body as a single wide box. */
+  cornerFiller?: CabinetInput['cornerFiller'];
+  /** Lift-up door (קלפה): hinged along the top, opens upward → the hinge mark
+   *  becomes a downward-pointing triangle regardless of `door.hingeSide`. */
+  liftUp?: boolean;
 }
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
   drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
-  boxDimensionOverrides, wallEnvelopeCm,
+  boxDimensionOverrides, wallEnvelopeCm, cornerFiller, liftUp,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -71,6 +91,7 @@ export default function CabinetFrontsSketch({
     boxDimensionOverrides,
     /* shellSides */ undefined,
     wallEnvelopeCm ?? 0,
+    /* noWidthSplit */ !!cornerFiller,
   );
   const plinthH = parseFloat(plinth);
 
@@ -123,8 +144,60 @@ export default function CabinetFrontsSketch({
           );
         })}
 
+        {/* Corner (פינה): one fixed door at the chosen edge + a filler face
+            covering the rest — drawn directly (not the equal-split layout). */}
+        {cornerFiller && (() => {
+          const cBox = geo.boxes.find(b => b.level !== 'plinth');
+          const door = Object.values(doorsById)[0];
+          if (!cBox || !door) return null;
+          const rect = geo.boxSvgRects[cBox.id];
+          if (!rect) return null;
+          const gapCm = (door.gapMm ?? 3) / 10;
+          const xl = cornerFrontXLayout(cBox.W, gapCm, cornerFiller);
+          const toX = (xcm: number) => geo.cabinet.x + xcm * geo.scale;
+          const panelH = door.height * geo.scale;
+          const panelY = rect.y + rect.h - panelH;
+          const doorX = toX(xl.door.x0);
+          const doorW = (xl.door.x1 - xl.door.x0) * geo.scale;
+          const fillerX = toX(xl.fillerFace.x0);
+          const fillerW = (xl.fillerFace.x1 - xl.fillerFace.x0) * geo.scale;
+          const doorBottomSvgY = panelY + panelH;
+          const toSvgY = (fromBottom: number) => doorBottomSvgY - fromBottom * geo.scale;
+          const num = displayNumbers.get(door.id) ?? '';
+          const doorGroupProps = onDoorClick
+            ? { onClick: (e: React.MouseEvent) => { e.stopPropagation(); onDoorClick(door.id); }, style: { cursor: 'pointer' as const } }
+            : {};
+          return (
+            <>
+              {/* Filler face (front material, full facade height) */}
+              <rect x={fillerX} y={panelY} width={fillerW} height={panelH} className={styles.doorRect} />
+              {/* The single door */}
+              <g {...doorGroupProps}>
+                <rect x={doorX} y={panelY} width={doorW} height={panelH} className={styles.doorRect} />
+                <polyline
+                  points={hingeMarkPoints(doorX, doorX + doorW, panelY, panelY + panelH, liftUp ? 'top' : door.hingeSide)}
+                  className={styles.hingeMark}
+                />
+                {door.hinges.map(hinge => {
+                  if (hinge.positionFromBottom < 0 || hinge.positionFromBottom > door.height) return null;
+                  const cy = toSvgY(hinge.positionFromBottom);
+                  const hingeX = door.hingeSide === 'right' ? doorX + doorW : doorX;
+                  return (
+                    <circle key={hinge.id} cx={hingeX} cy={cy} r={3.5}
+                      className={`${styles.hinge} ${hinge.isManual ? styles.hingeManual : ''}`} />
+                  );
+                })}
+                <text x={doorX + doorW / 2} y={panelY + panelH / 2}
+                  textAnchor="middle" dominantBaseline="middle" className={styles.doorNumber}>
+                  {num}
+                </text>
+              </g>
+            </>
+          );
+        })()}
+
         {/* Door panels — grouped by box, multiple horizontal fronts per box */}
-        {(() => {
+        {!cornerFiller && (() => {
           // Group doors by boxId, then render all fronts within each box rect
           const doorsByBoxId = new Map<string, typeof doorsById[string][]>();
           for (const door of Object.values(doorsById)) {
@@ -240,6 +313,10 @@ export default function CabinetFrontsSketch({
                 <g key={door.id} {...doorGroupProps}>
                   <rect x={panelX} y={panelY} width={panelW} height={panelH + skirtExt}
                     className={styles.doorRect} />
+                  <polyline
+                    points={hingeMarkPoints(panelX, panelX + panelW, panelY, panelY + panelH, liftUp ? 'top' : door.hingeSide)}
+                    className={styles.hingeMark}
+                  />
                   {skirtExt > 0 && (
                     <line
                       x1={panelX} y1={panelY + panelH}

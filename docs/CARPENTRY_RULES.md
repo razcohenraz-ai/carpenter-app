@@ -189,6 +189,12 @@
 - **מודל גובה**: המכסים **בתוך** ה-`H` החיצוני. הגוף הפנימי (`box.H`) מתכווץ ב-`2 × frontMaterial.thickness`. דוגמה: קלפה W=100, H=50, חזית 18 מ"מ → `box.H = 46.4` ס"מ.
 - ב-`deriveEnvelopeFlags` מסלול עצמאי מ-shell: כש-`hasWallEnvelope=true` → `{ left:false, right:false, top:isTopRow, bottom:isBottomRow }`. ראה DECISIONS_LOG 2026-06-14.
 
+### פינה (corner) — דלת קבועה + מילוי בצורת L
+- מסומן ע"י `CabinetInput.cornerFiller` (`{ doorSide, doorWidthCm, returnDepthCm }`). גוף בסיס רחב (W=125 ברירת מחדל), **תיבה אחת** (`noWidthSplit` עוקף את `MAX_BOX_W`).
+- **חזית**: דלת אחת ברוחב `doorWidthCm` (60) בקצה `doorSide` (ימין ברירת מחדל) + **מילוי** שמכסה את השאר. רוחב פני המילוי = `W − doorWidthCm − 3·gap` (gap בכל קצה חיצוני + בין הדלת למילוי, כמו כל חזית). הצירים **תמיד בצד המילוי** (הפוך מקצה הדלת).
+- **המילוי = L של שני חיתוכים מלאים** מחומר חזית, מחוברים בחיתוך 90°: **פנים** (`fillerFaceW × גובה-הדלת`, מסויף כמו דלת) + **זקף ציר** (`returnDepthCm × גובה-הפתח-הפנימי`, גלם). שמות בחיתוך: `מילוי פינה`, `זקף ציר פינה`. גובה-פתח-פנימי = `box.H − 2·tBody`.
+- **פרזול**: צירי הדלת (בצד המילוי) + ידית; למילוי אין פרזול. הגאומטריה מרוכזת ב-`core/product/cornerModule.ts` (מקור יחיד ל-cut list, 2D, 3D). ראה DECISIONS_LOG 2026-06-17.
+
 ---
 
 ## צירים

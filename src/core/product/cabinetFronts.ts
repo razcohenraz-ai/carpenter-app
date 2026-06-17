@@ -5,8 +5,10 @@ import { calcDoors } from '../doors/doorCalc';
 import {
   frontColumnsForBox, computeRowFrontLayout, computeFrontGeometry,
 } from '../geometry/frontGeometry';
+import { salonHingeSide, defaultHingeSide } from '../doors/doorUtils';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
+import { isCorner, cornerFrontXLayout, cornerHingeSide } from './cornerModule';
 
 /** One door / drawer-front face of a cabinet, in cabinet-local cm. `x` runs
  *  left→right from the outer-left edge; `y` is height off the floor (y0 bottom,
@@ -15,6 +17,11 @@ import { getMaterialWithCustom } from '../../catalog';
 export interface FrontPanel {
   x0: number; x1: number;
   y0: number; y1: number;
+  /** Set only on DOOR panels (not drawer fronts / corner filler). The EDGE the
+   *  door is hinged on. Drives the elevation hinge-marking triangle, whose apex
+   *  points to the OPENING (free) side — the opposite edge. `'top'` = a lift-up
+   *  door (קלפה) hinged along the top and opening upward → apex points down. */
+  hingeSide?: 'left' | 'right' | 'top';
 }
 
 /** Door rows + external-drawer faces of a single cabinet as flat panels.
@@ -47,6 +54,20 @@ export function cabinetFrontPanels(
   const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, hasAnyShell, tFront, forceRows, gapCm);
 
+  // Corner unit (פינה): one fixed-width door at the chosen edge + a filler face
+  // covering the rest of the front. Both share the single door row's height
+  // (a corner is a shelf-only body — no external drawers, no door columns).
+  if (isCorner(inp)) {
+    const cf = inp.cornerFiller!;
+    const xl = cornerFrontXLayout(effW, gapCm, cf);
+    const y0 = dl.doorStart;
+    const y1 = dl.doorStart + (dl.lowerH ?? 0);
+    return [
+      { x0: xl.door.x0, x1: xl.door.x1, y0, y1, hingeSide: cornerHingeSide(cf) },
+      { x0: xl.fillerFace.x0, x1: xl.fillerFace.x1, y0, y1 },
+    ];
+  }
+
   if (dl.n === 0 && extDrawers.length === 0) return [];
 
   const leftEnvCm = sides.left ? tFront : 0;
@@ -63,16 +84,25 @@ export function cabinetFrontPanels(
 
   // A front face's bottom edge off the floor is `plinth + yFromBodyBottom`
   // (the body floor sits at the plinth line). Columns come from the shared
-  // front layout — identical to the 2D overlay.
-  function pushFrontRow(heightCm: number, yFromBodyBottom: number) {
+  // front layout — identical to the 2D overlay. `isDoor` tags door rows so the
+  // panel carries the hinge side (the loop index runs left→right; Door.frontIndex
+  // is right→left, so the hinge side derivation inverts the index — matching the
+  // doors map produced by cabinetCompute / useCabinet).
+  function pushFrontRow(heightCm: number, yFromBodyBottom: number, isDoor = false) {
     const x0base = leftEnvCm + frontLayout.cabinetLeftOffset;
     for (let fi = 0; fi < numFronts; fi++) {
       const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
+      const hingeSide = isDoor
+        ? (inp.liftMechanism === true
+            ? 'top' as const // קלפה: lift-up door hinged along the top
+            : (numFronts > 1 ? salonHingeSide(numFronts - 1 - fi, numFronts) : defaultHingeSide('single', ['single'])))
+        : undefined;
       panels.push({
         x0: x0base + fp.x,
         x1: x0base + fp.x + Math.max(fp.width, 0),
         y0: inp.plinth + yFromBodyBottom,
         y1: inp.plinth + yFromBodyBottom + Math.max(heightCm, 0),
+        ...(hingeSide ? { hingeSide } : {}),
       });
     }
   }
@@ -92,9 +122,9 @@ export function cabinetFrontPanels(
     if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
     if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
     if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
-    rows.forEach(r => pushFrontRow(r.h, r.yFromBodyBottom));
+    rows.forEach(r => pushFrontRow(r.h, r.yFromBodyBottom, true));
   } else if (!noFronts && totalDrawerH < doorTopFromBodyBottom - 3) {
-    pushFrontRow(doorTopFromBodyBottom - totalDrawerH, totalDrawerH);
+    pushFrontRow(doorTopFromBodyBottom - totalDrawerH, totalDrawerH, true);
   }
 
   return panels;

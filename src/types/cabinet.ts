@@ -89,6 +89,22 @@ export interface CabinetInput {
    *  קלפה, עליון מזווה — a drawer face / lift panel is one piece per body).
    *  Default false → normal `ceil(W / maxDoorWidth)` split. */
   singleFront?: boolean;
+  /** Corner unit (פינה): a single fixed-width door at one edge + an L-shaped
+   *  front-material filler that covers the rest of the front. The filler's 7 cm
+   *  return (perpendicular, into the cabinet, at the carcass inner height)
+   *  carries the door hinges. Presence of this object marks the body as a corner
+   *  unit and drives the dedicated front layout, the door-width/hinge override,
+   *  and the two filler cut pieces. Absent (default) = a normal body whose front
+   *  splits into equal door columns. Every value is carpenter-overridable. */
+  cornerFiller?: {
+    /** Which EDGE the door sits on. Hinges always land on the opposite
+     *  (filler) side. Default 'right'. */
+    doorSide: 'left' | 'right';
+    /** Door panel width (cm). Default 60. */
+    doorWidthCm: number;
+    /** Depth (cm) of the perpendicular hinge-post return. Default 7. */
+    returnDepthCm: number;
+  };
 }
 
 /** Single source of truth for "which sides of the cabinet have a shell".

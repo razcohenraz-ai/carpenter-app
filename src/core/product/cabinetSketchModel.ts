@@ -11,6 +11,7 @@ import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM, type BoardOverrid
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
+import { isCorner } from './cornerModule';
 
 /** Everything a {@link CabinetSketch} needs to render a cabinet's body+interior
  *  elevation, derived purely from its saved `input` + `state`. */
@@ -61,7 +62,7 @@ export function buildCabinetSketchModel(
   const envelopeTopH = (input.hasEnvelopeTop && hasAnyShell) ? tFront : 0;
 
   const boxDimensionOverrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
-  const rawBoxes = decomposeBoxes(innerW, input.H, carcassD, input.lowerDoorH, input.plinth, input.doorsPerColumn, input.middleDoorH, envelopeTopH);
+  const rawBoxes = decomposeBoxes(innerW, input.H, carcassD, input.lowerDoorH, input.plinth, input.doorsPerColumn, input.middleDoorH, envelopeTopH, 0, isCorner(input));
   const boxes = boxDimensionOverrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
     const o = boxDimensionOverrides.get(boxStableKey(box));
     if (!o) return box;

@@ -38,19 +38,43 @@ export function CabinetFrontsOverlay({
         pointerEvents: 'none',
       }}
     >
-      {panels.map((p, i) => (
-        <rect
-          key={i}
-          x={p.x0}
-          y={viewBoxH - p.y1}
-          width={Math.max(p.x1 - p.x0, 0)}
-          height={Math.max(p.y1 - p.y0, 0)}
-          fill="var(--color-fronts, #e8934a)"
-          stroke="var(--color-border, #ccc)"
-          strokeWidth={0.1}
-          opacity={0.9}
-        />
-      ))}
+      {panels.map((p, i) => {
+        const top = viewBoxH - p.y1;
+        const bot = viewBoxH - p.y0;
+        const mid = (top + bot) / 2;
+        const midX = (p.x0 + p.x1) / 2;
+        // Elevation hinge-marking convention: a triangle whose apex points to the
+        // OPENING (free) side — the opposite edge from the hinge. 'top' = a
+        // lift-up door (hinged along the top, opens up) → apex points DOWN.
+        const points =
+          p.hingeSide === 'top'  ? `${p.x0},${top} ${midX},${bot} ${p.x1},${top}` :
+          p.hingeSide === 'left' ? `${p.x0},${top} ${p.x1},${mid} ${p.x0},${bot}` :
+          p.hingeSide === 'right' ? `${p.x1},${top} ${p.x0},${mid} ${p.x1},${bot}` : '';
+        return (
+          <React.Fragment key={i}>
+            <rect
+              x={p.x0}
+              y={top}
+              width={Math.max(p.x1 - p.x0, 0)}
+              height={Math.max(p.y1 - p.y0, 0)}
+              fill="var(--color-fronts, #e8934a)"
+              stroke="var(--color-border, #ccc)"
+              strokeWidth={0.1}
+              opacity={0.9}
+            />
+            {points && (
+              <polyline
+                points={points}
+                fill="none"
+                stroke="var(--color-border-strong, #555)"
+                strokeWidth={0.3}
+                strokeLinejoin="round"
+                opacity={0.7}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
     </svg>
   );
 }

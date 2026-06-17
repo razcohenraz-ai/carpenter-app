@@ -15,6 +15,7 @@ import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
 import { kitchenElevationLayout } from './kitchenFootprint';
 import { cabinetFrontPanels } from './cabinetFronts';
+import { isCorner, cornerReturnBox } from './cornerModule';
 
 /** One board of a product, expressed as a thin axis-aligned box in the
  *  product's LOCAL frame (cm) — the same frame as {@link ProductSubBox}
@@ -31,6 +32,10 @@ export type FixtureRole = 'drawer-box' | 'rod' | 'front';
 export interface BoardBox3D extends ProductSubBox {
   role: BoardRole | FixtureRole;
   materialId: string;
+  /** Set only on door front faces (role 'front'): the hinge EDGE, so the 3D
+   *  view can draw the elevation hinge-marking triangle (apex on the opposite,
+   *  opening side). 'top' = a lift-up door (קלפה) → apex points down. */
+  hingeSide?: 'left' | 'right' | 'top';
 }
 
 // ── Interior fixture geometry (cm) — mirrors CabinetSketch's 2D drawing ─────────
@@ -113,6 +118,7 @@ export function cabinetBoardBoxes(
   const rawBoxes = decomposeBoxes(
     innerW, input.H, carcassD, input.lowerDoorH, input.plinth,
     input.doorsPerColumn, input.middleDoorH, envelopeTopH, envelopeBottomH,
+    isCorner(input), // corner (פינה): one wide carcass, no 100 cm column split
   );
   const boxes = overrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
     const o = overrides.get(boxStableKey(box));
@@ -334,6 +340,24 @@ export function cabinetBoardBoxes(
     }
   }
 
+  // ── Corner (פינה): the perpendicular hinge-post return (the L's second leg).
+  //    The face flange is a front panel (productFrontBoxes); this leg is a
+  //    front-material board standing inside the carcass at the door↔filler
+  //    boundary, carrying the hinges. ──────────────────────────────────────────
+  if (isCorner(input)) {
+    const cBox = bodyBoxes[0];
+    if (cBox) {
+      const boxBottom = bottomFromFloor.get(cBox.level) ?? plinth;
+      const boxTop = boxBottom + cBox.H;
+      const ret = cornerReturnBox({
+        cabinetWcm: cBox.W, gapCm: input.doorGapMm / 10, cf: input.cornerFiller!,
+        tFrontCm: tF, fullDepthCm: fullD,
+        innerBottomCm: boxBottom + tBody, innerTopCm: boxTop - tBody,
+      });
+      out.push({ ...ret, role: 'front', materialId: frontMat.id });
+    }
+  }
+
   return out;
 }
 
@@ -379,6 +403,7 @@ function cabinetFrontBoxes(
     x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1,
     z0: fullD - tF, z1: fullD,
     role: 'front' as const, materialId: frontMat.id,
+    ...(p.hingeSide ? { hingeSide: p.hingeSide } : {}),
   }));
 }
 

@@ -142,6 +142,10 @@ export function computeSketchGeometry(
    *  top and bottom. Independent of the side shell — wall cabinets have none.
    *  Default 0 (no wall envelope). */
   wallEnvelopeCm = 0,
+  /** Corner unit (פינה): keep the body as ONE box regardless of MAX_BOX_W, so
+   *  the sketch shows a single wide carcass (matching the cut list / 3D) rather
+   *  than splitting 125 cm into two columns. Default false. */
+  noWidthSplit = false,
 ): SketchGeometry {
   const drawW = SVG_W - PAD_LEFT - PAD_RIGHT;
   const drawH = SVG_H - PAD_TOP - PAD_BOTTOM;
@@ -164,7 +168,7 @@ export function computeSketchGeometry(
   const botEnvCm = wallEnvelopeCm > 0 ? wallEnvelopeCm : 0;
   const rawBoxes = decomposeBoxes(
     innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH,
-    topEnvCm, botEnvCm,
+    topEnvCm, botEnvCm, noWidthSplit,
   );
   const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
     ? rawBoxes.map(box => {

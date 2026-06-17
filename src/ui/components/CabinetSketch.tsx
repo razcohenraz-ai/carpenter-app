@@ -93,9 +93,12 @@ interface Props {
   /** Forwarded to `buildBoardModel`. Defaults to true. False = no bottom
    *  board; sides extend to the floor of the box. */
   hasBottom?: boolean;
+  /** Corner unit (פינה): keep the body as ONE wide box (no MAX_BOX_W column
+   *  split), so the sketch matches the single-box cut list / 3D. */
+  cornerSingleWidth?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, cornerSingleWidth }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -126,7 +129,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   const fullD = parseFloat(D);
   const tFrontCm = frontMaterialThickness ?? 0;
   const carcassD = computeCarcassDepth(fullD, backThicknessCm, HINGE_GAP_CM, tFrontCm);
-  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides, shellSides, wallEnvelopeCm ?? 0);
+  const geo = computeSketchGeometry(parseFloat(W), parseFloat(H), carcassD, parseFloat(plinth), lo, dpc, mid, tEnv, hasEnvelopeTop && !!tEnv, boxDimensionOverrides, shellSides, wallEnvelopeCm ?? 0, !!cornerSingleWidth);
 
   // ── Per-body board model (cross-section view) ────────────────────────────
   // Boards are emitted only post-calc (interiorById defined) and only when

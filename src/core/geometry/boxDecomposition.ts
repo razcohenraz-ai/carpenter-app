@@ -36,8 +36,9 @@ export function splitWidth(
   H: number,
   D: number,
   heightRole: "top" | "middle" | "bottom" | "single",
+  noWidthSplit: boolean = false,
 ): BoxProto[] {
-  if (W <= MAX_BOX_W) {
+  if (noWidthSplit || W <= MAX_BOX_W) {
     return [{ W, H, D, position: "single", level: heightRole }];
   }
 
@@ -81,6 +82,11 @@ export function decomposeBoxes(
   middleDoorH?: number,
   envelopeTopH: number = 0,
   envelopeBottomH: number = 0,
+  /** When true, the body is kept as ONE box regardless of `MAX_BOX_W` — the
+   *  width is NOT split into 100 cm columns. Used by the corner unit (פינה),
+   *  which is a single wide carcass with one door + filler (not equal columns).
+   *  Width-split plinths are unaffected (a corner is < MAX_PLINTH_W anyway). */
+  noWidthSplit: boolean = false,
 ): Box[] {
   if (plinthHeight > 0 && plinthHeight >= H) {
     throw new Error(`plinthHeight (${plinthHeight}) must be less than H (${H})`);
@@ -98,7 +104,7 @@ export function decomposeBoxes(
 
   if (!needsSplit) {
     // קומה אחת
-    protos.push(...splitWidth(W, H - plinthHeight, D, "single"));
+    protos.push(...splitWidth(W, H - plinthHeight, D, "single", noWidthSplit));
 
   } else if (doorsPerColumn === 3) {
     // ── 3 קומות + לוגיקת איחוד ──────────────────────────────────────────────
@@ -180,7 +186,7 @@ export function decomposeBoxes(
 
     // בניית protos מהגופים הסופיים
     for (const body of bodies) {
-      const bodyProtos = splitWidth(W, body.H, D, body.level);
+      const bodyProtos = splitWidth(W, body.H, D, body.level, noWidthSplit);
       if (body.shelves.length > 0) {
         protos.push(...bodyProtos.map(p => ({ ...p, internalShelves: body.shelves })));
       } else {
@@ -197,8 +203,8 @@ export function decomposeBoxes(
       throw new Error(`plinthHeight (${plinthHeight}) must be less than lower door height (${lo})`);
     }
 
-    protos.push(...splitWidth(W, H - lo,            D, "top"));
-    protos.push(...splitWidth(W, lo - plinthHeight,  D, "bottom"));
+    protos.push(...splitWidth(W, H - lo,            D, "top", noWidthSplit));
+    protos.push(...splitWidth(W, lo - plinthHeight,  D, "bottom", noWidthSplit));
   }
 
   // ── יחידות צוקל — תמיד בסוף ──────────────────────────────────────────────

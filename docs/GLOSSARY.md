@@ -315,6 +315,15 @@ Props אופציונליים ב-`CabinetForm` (`hideRodOption` ב-`BoxInteriorEd
 ### wall module / מודול קלפה
 `KitchenModuleType = 'wall'`. ארון קיר עליון התלוי מעל השיש. W=100, H=50, D=35, `plinth=0`, חזית בודדת (`maxDoorWidth=120`), 2 מדפים ברירת מחדל. `mount:'wall'` מניע את תצוגת ה-elevation (שורה עליונה בגובה 152 ס"מ) ואת עורך ה-shelf-only. רוחב ברירת מחדל: 100 ס"מ.
 
+### corner module / מודול פינה
+`KitchenModuleType = 'corner'`. גוף בסיס רחב (W=125 ברירת מחדל) לפינת מטבח. החזית אינה התפצלות שווה: **דלת אחת בגודל קבוע** (`cornerFiller.doorWidthCm`, 60) בקצה `doorSide` (ימין ברירת מחדל) + **מילוי בצורת L** מחומר חזית שמכסה את שאר החזית. ה-L = שני חיתוכים — פנים מלא-גובה-דלת + זקף-ציר ניצב (`returnDepthCm`, 7 ס"מ) בגובה הפתח הפנימי, נושא את צירי הדלת. 2 מדפים, עורך shelf-only. הצירים תמיד בצד המילוי. `singleFront:true` + `noWidthSplit` (תיבה אחת למרות MAX_BOX_W). הגאומטריה: `core/product/cornerModule.ts`.
+
+### cornerFiller
+שדה אופציונלי ב-`CabinetInput` (`{ doorSide:'left'|'right'; doorWidthCm; returnDepthCm }`). נוכחותו מסמנת **גוף פינה** (`isCorner`) ומפעילה: עקיפת רוחב הדלת + `hingeSide` בלולאות הדלת, חיתוכי המילוי, פאנלי חזית ייעודיים (דלת+מילוי), לוח הזקף ב-3D, `noWidthSplit` ב-decompose, ו-shelf-only + בקרי הפינה בעורך. כל ערך עריך.
+
+### noWidthSplit
+פרמטר ל-`decomposeBoxes`/`splitWidth`. כש-`true` הגוף נשאר **תיבה אחת** ברוחב מלא ולא מתפצל ל-`MAX_BOX_W` (100 ס"מ) עמודות. משמש את הפינה (`isCorner(input)`) — גוף 125 הוא קרקס יחיד עם דלת+מילוי, לא שתי תיבות. מושחל בכל צרכני decompose דרך `isCorner` / prop `cornerSingleWidth`.
+
 ### mount
 שדה ב-`CabinetInput` (`'base' | 'wall'`, ברירת מחדל `base`). `'wall'` = ארון קיר (קלפה) התלוי מעל השיש. מטא-דאטה ל-UI/מיקום בלבד — מניע את ה-elevation ב-`KitchenOverview` ואת ה-`shelfOnly` ב-`BoxInteriorEditor`; **לא** משפיע על חישוב לוחות/חיתוכים.
 

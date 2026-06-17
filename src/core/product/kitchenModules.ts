@@ -1,7 +1,7 @@
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 
-export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry' | 'wall' | 'pantry-top';
+export type KitchenModuleType = 'drawers' | 'shelves' | 'sink' | 'dishwasher' | 'oven' | 'pantry' | 'wall' | 'pantry-top' | 'corner';
 
 /** Default dimensions for lower kitchen units. */
 const KITCHEN_DEFAULTS = {
@@ -28,7 +28,7 @@ const KITCHEN_DEFAULTS = {
  *  `w` overrides the default width (60 cm for drawers/shelves, 80 cm for sink,
  *  64 cm for dishwasher). */
 export function kitchenModuleInput(type: KitchenModuleType, w?: number): CabinetInput {
-  const defaultW = type === 'sink' ? 80 : type === 'dishwasher' ? 64 : type === 'wall' ? 100 : 60;
+  const defaultW = type === 'sink' ? 80 : type === 'dishwasher' ? 64 : type === 'wall' ? 100 : type === 'corner' ? 125 : 60;
   const base: CabinetInput = { ...KITCHEN_DEFAULTS, W: w ?? defaultW };
 
   if (type === 'sink') {
@@ -81,6 +81,15 @@ export function kitchenModuleInput(type: KitchenModuleType, w?: number): Cabinet
     // are panels, not lift mechanisms, and follow standard kitchen sizing.
     return { ...base, W: w ?? 60, H: 50, D: 60, plinth: 0, mount: 'wall' };
   }
+  if (type === 'corner') {
+    // פינה (corner unit): a wide blind-corner base. Standard kitchen carcass at
+    // W=125, but the front is ONE fixed 60 cm door at the chosen edge + an
+    // L-shaped front-material filler covering the rest (see `cornerFiller` and
+    // `core/product/cornerModule.ts`). `singleFront:true` pins the column count
+    // to 1 — the door loops then override its width to `doorWidthCm` and put the
+    // hinges on the filler side. Body editor is shelf-only.
+    return { ...base, singleFront: true, cornerFiller: { doorSide: 'right', doorWidthCm: 60, returnDepthCm: 7 } };
+  }
   if (type === 'drawers') {
     // יחידת מגירות (drawers unit): standard kitchen carcass with EXTERNAL
     // drawer faces filling the full body width. `singleFront:true` pins the
@@ -117,7 +126,10 @@ export function kitchenModuleState(type: KitchenModuleType): SavedCabinetState {
     };
   }
 
-  if (type === 'shelves') {
+  if (type === 'shelves' || type === 'corner') {
+    // shelves + corner share the same interior: two shelves splitting the
+    // bodyH (= 90 − plinth10 = 80) into thirds (hff 25 / 50). The corner's
+    // body editor is shelf-only, so the carpenter adds/removes shelves freely.
     return {
       ...emptyBase,
       interior: {

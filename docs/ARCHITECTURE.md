@@ -53,7 +53,8 @@ src/
 │   │   ├── interiorUtils.ts      init/preserve, redistributeShelves, defaultDrawerPlacement, defaultRodPlacement, equalizeExternalDrawersIfOverflow
 │   │   └── fixedShelfUtils.ts    syncFixedShelf — מדף קבוע מעל external drawers
 │   ├── product/
-│   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven/pantry/wall/pantry-top
+│   │   ├── kitchenModules.ts     kitchenModuleInput/State — defaults למודולי drawers/shelves/sink/dishwasher/oven/pantry/wall/pantry-top/corner
+│   │   ├── cornerModule.ts       isCorner/cornerFrontXLayout/cornerHingeSide/cornerFillerCutItems/cornerReturnBox — מקור יחיד לגאומטריית הפינה (cut/2D/3D)
 │   │   ├── kitchenPlinth.ts      groupKitchenUnitsForPlinth / buildKitchenPlinthCuts / buildKitchenPlinthBoxes
 │   │   ├── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint/kitchenElevationLayout (חולץ מ-KitchenOverview)
 │   │   ├── cabinetSketchModel.ts buildCabinetSketchModel — props של CabinetSketch ממקור יחיד (UnitsView + ProductElevation)

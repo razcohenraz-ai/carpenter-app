@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { cabinetBoardBoxes, productBoardBoxes, productFrontBoxes } from './cabinetBoards3D';
 import { productBounds, productSubBoxes } from '../room/productBounds';
 import { defaultInputForType, emptyCabinetState } from './productDefaults';
+import { kitchenModuleInput, kitchenModuleState } from './kitchenModules';
 import type { CabinetInput, SavedCabinetState } from '../../types';
 import type { ShelfItem, DrawerItem, RodItem } from '../../types/interior';
 import type { ProductUnit } from '../../types/project';
@@ -192,5 +193,38 @@ describe('productBoardBoxes — kitchen', () => {
     const subs = productSubBoxes(kitchenProduct());
     const rightmost = subs.reduce((a, b) => (b.x1 > a.x1 ? b : a));
     expect(rightmost.x1 - rightmost.x0).toBeCloseTo(60, 1);
+  });
+});
+
+describe('cabinetBoardBoxes — corner (פינה)', () => {
+  const cornerInput = () => kitchenModuleInput('corner');
+  const cornerState = () => kitchenModuleState('corner') as SavedCabinetState;
+
+  it('stays a single 125 cm carcass (no MAX_BOX_W split) and emits the hinge-post return', () => {
+    const input = cornerInput();
+    const boards = cabinetBoardBoxes(input, cornerState(), []);
+    // One carcass: exactly one left + one right side spanning the full width.
+    expect(boards.filter(b => b.role === 'side-left')).toHaveLength(1);
+    expect(boards.filter(b => b.role === 'side-right')).toHaveLength(1);
+    expect(Math.max(...boards.map(b => b.x1))).toBeCloseTo(input.W, 0);
+    // The 7 cm return: the only 'front'-role board here (door faces live in
+    // productFrontBoxes). Thin in X, reaching 7 cm back from the front face.
+    const ret = boards.find(b => b.role === 'front')!;
+    expect(ret).toBeDefined();
+    expect(ret.z1).toBeCloseTo(input.D, 5);
+    expect(ret.z1 - ret.z0).toBeCloseTo(7, 5);
+    expect(ret.x1 - ret.x0).toBeLessThan(3);
+  });
+
+  it('fronts = a fixed 60 cm door at the edge + a wider filler face covering the rest', () => {
+    const input = cornerInput();
+    const fronts = productFrontBoxes(
+      { id: 'p', name: 'פינה', productType: 'wardrobe', cabinet: { input, state: cornerState() } } as ProductUnit,
+      [],
+    );
+    expect(fronts).toHaveLength(2);
+    const widths = fronts.map(f => f.x1 - f.x0).sort((a, b) => a - b);
+    expect(widths[0]).toBeCloseTo(60, 0);       // the door
+    expect(widths[1]).toBeGreaterThan(60);      // the filler covers the rest
   });
 });

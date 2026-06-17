@@ -1,6 +1,6 @@
 import React from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import { OrbitControls, Html, Line } from '@react-three/drei';
 import { DoubleSide } from 'three';
 import type { Room, ProductUnit } from '../../types/project';
 import type { CustomMaterial } from '../../types/materials';
@@ -27,6 +27,48 @@ function colorForRole(role: BoardBox3D['role']): string {
   if (role.startsWith('envelope')) return '#b89668';
   if (role.startsWith('plinth')) return '#8a6f4a';
   return '#c8a877'; // sides / top / bottom / partition / traverses
+}
+
+type Vec3 = [number, number, number];
+interface Aabb { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; }
+
+/** The elevation hinge-marking triangle for a door face, in ROOM coordinates.
+ *  The apex points to the OPENING (free) side — the opposite edge from the
+ *  hinge. 'top' = a lift-up door (hinged along the top, opens up) → apex points
+ *  down. The door face is thin along its facing axis; the facing direction and
+ *  which room edge the cabinet-local hinge side maps to are both fixed by the
+ *  placement rotation (same convention as `subBoxRoomAABB`). Returns the 3
+ *  points [openCornerA, apex, openCornerB]. */
+function hingeTrianglePoints(b: Aabb, rotationDeg: number, hingeEdge: 'left' | 'right' | 'top'): Vec3[] {
+  const r = ((rotationDeg % 360) + 360) % 360;
+  const yTop = b.y1, yBot = b.y0, yMid = (b.y0 + b.y1) / 2;
+  const eps = 0.3; // lift the marking just off the face so it never z-fights
+  const facesZ = r === 0 || r === 180;
+  const zFace = r === 180 ? b.z0 - eps : b.z1 + eps;
+  const xFace = r === 90 ? b.x0 - eps : b.x1 + eps;
+
+  if (hingeEdge === 'top') {
+    // Hinged at the top, opens up → apex at the bottom, mid-width.
+    if (facesZ) {
+      const midX = (b.x0 + b.x1) / 2;
+      return [[b.x0, yTop, zFace], [midX, yBot, zFace], [b.x1, yTop, zFace]];
+    }
+    const midZ = (b.z0 + b.z1) / 2;
+    return [[xFace, yTop, b.z0], [xFace, yBot, midZ], [xFace, yTop, b.z1]];
+  }
+
+  if (facesZ) {
+    // Width runs along X. local-left → x0 at 0°, x1 at 180°. Apex = opening side.
+    const hingeAtX0 = (hingeEdge === 'left') === (r === 0);
+    const apexX = hingeAtX0 ? b.x1 : b.x0;
+    const openX = hingeAtX0 ? b.x0 : b.x1;
+    return [[openX, yTop, zFace], [apexX, yMid, zFace], [openX, yBot, zFace]];
+  }
+  // Width runs along Z. local-left → z0 at 90°, z1 at 270°. Apex = opening side.
+  const hingeAtZ0 = (hingeEdge === 'left') === (r === 90);
+  const apexZ = hingeAtZ0 ? b.z1 : b.z0;
+  const openZ = hingeAtZ0 ? b.z0 : b.z1;
+  return [[xFace, yTop, openZ], [xFace, yMid, apexZ], [xFace, yBot, openZ]];
 }
 
 interface Props {
@@ -99,6 +141,7 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
               ? [...carcass.filter(b => !INTERIOR_ROLES.has(b.role)), ...productFrontBoxes(product, customMaterials)]
               : carcass;
           const roles = detailed ? (local as BoardBox3D[]).map(b => b.role) : null;
+          const hingeSides = detailed ? (local as BoardBox3D[]).map(b => b.hingeSide) : null;
           const aabbs = placementSubBoxAABBs(pl, local, bounds);
           if (aabbs.length === 0) return null;
 
@@ -111,6 +154,7 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
             <group key={pl.productId}>
               {aabbs.map((b, i) => {
                 const role = roles ? roles[i]! : undefined;
+                const hingeSide = hingeSides ? hingeSides[i] : undefined;
                 const color = isSel
                   ? SELECTED_COLOR
                   : role ? colorForRole(role) : fallbackColor;
@@ -134,8 +178,8 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
                   );
                 }
 
-                return (
-                  <mesh key={i} position={center} onClick={onClick} onDoubleClick={onDoubleClick}>
+                const faceMesh = (
+                  <mesh position={center} onClick={onClick} onDoubleClick={onDoubleClick}>
                     <boxGeometry args={[
                       Math.max(b.x1 - b.x0, 0.1),
                       Math.max(b.y1 - b.y0, 0.1),
@@ -147,6 +191,23 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
                     />
                   </mesh>
                 );
+
+                // Door face → overlay the elevation hinge-marking triangle.
+                if (hingeSide) {
+                  return (
+                    <group key={i}>
+                      {faceMesh}
+                      <Line
+                        points={hingeTrianglePoints(b, pl.rotationDeg, hingeSide)}
+                        color="#8a8a8a"
+                        lineWidth={1}
+                        transparent
+                        opacity={0.65}
+                      />
+                    </group>
+                  );
+                }
+                return <React.Fragment key={i}>{faceMesh}</React.Fragment>;
               })}
               <Html position={[labelX, labelTop + 5, labelZ]} center style={{ pointerEvents: 'none' }}>
                 <div className={styles.label3d}>{product.name}</div>

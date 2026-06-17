@@ -88,6 +88,11 @@ export interface Translations {
     envelopeTopWarn: (cm: number) => string;
     hasWallEnvelope: string;
     maxDoorWidth: string;
+    cornerDoorSide: string;
+    cornerSideLeft: string;
+    cornerSideRight: string;
+    cornerDoorWidth: string;
+    cornerReturn: string;
   };
 
   results: {
@@ -325,7 +330,7 @@ const he: Translations = {
     kitchenAddUnit: '+ הוסף גוף',
     kitchenModuleTitle: 'סוג גוף',
     kitchenModuleWidth: 'רוחב (ס"מ)',
-    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור', dishwasher: 'מדיח', oven: 'תנור', pantry: 'מזווה', wall: 'קלפה', 'pantry-top': 'עליון מזווה' },
+    kitchenModules: { drawers: 'מגירות', shelves: 'מדפים', sink: 'כיור', dishwasher: 'מדיח', oven: 'תנור', pantry: 'מזווה', wall: 'קלפה', 'pantry-top': 'עליון מזווה', corner: 'פינה' },
     kitchenNoUnits: 'אין גופים עדיין. לחץ על "הוסף גוף" כדי להתחיל.',
     kitchenEditUnit: 'עריכה →',
     productTypes: {
@@ -401,6 +406,11 @@ const he: Translations = {
     envelopeTopWarn: (cm: number) => `אזהרה: גובה קומה עליונה פנימית ${cm.toFixed(1)} ס"מ — מומלץ לפחות 20 ס"מ.`,
     hasWallEnvelope: 'מעטפת עליון+תחתון',
     maxDoorWidth: 'רוחב מקסימלי לחזית (ס"מ)',
+    cornerDoorSide: 'צד הדלת (פינה)',
+    cornerSideLeft: 'שמאל',
+    cornerSideRight: 'ימין',
+    cornerDoorWidth: 'רוחב דלת פינה (ס"מ)',
+    cornerReturn: 'עומק זקף הציר (ס"מ)',
   },
 
   results: {
@@ -615,7 +625,7 @@ const en: Translations = {
     kitchenAddUnit: '+ Add Unit',
     kitchenModuleTitle: 'Unit type',
     kitchenModuleWidth: 'Width (cm)',
-    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink', dishwasher: 'Dishwasher', oven: 'Oven', pantry: 'Pantry', wall: 'Wall cabinet', 'pantry-top': 'Pantry top' },
+    kitchenModules: { drawers: 'Drawers', shelves: 'Shelves', sink: 'Sink', dishwasher: 'Dishwasher', oven: 'Oven', pantry: 'Pantry', wall: 'Wall cabinet', 'pantry-top': 'Pantry top', corner: 'Corner' },
     kitchenNoUnits: 'No units yet. Click "Add Unit" to start.',
     kitchenEditUnit: 'Edit →',
     productTypes: {
@@ -691,6 +701,11 @@ const en: Translations = {
     envelopeTopWarn: (cm: number) => `Warning: top section inner height is ${cm.toFixed(1)} cm — recommended minimum is 20 cm.`,
     hasWallEnvelope: 'Top+bottom envelope',
     maxDoorWidth: 'Max Front Width (cm)',
+    cornerDoorSide: 'Door side (corner)',
+    cornerSideLeft: 'Left',
+    cornerSideRight: 'Right',
+    cornerDoorWidth: 'Corner door width (cm)',
+    cornerReturn: 'Hinge-post depth (cm)',
   },
 
   results: {

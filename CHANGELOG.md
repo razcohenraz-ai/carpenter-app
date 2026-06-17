@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+### נוסף — סימון ציר דלת (קונבנציית תכנון) במבט-חזית ובתלת-ממד
+
+- כל **פאנל דלת** מסומן כעת במשולש הקונבנציונלי של שרטוטי נגרות — שני אלכסונים מפינות **צד הציר** אל קודקוד ב**צד הפתיחה** (קודקוד המשולש מצביע לכיוון הפתיחה, מנוגד לצירים). מבדיל דלת שמאלית מימנית במבט בלבד.
+- **קלפה (lift-up)**: דלת התלויה בציר עליון ונפתחת כלפי מעלה — המשולש **אנכי, קודקוד כלפי מטה** (`hingeSide: 'top'`, מגודר ע"י `input.liftMechanism`).
+- **מקור הקצה**: `FrontPanel.hingeSide?: 'left'|'right'|'top'` (מחושב ב-`cabinetFrontPanels` — `salonHingeSide`/`defaultHingeSide` עם היפוך אינדקס מול `Door.frontIndex`, `'top'` לקלפה, ולפינה `cornerHingeSide`); נטען רק על פאנלי דלת (לא מגירות/מילוי).
+- **2D**: `CabinetFrontsOverlay` (תצוגת מטבח/חדר) ו-`CabinetFrontsSketch` (עורך הגוף, עם `liftUp`) מציירים את המשולש (`polyline`, class `hingeMark`). **3D**: `BoardBox3D` נושא `hingeSide`; `RoomView3D` מצייר את המשולש על פני הדלת (`drei <Line>`), עם אוריינטציה נכונה לכל 4 הסיבובים (אותה קונבנציה כמו `subBoxRoomAABB`).
+
+### נוסף — מודול מטבח חדש: פינה (corner) — דלת קבועה + מילוי בצורת L
+
+- **מודול תשיעי `'corner'` (פינה)**: גוף בסיס רחב (W=125 ברירת מחדל) שיורש H/D/צוקל מ-`KITCHEN_DEFAULTS`. **שני מדפים**, עורך גוף **shelf-only**. החזית: **דלת אחת בגודל קבוע** (60 ס"מ ברירת מחדל) בצד נבחר (**ימין** כברירת מחדל) + **מילוי בצורת L** מחומר חזית שמכסה את שאר החזית. כל ערך **ניתן לעריכה** (צד, רוחב דלת, עומק זקף).
+- **לוח חדש `CabinetInput.cornerFiller`** (`{ doorSide, doorWidthCm, returnDepthCm }`) — נוכחותו מסמנת גוף פינה ומפעילה את כל הענפים. `singleFront:true` מצמיד עמודה אחת; לולאות הדלת **עוקפות** את רוחב הדלת ל-`doorWidthCm` ומציבות את הצירים בצד המילוי (`hingeSide`).
+- **ליבה חדשה `core/product/cornerModule.ts`** — מקור יחיד לגאומטריית הפינה: `isCorner`, `cornerFrontXLayout` (דלת בקצה + מילוי על השאר, gap לפי `computeFrontGeometry`), `cornerHingeSide` (תמיד צד המילוי), `cornerFillerCutItems` (שני חיתוכי חזית — פנים מלא-גובה-דלת + זקף-ציר 7 ס"מ × גובה-פתח-פנימי), `cornerReturnBox` (תיבת הזקף ל-3D).
+- **רשימת חיתוך**: דלת 60 + **מילוי פינה** (פנים) + **זקף ציר פינה** (זקף 7 ס"מ), כולם חומר חזית; ב-`cabinetCompute` ו-`useCabinet` (שני המסלולים). פרזול: צירי הדלת בצד המילוי + ידית; למילוי אין פרזול.
+- **`decomposeBoxes` קיבל פרמטר `noWidthSplit`** — גוף הפינה נשאר **תיבה רחבה אחת** למרות `MAX_BOX_W=100` (אחרת 125 היה מתפצל לשתי תיבות, שתי דלתות, והמדפים לא היו נתלים ב-`single:single`). מושחל ב-5 צרכני decompose (cut ×2, 3D, 2 sketch builders) דרך `isCorner(input)` / prop `cornerSingleWidth`.
+- **רינדור**: פאנלי החזית (דלת + מילוי) דרך `cabinetFrontPanels` — מזין את overlay החזיתות ב-2D ואת מבט-החזית ב-3D. הזקף נפלט כלוח חזית ב-`cabinetBoards3D` (3D). `CabinetFrontsSketch` (עורך הגוף) קיבל ענף פינה ייעודי. עורך הגוף: shelf-only + שלושת בקרי הפינה (recalculate חי).
+
 ### תוקן — מעטפת עליון+תחתון של קלפה (`hasWallEnvelope`) חסרה בתלת-ממד וצבועה בצבע גוף ב-2D
 
 - **המידות בגזירה (cut list) תקינות** — באג תצוגה בלבד. מסלול הייצור (`useCabinet`/`cabinetCompute`) משחיל נכון את דגל `wallEnv`; שני מסלולי הרינדור החדשים לא.

@@ -182,6 +182,33 @@ describe('kitchenModuleInput — pantry-top (עליון מזווה)', () => {
   });
 });
 
+describe('kitchenModuleInput — corner (פינה)', () => {
+  it('default W=125, inherits kitchen H=90 / D=60 / plinth=10', () => {
+    const inp = kitchenModuleInput('corner');
+    expect(inp.W).toBe(125);
+    expect(inp.H).toBe(90);
+    expect(inp.D).toBe(60);
+    expect(inp.plinth).toBe(10);
+  });
+
+  it('W override is respected', () => {
+    expect(kitchenModuleInput('corner', 110).W).toBe(110);
+  });
+
+  it('singleFront = true (one door column; its width is overridden to doorWidthCm)', () => {
+    expect(kitchenModuleInput('corner').singleFront).toBe(true);
+  });
+
+  it('cornerFiller defaults: door on the right, 60 cm, 7 cm return', () => {
+    const cf = kitchenModuleInput('corner').cornerFiller;
+    expect(cf).toEqual({ doorSide: 'right', doorWidthCm: 60, returnDepthCm: 7 });
+  });
+
+  it('has a door: hasFronts left at default (undefined → true)', () => {
+    expect(kitchenModuleInput('corner').hasFronts).toBeUndefined();
+  });
+});
+
 describe('kitchenModuleState — interior shape', () => {
   it('drawers → 3 external drawers', () => {
     const st = kitchenModuleState('drawers');
@@ -193,6 +220,14 @@ describe('kitchenModuleState — interior shape', () => {
 
   it('shelves → 2 shelves', () => {
     const st = kitchenModuleState('shelves');
+    const items = st.interior['single:single'];
+    expect(items).toBeDefined();
+    expect(items!.length).toBe(2);
+    expect(items!.every(i => i.type === 'shelf')).toBe(true);
+  });
+
+  it('corner → 2 shelves (shelf-only body)', () => {
+    const st = kitchenModuleState('corner');
     const items = st.interior['single:single'];
     expect(items).toBeDefined();
     expect(items!.length).toBe(2);

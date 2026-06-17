@@ -71,6 +71,7 @@ function SingleCabinetElevation({
         {...(input.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: input.sinkTraverseWidthCm } : {})}
         {...(input.hasBack !== undefined ? { hasBack: input.hasBack } : {})}
         {...(input.hasBottom !== undefined ? { hasBottom: input.hasBottom } : {})}
+        {...(input.cornerFiller ? { cornerSingleWidth: true } : {})}
         customMaterials={customMaterials}
       />
       {mode === 'fronts' && (
@@ -151,6 +152,7 @@ function KitchenElevation({
               {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
               {...(inp.hasBack !== undefined ? { hasBack: inp.hasBack } : {})}
               {...(inp.hasBottom !== undefined ? { hasBottom: inp.hasBottom } : {})}
+              {...(inp.cornerFiller ? { cornerSingleWidth: true } : {})}
               customMaterials={customMaterials}
               unifiedPlinth
             />

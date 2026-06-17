@@ -50,6 +50,15 @@ describe("decomposeBoxes", () => {
     boxes.forEach((b) => expect(b.W).toBeLessThanOrEqual(100));
   });
 
+  it("noWidthSplit=true (פינה) — נשאר גוף יחיד למרות W>100", () => {
+    // W=125 רגיל → 2 קופסאות; עם noWidthSplit → גוף יחיד single ברוחב מלא.
+    const boxes = decomposeBoxes(125, 90, 60, undefined, 10, "auto", undefined, 0, 0, true);
+    const bodies = boxes.filter((b) => b.level !== "plinth");
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]!.position).toBe("single");
+    expect(bodies[0]!.W).toBe(125);
+  });
+
   it("W=250 מפצל ל-3 קופסאות, כל אחת ≤ 100", () => {
     const boxes = decomposeBoxes(250, 180, 60);
     expect(boxes).toHaveLength(3);

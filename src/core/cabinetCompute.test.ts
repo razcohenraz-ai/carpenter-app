@@ -107,3 +107,42 @@ describe('computeUnitCutsAndHardware — door cut tracks per-body overrides', ()
     expect(narrow).toBeLessThan(wide);
   });
 });
+
+// ── Corner (פינה): fixed-width door + L-shaped filler ────────────────────────
+// The corner front is NOT the equal-split of the 125 cm body: it is one fixed
+// 60 cm door at the chosen edge plus a front-material filler covering the rest
+// (face flange + a 7 cm perpendicular hinge-post return). All three pieces reach
+// the saw operator's list; the filler is enriched to the front material.
+describe('computeUnitCutsAndHardware — corner (פינה) front + filler', () => {
+  const input = kitchenModuleInput('corner'); // W=125, door 60 right, 7 cm return
+  const state = kitchenModuleState('corner');
+  const { cuts } = computeUnitCutsAndHardware(input, state);
+
+  it('the single door cut is the fixed 60 cm width (not the 125 body width)', () => {
+    const doors = cuts.filter(c => c.group === 'door');
+    expect(doors).toHaveLength(1);
+    expect(doors[0]!.w).toBeCloseTo(600 - 1.2, 1); // 60 cm − 1.2 mm edging band
+  });
+
+  it('emits the L-filler: face flange covering the rest + a 7 cm hinge-post return, both front material', () => {
+    const face = cuts.find(c => c.name === 'מילוי פינה');
+    const ret = cuts.find(c => c.name === 'זקף ציר פינה');
+    expect(face).toBeDefined();
+    expect(ret).toBeDefined();
+    expect(face!.group).toBe('front');
+    expect(ret!.group).toBe('front');
+    expect(face!.materialId).toBe(input.frontMaterialId); // enriched to front material
+    expect(ret!.materialId).toBe(input.frontMaterialId);
+    // Face width = (125 − 60 − 3·0.3) cm − 1.2 mm band.
+    expect(face!.w).toBeCloseTo((125 - 60 - 0.9) * 10 - 1.2, 1);
+    // Return = 7 cm wide × inner opening (bodyH 80 − 2·1.8 = 76.4 cm).
+    expect(ret!.w).toBeCloseTo(70, 1);
+    expect(ret!.h).toBeCloseTo(764, 1);
+  });
+
+  it('the filler face height matches the door height (shared facade line)', () => {
+    const door = cuts.find(c => c.group === 'door')!;
+    const face = cuts.find(c => c.name === 'מילוי פינה')!;
+    expect(face.h).toBeCloseTo(door.h, 1);
+  });
+});

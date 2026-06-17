@@ -28,6 +28,7 @@ import {
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
+import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
 import { calcHardware } from '../../core/hardware/calcHardware';
 import {
   buildBoardModel,
@@ -808,7 +809,7 @@ export function useCabinet(settings?: {
 
     const envelopeTopH = ((hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
     const envelopeBottomH = wallEnv ? tFront : 0;
-    const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH, envelopeBottomH);
+    const rawBoxes = decomposeBoxes(innerW, H, carcassD, lowerDoorH, plinth, doorsPerColumn, middleDoorH, envelopeTopH, envelopeBottomH, isCorner(input));
     // Apply per-body dimension overrides (W/H/D). Each override replaces only
     // the axes the carpenter explicitly set; unset axes keep the decomposed value.
     // The override affects only the board model for that body — it does NOT
@@ -1013,9 +1014,12 @@ export function useCabinet(settings?: {
       const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
       const hasTopGap = box.level === 'top' || box.level === 'single';
 
-      // Every door — partition or not — uses its row's frontWidth.
+      // Every door — partition or not — uses its row's frontWidth. Corner
+      // unit (פינה): the single door is a fixed `doorWidthCm` at the chosen
+      // edge with hinges on the filler side (see core/product/cornerModule.ts).
       const rowLayout = layoutByRow.get(box.level);
-      const frontW = rowLayout?.frontWidth ?? 0;
+      const cornerCf = isCorner(input) ? input.cornerFiller! : null;
+      const frontW = cornerCf ? cornerCf.doorWidthCm : (rowLayout?.frontWidth ?? 0);
 
       for (let fi = 0; fi < numFronts; fi++) {
         const doorId = makeDoorId(box.id, fi);
@@ -1029,9 +1033,11 @@ export function useCabinet(settings?: {
         const coversSkirt = originalCoversSkirt && skirtDrawer === null;
 
         const oldDoor = stableDoorMap.get(`${boxStableKey(box)}:${fi}`);
-        const hingeSide = numFronts > 1
-          ? salonHingeSide(fi, numFronts)
-          : defaultHingeSide(box.position, allPositions);
+        const hingeSide = cornerCf
+          ? cornerHingeSide(cornerCf)
+          : numFronts > 1
+            ? salonHingeSide(fi, numFronts)
+            : defaultHingeSide(box.position, allPositions);
 
         if (!oldDoor) {
           const defaults = computeDefaultHingePositions(panelH);
@@ -1044,7 +1050,8 @@ export function useCabinet(settings?: {
           };
         } else {
           const recomputed = recomputeDoorHinges(
-            { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm },
+            { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm,
+              ...(cornerCf ? { hingeSide: cornerHingeSide(cornerCf) } : {}) },
             itemsForFront, plinth,
           );
           newDoors[doorId] = recomputed;
@@ -1067,6 +1074,20 @@ export function useCabinet(settings?: {
     const doorCuts = buildDoorCutItems({
       doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
     });
+
+    // ── Corner filler (פינה): face flange + perpendicular hinge-post return ──
+    const cornerFillerCuts: CutItem[] = [];
+    if (isCorner(input)) {
+      const cornerBox = bodyBoxes[0];
+      const cornerDoor = cornerBox ? newDoors[makeDoorId(cornerBox.id, 0)] : undefined;
+      if (cornerBox && cornerDoor) {
+        cornerFillerCuts.push(...cornerFillerCutItems({
+          cabinetWcm: cornerBox.W, gapCm: cabinetGapCm, cf: input.cornerFiller!,
+          doorHeightCm: cornerDoor.height, innerHeightCm: Math.max(0, cornerBox.H - 2 * tBody),
+          edging: cabinetEdging,
+        }));
+      }
+    }
 
     // ── External-drawer front cuts ────────────────────────────────────────
     // Width comes from the cabinet-level layout (same source as the doors):
@@ -1257,6 +1278,7 @@ export function useCabinet(settings?: {
     }
     const allCuts = [
       ...enrich(doorCuts),
+      ...enrich(cornerFillerCuts),
       ...boardCuts,
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),

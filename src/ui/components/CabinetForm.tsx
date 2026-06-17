@@ -57,6 +57,12 @@ interface FormState {
   /** Cabinet-wide edging finish material. `''` = auto (matches the panel
    *  the band is on); any other value is a catalog `MaterialId`. */
   edgingFinishMaterialId: '' | MaterialId;
+  /** Corner unit (פינה) controls — only meaningful when `initialInput.cornerFiller`
+   *  is set. Door side, fixed door width (cm), and the hinge-post return depth
+   *  (cm). Stored as strings for the number inputs. */
+  cornerDoorSide: 'left' | 'right';
+  cornerDoorWidthCm: string;
+  cornerReturnCm: string;
 }
 
 interface FormErrors {
@@ -146,6 +152,9 @@ function inputToFormState(
     maxDoorWidth: String(inp.maxDoorWidth),
     edgingThicknessMm: inp.edging?.thickness === 1.3 ? '1.3' : '0.6',
     edgingFinishMaterialId: (inp.edging?.finishMaterialId ?? '') as '' | import('../../types/materials').MaterialId,
+    cornerDoorSide: inp.cornerFiller?.doorSide ?? 'right',
+    cornerDoorWidthCm: String(inp.cornerFiller?.doorWidthCm ?? 60),
+    cornerReturnCm: String(inp.cornerFiller?.returnDepthCm ?? 7),
   };
 }
 
@@ -220,6 +229,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
+      // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
+      // so the door side / width / return survive every recalculation (Gotcha #2).
+      ...(initialInput?.cornerFiller ? { cornerFiller: {
+        doorSide: form.cornerDoorSide,
+        doorWidthCm: Math.max(parseFloat(form.cornerDoorWidthCm) || 60, 1),
+        returnDepthCm: Math.max(parseFloat(form.cornerReturnCm) || 7, 0),
+      } } : {}),
     });
     // Restore saved state (interior/doors/overrides) right after first calculate
     if (initialState && !restoredRef.current) {
@@ -347,6 +363,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
+      // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
+      // so the door side / width / return survive every recalculation (Gotcha #2).
+      ...(initialInput?.cornerFiller ? { cornerFiller: {
+        doorSide: form.cornerDoorSide,
+        doorWidthCm: Math.max(parseFloat(form.cornerDoorWidthCm) || 60, 1),
+        returnDepthCm: Math.max(parseFloat(form.cornerReturnCm) || 7, 0),
+      } } : {}),
     });
   }
 
@@ -389,6 +412,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       doorGap: '2', doorGapManuallySet: false,
       maxDoorWidth: '60',
       edgingThicknessMm: '0.6', edgingFinishMaterialId: '',
+      cornerDoorSide: 'right', cornerDoorWidthCm: '60', cornerReturnCm: '7',
     }
   );
 
@@ -537,6 +561,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
+      // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
+      // so the door side / width / return survive every recalculation (Gotcha #2).
+      ...(initialInput?.cornerFiller ? { cornerFiller: {
+        doorSide: form.cornerDoorSide,
+        doorWidthCm: Math.max(parseFloat(form.cornerDoorWidthCm) || 60, 1),
+        returnDepthCm: Math.max(parseFloat(form.cornerReturnCm) || 7, 0),
+      } } : {}),
     };
     calculate(cabinetInput);
   }
@@ -684,7 +715,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             derivedD={result?.derivedBoxDims.get(editingBoxSlotId)?.D ?? editingBox.D}
             {...(hideMainDimensions ? { hideRodOption: true } : {})}
             {...(initialInput?.hasFronts === false ? { hideInteriorControls: true } : {})}
-            {...(initialInput?.mount === 'wall' ? { shelfOnly: true } : {})}
+            {...(initialInput?.mount === 'wall' || initialInput?.cornerFiller ? { shelfOnly: true } : {})}
             {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
             {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
           />
@@ -988,6 +1019,65 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               )}
             </div>
 
+            {/* Corner unit (פינה) controls — door side / width / hinge-post depth.
+                Each edits cornerFiller and recalculates live (mirrors the wall-
+                envelope checkbox) so the door + filler follow immediately. */}
+            {initialInput?.cornerFiller && (
+              <>
+                <div className={styles.field}>
+                  <label className={styles.fieldLabel} htmlFor="corner-door-side">{t.form.cornerDoorSide}</label>
+                  <select
+                    id="corner-door-side"
+                    className={styles.input}
+                    value={form.cornerDoorSide}
+                    onChange={e => {
+                      const side = e.target.value as 'left' | 'right';
+                      setForm(p => ({ ...p, cornerDoorSide: side }));
+                      const li = getLastInput();
+                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorSide: side } });
+                    }}
+                  >
+                    <option value="right">{t.form.cornerSideRight}</option>
+                    <option value="left">{t.form.cornerSideLeft}</option>
+                  </select>
+                </div>
+                <div className={styles.field}>
+                  <label className={styles.fieldLabel} htmlFor="corner-door-w">{t.form.cornerDoorWidth}</label>
+                  <input
+                    id="corner-door-w"
+                    className={styles.input}
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.cornerDoorWidthCm}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm(p => ({ ...p, cornerDoorWidthCm: val }));
+                      const li = getLastInput();
+                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorWidthCm: Math.max(parseFloat(val) || 60, 1) } });
+                    }}
+                  />
+                </div>
+                <div className={styles.field}>
+                  <label className={styles.fieldLabel} htmlFor="corner-return">{t.form.cornerReturn}</label>
+                  <input
+                    id="corner-return"
+                    className={styles.input}
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.cornerReturnCm}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm(p => ({ ...p, cornerReturnCm: val }));
+                      const li = getLastInput();
+                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, returnDepthCm: Math.max(parseFloat(val) || 7, 0) } });
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
             {/* רווח בין דלתות */}
             <div className={styles.field}>
               <label className={styles.fieldLabel} htmlFor="input-door-gap">
@@ -1102,6 +1192,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
               {...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {})}
               {...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {})}
+              {...(initialInput?.cornerFiller ? { cornerSingleWidth: true } : {})}
             />
           ) : (
             <CabinetFrontsSketch
@@ -1124,6 +1215,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               onDoorClick={handleDoorClick}
               onBoxClick={handleBoxClick}
               {...(boxDimensionOverrides.size > 0 ? { boxDimensionOverrides } : {})}
+              {...(initialInput?.cornerFiller ? { cornerFiller: initialInput.cornerFiller } : {})}
+              {...(initialInput?.liftMechanism ? { liftUp: true } : {})}
             />
           )}
         </div>
