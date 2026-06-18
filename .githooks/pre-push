@@ -1,0 +1,13 @@
+#!/bin/sh
+# Pre-push gate — a red state can never land on the remote.
+# Runs the same two checks CLAUDE.md mandates after every change.
+# Bypass in a real emergency with:  git push --no-verify
+set -e
+
+echo "pre-push ▸ tsc --noEmit"
+npx tsc --noEmit
+
+echo "pre-push ▸ vitest run"
+npx vitest run
+
+echo "pre-push ▸ OK"

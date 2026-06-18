@@ -8,7 +8,8 @@ import {
   getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
 } from '../../core/geometry/frontGeometry';
-import { buildBoardModel, deriveEnvelopeFlags, resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM } from '../../core/boards/boardModel';
+import { resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM, type Board } from '../../core/boards/boardModel';
+import { buildSketchBoards } from '../../core/product/cabinetSketchBoards';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -145,7 +146,7 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
     ? (customMaterials ? getMaterialWithCustom(frontMaterialId, customMaterials) : getEffectiveMaterial(frontMaterialId))
     : null;
   const hasBoards = !!interiorById && !!bodyMat && !!frontMat;
-  const boardsByBoxId = new Map<string, ReturnType<typeof buildBoardModel>>();
+  const boardsByBoxId = new Map<string, Board[]>();
 
   // Plinth split lines — drawn ONLY between adjacent plinth boxes in
   // STANDALONE mode (single cabinet, unifiedPlinth=false). In kitchen mode
@@ -180,41 +181,30 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
   // but the joint convention is uniform across the whole cabinet.
   const cabinetJoint = resolveCabinetJointMethod(parseFloat(W), parseFloat(H));
   if (hasBoards) {
-    for (const box of geo.boxes) {
-      if (box.level === 'plinth') continue;
-      const hasPartition = partitionsById?.get(box.id) === true;
-      const cells = cellInteriorById?.[box.id];
-      const items = interiorById![box.id] ?? [];
-      // Centralised envelope-flag derivation handles unit_* positions too —
-      // the legacy inline check missed unit_1 / unit_N (only 'left' / 'right'
-      // / 'single' got envelope panels). The 4th arg threads the wall-cabinet
-      // (קלפה) flag so envelope-top + envelope-bottom caps emit as front-material
-      // boards (otherwise the caps stayed un-drawn and the body's carcass top /
-      // bottom read as a body-coloured cap).
-      const env = deriveEnvelopeFlags(box, shellSides, !!hasEnvelopeTop, (wallEnvelopeCm ?? 0) > 0);
-      const boards = buildBoardModel({
-        box,
-        bodyMaterial: bodyMat!,
-        frontMaterial: frontMat!,
-        hasEnvelopeLeft: env.hasEnvelopeLeft,
-        hasEnvelopeRight: env.hasEnvelopeRight,
-        hasEnvelopeTop: env.hasEnvelopeTop,
-        hasEnvelopeBottom: env.hasEnvelopeBottom,
-        items,
-        hasPartition,
-        ...(hasPartition && cells ? { cellItems: [cells[0] ?? [], cells[1] ?? []] as [typeof items, typeof items] } : {}),
-        hasBack: hasBack ?? true,
-        hasBottom: hasBottom ?? true,
-        envelopeDepth: fullD,
-        backThicknessCm,
-        joint: cabinetJoint,
-        ...(topVariant ? { topVariant } : {}),
-        ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
-      });
+    // Single source for the per-body board set — shared with the cut list / 3D
+    // via the render-parity census, so the three can never drift (Gotcha #8).
+    const sketchBoards = buildSketchBoards(geo.boxes, {
+      shellSides,
+      hasEnvelopeTop: !!hasEnvelopeTop,
+      wallEnvelopeCm: wallEnvelopeCm ?? 0,
+      bodyMaterial: bodyMat!,
+      frontMaterial: frontMat!,
+      fullD,
+      backThicknessCm,
+      joint: cabinetJoint,
+      ...(topVariant ? { topVariant } : {}),
+      ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
+      hasBack: hasBack ?? true,
+      hasBottom: hasBottom ?? true,
+      interiorById: interiorById!,
+      ...(cellInteriorById ? { cellInteriorById } : {}),
+      ...(partitionsById ? { partitionsById } : {}),
+    });
+    for (const [boxId, boards] of sketchBoards) {
       // Envelope side panels are drawn as full-height rects via geo.envelopePanels
       // (always visible below). Exclude them from per-body board rendering to
       // avoid a seam where top and bottom bodies would each draw half the panel.
-      boardsByBoxId.set(box.id, boards.filter(
+      boardsByBoxId.set(boxId, boards.filter(
         b => b.role !== 'envelope-left' && b.role !== 'envelope-right',
       ));
     }

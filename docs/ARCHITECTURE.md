@@ -59,6 +59,7 @@ src/
 │   │   ├── kitchenFootprint.ts   WALL_BOTTOM_CM + effectiveUnitDims/unitOuterW/isWallUnit/kitchenFootprint/kitchenElevationLayout (חולץ מ-KitchenOverview)
 │   │   ├── cabinetSketchModel.ts buildCabinetSketchModel — props של CabinetSketch ממקור יחיד (UnitsView + ProductElevation)
 │   │   ├── cabinetFronts.ts      cabinetFrontPanels → FrontPanel[] (door/drawer faces, floor-up) — מקור יחיד ל-CabinetFrontsOverlay (2D) ולמבט-חזית 3D
+│   │   ├── cabinetSketchBoards.ts buildSketchBoards/cabinetSketchBoards → Board[] (לוחות-גוף ל-2D) — מקור יחיד ש-CabinetSketch.tsx צורך + רשת ה-parity מבקרת
 │   │   └── cabinetBoards3D.ts    cabinetBoardBoxes/productBoardBoxes (carcass+פנים) + productFrontBoxes (חזיתות) → BoardBox3D[] (מקור למבט-3D המפורט)
 │   ├── room/                     תצוגת חדר (floor plan) — core טהור
 │   │   ├── productBounds.ts      productBounds → bounding box W×H×D · productSubBoxes → תיבות מקומיות 3D (לחזית + 3D)

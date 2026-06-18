@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { computeUnitCutsAndHardware } from './cabinetCompute';
 import { cabinetBoardBoxes, type BoardBox3D } from './product/cabinetBoards3D';
-import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM } from './boards/boardModel';
+import { cabinetSketchBoards } from './product/cabinetSketchBoards';
+import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM, type Board } from './boards/boardModel';
 import { isCorner } from './product/cornerModule';
 import { defaultInputForType, emptyCabinetState } from './product/productDefaults';
 import { kitchenModuleInput, kitchenModuleState, type KitchenModuleType } from './product/kitchenModules';
@@ -41,6 +42,11 @@ import type { CabinetInput, CutItem, SavedCabinetState } from '../types';
 // drawer-box parts ('drawer') are NOT structural carcass boards.
 const STRUCT_GROUPS = new Set<CutItem['group']>(['body', 'shell', 'back', 'plinth']);
 
+// The 2D BODY sketch draws the plinth as one cabinet-level rect, never as
+// per-body boards — so its board model carries carcass + envelope + back, but
+// no plinth. Census the 2D path against this narrower scope.
+const STRUCT_GROUPS_2D = new Set<CutItem['group']>(['body', 'shell', 'back']);
+
 // Roles the two paths handle asymmetrically BY DESIGN — excluded from the census
 // on both sides so the comparison stays a true invariant:
 //  - 'partition': the cut list emits it via computePartitionCuts WITHOUT a role
@@ -51,12 +57,16 @@ const EXCLUDED_ROLES = new Set<string>(['partition', 'plinth-gable-b']);
 // 3D-only fixture roles (not carcass boards, never in the cut list as boards).
 const FIXTURE_ROLES = new Set<string>(['drawer-box', 'rod', 'front']);
 
-/** Multiset of structural board roles in the cut list (the source of truth). */
-function censusFromCuts(cuts: CutItem[]): Map<string, number> {
+/** Multiset of structural board roles in the cut list (the source of truth),
+ *  restricted to the given cut groups (3D censuses all four; 2D omits plinth). */
+function censusFromCuts(
+  cuts: CutItem[],
+  groups: ReadonlySet<CutItem['group']> = STRUCT_GROUPS,
+): Map<string, number> {
   const m = new Map<string, number>();
   for (const c of cuts) {
     if (!c.role) continue;
-    if (!c.group || !STRUCT_GROUPS.has(c.group)) continue;
+    if (!c.group || !groups.has(c.group)) continue;
     if (EXCLUDED_ROLES.has(c.role)) continue;
     m.set(c.role, (m.get(c.role) ?? 0) + c.qty);
   }
@@ -68,6 +78,17 @@ function censusFrom3D(boxes: BoardBox3D[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const b of boxes) {
     if (FIXTURE_ROLES.has(b.role)) continue;
+    if (EXCLUDED_ROLES.has(b.role)) continue;
+    m.set(b.role, (m.get(b.role) ?? 0) + 1);
+  }
+  return m;
+}
+
+/** Multiset of structural board roles in the 2D body sketch (carcass + envelope
+ *  + back; the body sketch emits no plinth boards). */
+function censusFrom2D(boards: Board[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const b of boards) {
     if (EXCLUDED_ROLES.has(b.role)) continue;
     m.set(b.role, (m.get(b.role) ?? 0) + 1);
   }
@@ -174,6 +195,18 @@ describe('render parity — 2D sketch geometry vs cut list', () => {
   });
 });
 
+// ── 3b. 2D body-board model ↔ cut list: structural board census ───────────────
+// `cabinetSketchBoards` is the SAME function `CabinetSketch.tsx` renders, so this
+// censuses the real 2D body-board emission — the layer that drew the קלפה cap in
+// body colour (bug #2 of that incident) before it was extracted to core.
+describe('render parity — 2D body-board model vs cut list', () => {
+  it.each(CASES)('$name — 2D carcass+envelope+back census matches the cut list', ({ input, state }) => {
+    const { cuts } = computeUnitCutsAndHardware(input, state, []);
+    const boards = cabinetSketchBoards(input, state, []);
+    expect(censusFrom2D(boards)).toEqual(censusFromCuts(cuts, STRUCT_GROUPS_2D));
+  });
+});
+
 // ── 4. Named regression: the קלפה envelope bug, asserted across all three paths.
 describe('render parity — קלפה (wall cabinet) top+bottom envelope', () => {
   const input: CabinetInput = { ...kitchenModuleInput('wall'), hasWallEnvelope: true };
@@ -190,6 +223,10 @@ describe('render parity — קלפה (wall cabinet) top+bottom envelope', () => 
     expect(boxRoles).toContain('envelope-top');
     expect(boxRoles).toContain('envelope-bottom');
 
+    const sketchRoles = cabinetSketchBoards(input, state, []).map(b => b.role);
+    expect(sketchRoles).toContain('envelope-top');
+    expect(sketchRoles).toContain('envelope-bottom');
+
     const frontMat = getMaterialWithCustom(input.frontMaterialId, []);
     const tFront = frontMat.thickness / 10;
     const carcassD = computeCarcassDepth(input.D, input.backThickness, HINGE_GAP_CM, tFront);
@@ -203,9 +240,12 @@ describe('render parity — קלפה (wall cabinet) top+bottom envelope', () => 
   });
 });
 
-// NOTE (follow-up): the 2D body-board *role/colour* emission lives in
-// CabinetSketch.tsx (React) and is not reachable from this pure-core net. Bug
-// #2 of the קלפה incident (the bottom cap drawn in body colour) happened there.
-// Extracting that emission into a pure `cabinetSketchBoards(input, state, …):
-// Board[]` in core would remove a real single-source violation AND let this
-// census cover the 2D path identically. Recommended next step.
+// All three board-building paths are now covered by this net:
+//   - cut list   → computeUnitCutsAndHardware (source of truth)
+//   - 3D model   → cabinetBoardBoxes
+//   - 2D body    → cabinetSketchBoards (the function CabinetSketch.tsx renders)
+// The 2D emission was extracted from CabinetSketch.tsx into core/product/
+// cabinetSketchBoards.ts so the component and this census share ONE
+// implementation — closing the single-source gap that produced bug #2 (the
+// קלפה bottom cap drawn in body colour). computeSketchGeometry still owns the
+// SVG layout (rects/scale); only the role-tagged board set moved to core.
