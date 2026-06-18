@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeUnitCutsAndHardware } from './cabinetCompute';
 import { cabinetBoardBoxes, type BoardBox3D } from './product/cabinetBoards3D';
 import { cabinetSketchBoards } from './product/cabinetSketchBoards';
+import { cabinetFrontPanels } from './product/cabinetFronts';
 import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM, type Board } from './boards/boardModel';
 import { isCorner } from './product/cornerModule';
 import { defaultInputForType, emptyCabinetState } from './product/productDefaults';
@@ -204,6 +205,57 @@ describe('render parity — 2D body-board model vs cut list', () => {
     const { cuts } = computeUnitCutsAndHardware(input, state, []);
     const boards = cabinetSketchBoards(input, state, []);
     expect(censusFrom2D(boards)).toEqual(censusFromCuts(cuts, STRUCT_GROUPS_2D));
+  });
+});
+
+// ── 3c. Front geometry: rendered faces vs the cut list ────────────────────────
+// The role census above counts boards but not front POSITIONS/WIDTHS — so a
+// render door width drifting from the cut list (as it did for shelled units,
+// where the render laid fronts over the full W instead of the inner opening,
+// overhanging the right edge) slips past it. These two checks close that gap.
+describe('render parity — front-face geometry vs cut list', () => {
+  // Containment: no face may overhang the cabinet width. Catches the shelled
+  // overhang for EVERY face type (door / drawer / corner filler), self-contained.
+  it.each(CASES)('$name — front faces stay within [0, W]', ({ input, state }) => {
+    for (const f of cabinetFrontPanels(input, state, [])) {
+      expect(f.x0).toBeGreaterThanOrEqual(-0.05);
+      expect(f.x1).toBeLessThanOrEqual(input.W + 0.05);
+    }
+  });
+
+  // Caps: a face must sit BETWEEN the envelope caps, never over them. Catches the
+  // קלפה lift door overlapping its top+bottom caps AND a shell door overlapping
+  // the ceiling envelope — the door area must drop the same caps the cut list does
+  // (via the reduced box.H). Self-contained: derived straight from the input.
+  it.each(CASES)('$name — front faces clear the top/bottom envelope caps', ({ input, state }) => {
+    const tFront = getMaterialWithCustom(input.frontMaterialId, []).thickness / 10;
+    const sides = getShellSides(input);
+    const wallEnv = input.hasWallEnvelope === true && input.mount === 'wall';
+    const topCap = ((input.hasEnvelopeTop && (sides.left || sides.right)) || wallEnv) ? tFront : 0;
+    const botCap = wallEnv ? tFront : 0;
+    for (const f of cabinetFrontPanels(input, state, [])) {
+      if (topCap > 0) expect(f.y1).toBeLessThanOrEqual(input.H - topCap + 0.05);
+      if (botCap > 0) expect(f.y0).toBeGreaterThanOrEqual(input.plinth + botCap - 0.05);
+    }
+  });
+
+  // Width parity: every rendered door face (hinged panel) must match a cut-list
+  // door width. The shell bug made rendered doors too WIDE (laid over W, not the
+  // inner opening) → no cut-list match. Tolerance absorbs the perimeter edge-band
+  // (≤ 2·1.3mm), well below the cm-scale drift. Subset (not length-equality): the
+  // cut list can carry a sub-3cm "door" above a full external-drawer stack that
+  // the render intentionally omits (render drops door rows < 3cm).
+  const TOL_MM = 3;
+  it.each(CASES)('$name — every rendered door width matches a cut-list door', ({ input, state }) => {
+    const { cuts } = computeUnitCutsAndHardware(input, state, []);
+    const cutDoorW = cuts.filter(c => c.group === 'door').map(c => c.w);
+    const renderDoorW = cabinetFrontPanels(input, state, [])
+      .filter(p => p.hingeSide !== undefined)            // door panels only
+      .map(p => Math.round((p.x1 - p.x0) * 10));         // cm → mm
+    for (const rw of renderDoorW) {
+      const matched = cutDoorW.some(cw => Math.abs(rw - cw) <= TOL_MM);
+      expect(matched, `rendered door ${rw}mm has no cut-list match in [${cutDoorW.join(', ')}]`).toBe(true);
+    }
   });
 });
 

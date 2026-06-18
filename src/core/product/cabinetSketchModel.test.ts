@@ -30,6 +30,20 @@ describe('buildCabinetSketchModel', () => {
     expect(m.outerCabW).toBe(80);
   });
 
+  it('shell does not widen outerCabW — the entered W is already external', () => {
+    // Regression: outerCabW used to add the shell thickness to effW, but the
+    // shell is carved INSIDE W (innerW = W − shells). The over-count widened the
+    // kitchen-view unit slot past the actual boards, leaving a shell-thick gap
+    // between units in the room views. outerCabW must equal effW.
+    const m = buildCabinetSketchModel(
+      { ...singleBodyInput(), hasShell: true },
+      emptyCabinetState() as SavedCabinetState,
+      [],
+    );
+    expect(m.hasAnyShell).toBe(true);
+    expect(m.outerCabW).toBe(m.effW); // == 60, not 60 + 2·tFront
+  });
+
   it('interior items keyed by the stable slot land in interiorById', () => {
     const shelf: ShelfItem = { id: 'sh1', type: 'shelf', heightFromFloor: 100 };
     const state = {

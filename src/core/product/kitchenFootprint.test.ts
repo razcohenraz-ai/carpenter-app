@@ -34,6 +34,20 @@ describe('kitchenElevationLayout', () => {
     expect(top).toMatchObject({ xCm: 0, yBottomCm: WALL_BOTTOM_CM }); // same x → aligned column
   });
 
+  it('a shelled unit is not widened — W is already external, so no inter-unit gap', () => {
+    // Regression: unitOuterW used to add the shell thickness ON TOP of W, but W
+    // is the EXTERNAL width (shell carved inside). The over-count left a
+    // shell-thick gap between units in the room top/elevation/3D views, while
+    // the kitchen overview hid it (its wrapper was over-counted by the same
+    // amount). One shelled side is enough to trigger it.
+    const u1 = mkUnit('drawers', 60);
+    u1.cabinet.input = { ...u1.cabinet.input, hasShellLeft: true };
+    const u2 = mkUnit('shelves', 80);
+    const [a, b] = kitchenElevationLayout([u1, u2]);
+    expect(a!.w).toBe(60);     // not 60 + tFront
+    expect(b!.xCm).toBe(60);   // flush against unit 1's external width — no gap
+  });
+
   it('a tall base unit (H>152) pushes a wall cabinet past it', () => {
     const tall = mkUnit('drawers', 60);
     tall.cabinet.input = { ...tall.cabinet.input, H: 200 };

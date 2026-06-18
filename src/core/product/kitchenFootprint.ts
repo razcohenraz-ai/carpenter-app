@@ -1,6 +1,4 @@
 import type { KitchenUnit } from '../../types/project';
-import { getShellSides } from '../../types/cabinet';
-import { getEffectiveMaterial } from '../../catalog';
 
 // ── Kitchen elevation reference heights (cm) ──────────────────────────────────
 // A wall cabinet (קלפה) hangs WALL_BOTTOM_CM above the floor:
@@ -27,11 +25,15 @@ export function isWallUnit(unit: KitchenUnit): boolean {
   return (unit.cabinet.input.mount ?? 'base') === 'wall';
 }
 
-/** Outer width of a unit including its shell envelope on each present side. */
+/** Outer (external) width of a unit, cm. The entered `W` is ALREADY the
+ *  external width — the shell is carved INSIDE it (`innerW = W − shells`; see
+ *  CARPENTRY_RULES "מעטפת חיצונית: מידות שהוזנו = מידות חיצוניות"). A unit's
+ *  carcass boards therefore span exactly `[0, W]`, so the kitchen layout must
+ *  space units by `W`. Adding the shell here double-counted it and left a
+ *  shell-thick gap between units in the room top/elevation/3D views (the cut
+ *  list and the 3D boards, which use `W` as the outer width, never had it). */
 export function unitOuterW(unit: KitchenUnit): number {
-  const sides = getShellSides(unit.cabinet.input);
-  const tFront = getEffectiveMaterial(unit.cabinet.input.frontMaterialId).thickness / 10;
-  return effectiveUnitDims(unit).W + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+  return effectiveUnitDims(unit).W;
 }
 
 /** 3D bounding box of a whole kitchen (all of its units), cm:

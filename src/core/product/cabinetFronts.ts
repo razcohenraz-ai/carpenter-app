@@ -51,7 +51,16 @@ export function cabinetFrontPanels(
   const sides = getShellSides(inp);
   const hasAnyShell = sides.left || sides.right;
   const gapCm = inp.doorGapMm / 10;
-  const dl = calcDoors(effW, effH, inp.plinth, inp.doorCoversPlinth,
+  // Top/bottom envelope caps (front material, tFront each) reduce the door area —
+  // the door must sit BETWEEN them, not over them. `topEnvCm` covers the shell
+  // ceiling (מעטפת תקרה) AND the קלפה top cap; `botEnvCm` is the קלפה bottom cap.
+  // These mirror decomposeBoxes' envelopeTopH / envelopeBottomH, so the rendered
+  // door height equals the cut list's (derived from the already-reduced box.H).
+  // Both zero for a plain cabinet, so no other path moves.
+  const wallEnv = inp.hasWallEnvelope === true && inp.mount === 'wall';
+  const topEnvCm = ((inp.hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
+  const botEnvCm = wallEnv ? tFront : 0;
+  const dl = calcDoors(effW, effH - topEnvCm - botEnvCm, inp.plinth, inp.doorCoversPlinth,
                        inp.lowerDoorH, hasAnyShell, tFront, forceRows, gapCm);
 
   // Corner unit (פינה): one fixed-width door at the chosen edge + a filler face
@@ -70,12 +79,18 @@ export function cabinetFrontPanels(
 
   if (dl.n === 0 && extDrawers.length === 0) return [];
 
-  const leftEnvCm = sides.left ? tFront : 0;
   const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount, inp.singleFront);
+  // Front layout MUST match the cut list (cabinetCompute) so the rendered faces
+  // agree with the actual door cuts: with a shell the fronts sit INSIDE the
+  // opening (inset by the shell), not over it. The previous `hasOuterShell:false`
+  // + a manual left-shell shift made the faces span the full W and pushed them
+  // one shell-thickness past the right edge — masked by the old inter-unit gap,
+  // but overlapping the neighbour once kitchen units pack flush.
   const frontLayout = computeRowFrontLayout({
     cabinetW: effW,
-    hasOuterShell: false,
-    shellThicknessCm: 0,
+    hasOuterShell: hasAnyShell,
+    shellSides: sides,
+    shellThicknessCm: tFront,
     totalFrontsInRow: numFronts,
     gapCm,
   });
@@ -89,7 +104,7 @@ export function cabinetFrontPanels(
   // is right→left, so the hinge side derivation inverts the index — matching the
   // doors map produced by cabinetCompute / useCabinet).
   function pushFrontRow(heightCm: number, yFromBodyBottom: number, isDoor = false) {
-    const x0base = leftEnvCm + frontLayout.cabinetLeftOffset;
+    const x0base = frontLayout.cabinetLeftOffset;
     for (let fi = 0; fi < numFronts; fi++) {
       const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
       const hingeSide = isDoor
@@ -100,8 +115,8 @@ export function cabinetFrontPanels(
       panels.push({
         x0: x0base + fp.x,
         x1: x0base + fp.x + Math.max(fp.width, 0),
-        y0: inp.plinth + yFromBodyBottom,
-        y1: inp.plinth + yFromBodyBottom + Math.max(heightCm, 0),
+        y0: inp.plinth + botEnvCm + yFromBodyBottom,
+        y1: inp.plinth + botEnvCm + yFromBodyBottom + Math.max(heightCm, 0),
         ...(hingeSide ? { hingeSide } : {}),
       });
     }

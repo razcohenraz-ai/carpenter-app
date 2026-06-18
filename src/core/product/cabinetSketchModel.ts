@@ -26,7 +26,9 @@ export interface CabinetSketchModel {
   /** Effective outer dimensions (after the single-body W/H override), cm. */
   effW: number;
   effH: number;
-  /** Outer width including the shell envelope on each present side, cm. */
+  /** Outer (external) cabinet width, cm. Equals `effW` — the entered W is
+   *  already external (the shell is carved inside it; see CARPENTRY_RULES
+   *  "מעטפת חיצונית"). Kept as a field for the embedded-sketch viewBox. */
   outerCabW: number;
   /** Front-material thickness, cm. */
   tFront: number;
@@ -110,7 +112,11 @@ export function buildCabinetSketchModel(
   }
 
   const boardOverrides = new Map(Object.entries(state.boardOverrides ?? {}));
-  const outerCabW = effW + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+  // `effW` is already the EXTERNAL cabinet width (the shell is carved inside it —
+  // innerW = W − shells; see CARPENTRY_RULES "מעטפת חיצונית"). Adding the shell
+  // here double-counted it, widening the kitchen-view slot past the actual boards
+  // and leaving a shell-thick gap between units in the room views.
+  const outerCabW = effW;
 
   return {
     interiorById, cellInteriorById, partitionsById,
