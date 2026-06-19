@@ -1084,23 +1084,41 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                     'input-shell-left',
                     form.hasShellLeft,
                     t.form.hasShellLeft,
-                    v => setForm(p => ({
-                      ...p,
-                      hasShellLeft: v,
-                      hasShell: v && p.hasShellRight,
-                      ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}),
-                    })),
+                    v => {
+                      setForm(p => ({
+                        ...p,
+                        hasShellLeft: v,
+                        hasShell: v && p.hasShellRight,
+                        ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}),
+                      }));
+                      const li = getLastInput();
+                      if (li) calculate({
+                        ...li,
+                        hasShellLeft: v,
+                        hasShell: v && form.hasShellRight,
+                        ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}),
+                      });
+                    },
                   )}
                   {checkbox(
                     'input-shell-right',
                     form.hasShellRight,
                     t.form.hasShellRight,
-                    v => setForm(p => ({
-                      ...p,
-                      hasShellRight: v,
-                      hasShell: p.hasShellLeft && v,
-                      ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
-                    })),
+                    v => {
+                      setForm(p => ({
+                        ...p,
+                        hasShellRight: v,
+                        hasShell: p.hasShellLeft && v,
+                        ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
+                      }));
+                      const li = getLastInput();
+                      if (li) calculate({
+                        ...li,
+                        hasShellRight: v,
+                        hasShell: form.hasShellLeft && v,
+                        ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
+                      });
+                    },
                   )}
                 </>
               ) : (
@@ -1109,14 +1127,23 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                     'input-shell',
                     form.hasShell,
                     t.form.hasShell,
-                    v => setForm(p => ({
-                      ...p,
-                      hasShell: v,
-                      hasShellLeft: v,
-                      hasShellRight: v,
-                      ...(v ? {} : { hasEnvelopeTop: false }),
-                      ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
-                    })),
+                    v => {
+                      setForm(p => ({
+                        ...p,
+                        hasShell: v,
+                        hasShellLeft: v,
+                        hasShellRight: v,
+                        ...(v ? {} : { hasEnvelopeTop: false }),
+                        ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
+                      }));
+                      const li = getLastInput();
+                      if (li) calculate({
+                        ...li,
+                        hasShell: v, hasShellLeft: v, hasShellRight: v,
+                        hasEnvelopeTop: v ? li.hasEnvelopeTop : false,
+                        ...(form.doorGapManuallySet ? {} : { doorGapMm: v ? 2 : 0 }),
+                      });
+                    },
                   )}
                   {shellWidthWarning && (
                     <span className={styles.warnMsg}>{shellWidthWarning}</span>
@@ -1130,6 +1157,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 v => {
                   setForm(p => ({ ...p, doorCoversPlinth: v }));
                   setCoversSkirt(v);
+                  const li = getLastInput();
+                  if (li) calculate({ ...li, doorCoversPlinth: v });
                 },
                 parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
               )}
@@ -1139,7 +1168,11 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                     'input-envelope-top',
                     form.hasEnvelopeTop,
                     t.form.hasEnvelopeTop,
-                    v => setForm(p => ({ ...p, hasEnvelopeTop: v })),
+                    v => {
+                      setForm(p => ({ ...p, hasEnvelopeTop: v }));
+                      const li = getLastInput();
+                      if (li) calculate({ ...li, hasEnvelopeTop: v });
+                    },
                     !form.hasShellLeft && !form.hasShellRight,
                   )}
                   {envelopeTopWarning && (
