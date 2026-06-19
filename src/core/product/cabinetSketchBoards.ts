@@ -12,6 +12,7 @@ import { decomposeBoxes } from '../geometry/boxDecomposition';
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
+import { resolveBoxMaterials } from '../boards/boxMaterials';
 import { isCorner } from './cornerModule';
 
 type Mat = Material | (Omit<Material, 'id'> & { id: string });
@@ -24,11 +25,12 @@ export interface SketchBoardContext {
   hasEnvelopeTop: boolean;
   /** Wall-cabinet (קלפה) cap thickness in cm; > 0 drives the top+bottom caps. */
   wallEnvelopeCm: number;
-  bodyMaterial: Mat;
-  frontMaterial: Mat;
+  /** Effective materials + back thickness for a body — resolves the per-body
+   *  material override (falling back to the cabinet default). One function so the
+   *  component and the census share the exact same per-box resolution. */
+  materialsForBox: (box: Box) => { bodyMaterial: Mat; frontMaterial: Mat; backThicknessCm: number };
   /** Full external cabinet depth (cm) — envelope boards span it. */
   fullD: number;
-  backThicknessCm: number;
   joint: JointMethod;
   topVariant?: 'standard' | 'sink-open';
   sinkTraverseWidthCm?: number;
@@ -64,10 +66,11 @@ export function buildSketchBoards(
     // 4th arg threads the wall-cabinet (קלפה) flag so the top+bottom caps emit
     // as front-material envelope boards — same call the cut list makes.
     const env = deriveEnvelopeFlags(box, ctx.shellSides, ctx.hasEnvelopeTop, ctx.wallEnvelopeCm > 0);
+    const mat = ctx.materialsForBox(box); // effective per-body materials
     const boards = buildBoardModel({
       box,
-      bodyMaterial: ctx.bodyMaterial,
-      frontMaterial: ctx.frontMaterial,
+      bodyMaterial: mat.bodyMaterial,
+      frontMaterial: mat.frontMaterial,
       hasEnvelopeLeft: env.hasEnvelopeLeft,
       hasEnvelopeRight: env.hasEnvelopeRight,
       hasEnvelopeTop: env.hasEnvelopeTop,
@@ -80,7 +83,7 @@ export function buildSketchBoards(
       hasBack: ctx.hasBack,
       hasBottom: ctx.hasBottom,
       envelopeDepth: ctx.fullD,
-      backThicknessCm: ctx.backThicknessCm,
+      backThicknessCm: mat.backThicknessCm,
       joint: ctx.joint,
       ...(ctx.topVariant ? { topVariant: ctx.topVariant } : {}),
       ...(ctx.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: ctx.sinkTraverseWidthCm } : {}),
@@ -103,9 +106,11 @@ export function cabinetSketchBoards(
 ): Board[] {
   if (input.W <= 0 || input.H <= 0 || input.D <= 0) return [];
 
-  const bodyMaterial = getMaterialWithCustom(input.bodyMaterialId, customMaterials);
+  // Cabinet-level front material drives the SHARED geometry (shell inset, carcass
+  // depth, caps); per-body materials are resolved per box via `materialsForBox`.
   const frontMaterial = getMaterialWithCustom(input.frontMaterialId, customMaterials);
   const tFront = frontMaterial.thickness / 10;
+  const boxMaterialOvr = new Map(Object.entries(state.boxMaterialOverrides ?? {}));
   const shellSides = getShellSides(input);
   const hasAnyShell = shellSides.left || shellSides.right;
   const innerW = computeInnerWidth(input.W, shellSides, tFront);
@@ -151,10 +156,8 @@ export function cabinetSketchBoards(
     shellSides,
     hasEnvelopeTop: !!input.hasEnvelopeTop,
     wallEnvelopeCm,
-    bodyMaterial,
-    frontMaterial,
+    materialsForBox: box => resolveBoxMaterials(box, input, boxMaterialOvr, customMaterials),
     fullD: input.D,
-    backThicknessCm: input.backThickness,
     joint: resolveCabinetJointMethod(input.W, input.H),
     ...(input.topVariant ? { topVariant: input.topVariant } : {}),
     ...(input.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: input.sinkTraverseWidthCm } : {}),

@@ -41,6 +41,7 @@ import {
   HINGE_GAP_CM,
 } from './boards/boardModel';
 import { newItemId } from './interior/interiorUtils';
+import { resolveBoxMaterials } from './boards/boxMaterials';
 import { getMaterialWithCustom } from '../catalog';
 import type { Box, CutItem, MaterialId } from '../types';
 import type { HardwareLineItem } from '../types/hardware';
@@ -79,7 +80,9 @@ function computePartitionCuts(
   boxes: Box[],
   nfMap: Map<string, number>,
   pMap: Map<string, boolean>,
-  tBodyCm: number,
+  /** Per-body effective body material (id for cut grouping, thickness in cm for
+   *  the note) — a partition inherits its body's (possibly overridden) material. */
+  bodyMatForBox: (box: Box) => { id: MaterialId | string; tCm: number },
 ): CutItem[] {
   const cuts: CutItem[] = [];
   for (const box of boxes) {
@@ -88,13 +91,15 @@ function computePartitionCuts(
     const nf = nfMap.get(box.id) ?? 1;
     const count = nf - 1;
     if (count <= 0) continue;
+    const mat = bodyMatForBox(box);
     cuts.push({
       name: buildPartitionCutLabel(box),
       qty: count,
       w: box.D * 10,
       h: box.H * 10,
       group: 'body',
-      note: `${Math.round(tBodyCm * 10)}mm`,
+      note: `${Math.round(mat.tCm * 10)}mm`,
+      materialId: mat.id,
     });
   }
   return cuts;
@@ -166,6 +171,8 @@ export function computeUnitCutsAndHardware(
   const cabinetEdging = input.edging ?? DEFAULT_EDGING;
   const bodyEdgingOverrides = new Map(Object.entries(savedState.bodyEdgingOverrides ?? {}));
   const boardOverrides = new Map(Object.entries(savedState.boardOverrides ?? {}));
+  // Per-body material + back-thickness overrides (resolved per box below).
+  const boxMaterialOvr = new Map(Object.entries(savedState.boxMaterialOverrides ?? {}));
   const edgingCtx = {
     cabinetDefault: cabinetEdging,
     bodyOverrides: bodyEdgingOverrides,
@@ -180,6 +187,11 @@ export function computeUnitCutsAndHardware(
 
   // ── Build interior/cells/partitions/doors maps from saved state ─────────────
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+  // Effective per-body materials (override ?? cabinet default) — one lookup
+  // shared by the carcass, partition, door and external-front cut emitters.
+  const boxMaterials = new Map(
+    bodyBoxes.map(b => [b.id, resolveBoxMaterials(b, input, boxMaterialOvr, customMaterials)] as const),
+  );
   const allPositions = bodyBoxes.map(b => b.position);
   const newInterior: InteriorById = {};
   const newCellInteriorById: CellInteriorById = {};
@@ -311,6 +323,7 @@ export function computeUnitCutsAndHardware(
   // ── Door cuts (derived from the finished doors — single source of truth) ──
   const doorCuts = buildDoorCutItems({
     doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
+    frontMaterialForBox: id => boxMaterials.get(id)?.frontMaterial.id,
   });
 
   // ── Corner filler (פינה): face flange + perpendicular hinge-post return ──
@@ -319,11 +332,12 @@ export function computeUnitCutsAndHardware(
     const cornerBox = bodyBoxes[0];
     const cornerDoor = cornerBox ? newDoors[makeDoorId(cornerBox.id, 0)] : undefined;
     if (cornerBox && cornerDoor) {
+      const cornerFrontMatId = boxMaterials.get(cornerBox.id)?.frontMaterial.id;
       cornerFillerCuts.push(...cornerFillerCutItems({
         cabinetWcm: cornerBox.W, gapCm: cabinetGapCm, cf: input.cornerFiller!,
         doorHeightCm: cornerDoor.height, innerHeightCm: Math.max(0, cornerBox.H - 2 * tBody),
         edging: cabinetEdging,
-      }));
+      }).map(c => (cornerFrontMatId !== undefined ? { ...c, materialId: cornerFrontMatId } : c)));
     }
   }
 
@@ -339,16 +353,20 @@ export function computeUnitCutsAndHardware(
     const rowLayout = layoutByRow.get(box.level);
     if (!rowLayout) continue;
     const rowBoxes = rowsByLevel.get(box.level) ?? [];
+    // External-drawer faces are this body's fronts → its (overridden) front
+    // material, both for the panel thickness and the cut-list grouping.
+    const boxFront = boxMaterials.get(box.id)!.frontMaterial;
+    const tagFront = (cs: CutItem[]): CutItem[] => cs.map(c => ({ ...c, materialId: boxFront.id }));
 
     if (hasPartition) {
       const cellW = rowLayout.frontWidth;
       for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
         const itemsForCell = cellItems?.[ci] ?? [];
         externalDrawerCuts.push(
-          ...calcExternalDrawerFrontCuts(
+          ...tagFront(calcExternalDrawerFrontCuts(
             itemsForCell, cellW, doorGapMm, plinth, originalCoversSkirt,
-            frontMaterial.thickness, undefined, cabinetEdging,
-          ),
+            boxFront.thickness, undefined, cabinetEdging,
+          )),
         );
       }
     } else {
@@ -362,15 +380,18 @@ export function computeUnitCutsAndHardware(
         gapCm: cabinetGapCm,
       }).width;
       externalDrawerCuts.push(
-        ...calcExternalDrawerFrontCuts(
+        ...tagFront(calcExternalDrawerFrontCuts(
           bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt,
-          frontMaterial.thickness, undefined, cabinetEdging,
-        ),
+          boxFront.thickness, undefined, cabinetEdging,
+        )),
       );
     }
   }
 
-  const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody);
+  const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, box => {
+    const m = boxMaterials.get(box.id)!;
+    return { id: m.bodyMaterial.id, tCm: m.bodyMaterial.thickness / 10 };
+  });
 
   // ── Carcass boards ──────────────────────────────────────────────────────────
   const cabinetJoint = resolveCabinetJointMethod(W, H);
@@ -380,10 +401,13 @@ export function computeUnitCutsAndHardware(
     const items = newInterior[box.id] ?? [];
     const cellItems = newCellInteriorById[box.id];
     const hasPartitionBox = newPartitionsMap.get(box.id) === true;
+    // Per-body material override: this body's carcass / envelope / back boards
+    // are cut from its own materials (falling back to the cabinet default).
+    const boxMat = boxMaterials.get(box.id)!;
     const boards = buildBoardModel({
       box,
-      bodyMaterial,
-      frontMaterial,
+      bodyMaterial: boxMat.bodyMaterial,
+      frontMaterial: boxMat.frontMaterial,
       hasEnvelopeLeft: envFlags.hasEnvelopeLeft,
       hasEnvelopeRight: envFlags.hasEnvelopeRight,
       hasEnvelopeTop: envFlags.hasEnvelopeTop,
@@ -396,7 +420,7 @@ export function computeUnitCutsAndHardware(
       hasBack: input.hasBack ?? true,
       hasBottom: input.hasBottom ?? true,
       envelopeDepth: D,
-      backThicknessCm: backThickness,
+      backThicknessCm: boxMat.backThicknessCm,
       cabinetTotalH: H,
       joint: cabinetJoint,
       ...(input.topVariant ? { topVariant: input.topVariant } : {}),

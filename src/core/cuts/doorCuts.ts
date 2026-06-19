@@ -2,6 +2,7 @@ import type { CutItem } from '../../types/cuts';
 import type { Door } from '../../types/doors';
 import type { Box, BoxLevel } from '../../types/geometry';
 import type { Edging } from '../../types/edging';
+import type { MaterialId } from '../../types/materials';
 import { makeDoorId } from '../doors/doorUtils';
 
 // Door dimensions are in cm; CutItem dimensions are in mm.
@@ -52,13 +53,19 @@ export function buildDoorCutItems(args: {
   bodyBoxes: ReadonlyArray<Box>;
   numFrontsPerBox: ReadonlyMap<string, number>;
   edging?: Edging;
+  /** Optional per-body front material id. When provided, each door cut is tagged
+   *  with its body's (possibly overridden) front material so the cut list groups
+   *  it correctly — bypassing the cabinet-wide `enrich` step. Omit to fall back
+   *  to the cabinet front material via group enrichment. */
+  frontMaterialForBox?: (boxId: string) => MaterialId | string | undefined;
 }): CutItem[] {
-  const { doors, bodyBoxes, numFrontsPerBox, edging } = args;
+  const { doors, bodyBoxes, numFrontsPerBox, edging, frontMaterialForBox } = args;
   const perimMm = edging ? 2 * edging.thickness : 0;
   const cuts: CutItem[] = [];
   for (const box of bodyBoxes) {
     const nf = numFrontsPerBox.get(box.id) ?? 1;
     const name = doorCutName(box.level);
+    const matId = frontMaterialForBox?.(box.id);
     for (let fi = 0; fi < nf; fi++) {
       const door = doors[makeDoorId(box.id, fi)];
       if (!door || !door.hasDoor) continue;
@@ -68,6 +75,7 @@ export function buildDoorCutItems(args: {
         w: cm(door.width) - perimMm,
         h: cm(door.height) - perimMm,
         group: 'door',
+        ...(matId !== undefined ? { materialId: matId } : {}),
       });
     }
   }

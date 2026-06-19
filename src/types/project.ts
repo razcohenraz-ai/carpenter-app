@@ -85,6 +85,12 @@ export interface SavedCabinetState {
   /** Per-body W/H/D dimension overrides, keyed by {@link BoxSlotId}.
    *  Only axes explicitly set by the user are present. Optional. */
   boxDimensionOverrides?: Record<BoxSlotId, { W?: number; H?: number; D?: number }>;
+  /** Per-body material + back-thickness override, keyed by {@link BoxSlotId}.
+   *  Each field overrides the cabinet-wide default for that body only: the body
+   *  (carcass) material, the front (door/face) material, and the back-panel
+   *  thickness in cm. Only fields the carpenter explicitly set are present.
+   *  Optional — absent in projects saved before per-body materials. */
+  boxMaterialOverrides?: Record<BoxSlotId, { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId; backThicknessCm?: number }>;
 }
 
 // ── Cabinet content (input + saved state) ─────────────────────────────────────

@@ -58,6 +58,15 @@ export interface Translations {
     invalidDimensions: string;
   };
 
+  bodyView: {
+    title: string;
+    hint: string;
+    inherit: string;
+    back: string;
+    reset: string;
+    editInterior: string;
+  };
+
   form: {
     title: string;
     width: string;
@@ -376,6 +385,15 @@ const he: Translations = {
     invalidDimensions: 'הזן מידות תקינות לתצוגה',
   },
 
+  bodyView: {
+    title: 'גוף',
+    hint: 'חומרים ועובי-גב לגוף זה בלבד. ריק = ברירת המחדל של הארון.',
+    inherit: 'ברירת מחדל',
+    back: '→ חזרה',
+    reset: 'איפוס לחומרי הארון',
+    editInterior: 'עריכת פנים הגוף →',
+  },
+
   form: {
     title: 'מידות הארון',
     width: 'רוחב (ס"מ)',
@@ -669,6 +687,15 @@ const en: Translations = {
   sketch: {
     preview: 'Preview',
     invalidDimensions: 'Enter valid dimensions to preview',
+  },
+
+  bodyView: {
+    title: 'Body',
+    hint: 'Materials and back thickness for this body only. Empty = the cabinet default.',
+    inherit: 'Default',
+    back: '→ Back',
+    reset: 'Reset to cabinet materials',
+    editInterior: 'Edit interior →',
   },
 
   form: {

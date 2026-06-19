@@ -36,7 +36,8 @@ src/
 │   │   ├── boxDecomposition.ts   decomposeBoxes — פיצול לגופים
 │   │   └── frontGeometry.ts      computeRowFrontLayout / computeFrontGeometry — מקור יחיד לחישוב x+width של חזיתות
 │   ├── boards/
-│   │   └── boardModel.ts         buildBoardModel / buildPlinthBoardModel / boardsToCutItems / deriveEnvelopeFlags / getDimension / getMaterial / boardStableId / computeCarcassDepth / computeInnerWidth (תומך {left,right}) / resolveCabinetJointMethod
+│   │   ├── boardModel.ts         buildBoardModel / buildPlinthBoardModel / boardsToCutItems / deriveEnvelopeFlags / getDimension / getMaterial / boardStableId / computeCarcassDepth / computeInnerWidth (תומך {left,right}) / resolveCabinetJointMethod
+│   │   └── boxMaterials.ts       resolveBoxMaterials — חומרי גוף/חזית/עובי-גב אפקטיביים פר-body (override ?? cabinet default); מקור יחיד לכל מסלולי בניית-הלוחות
 │   ├── doors/
 │   │   ├── doorCalc.ts           חישוב מספר דלתות + שורות
 │   │   ├── doorUtils.ts          צירים, kindings, coversSkirt, calcMainDoorHeight, calcExternalStackHeight, getSkirtCoveringDrawer
@@ -109,6 +110,7 @@ src/
         ├── CabinetFrontsSketch.tsx סקיצת חזיתות (בעורך unit יחיד)
         ├── BoxBodySketch.tsx     סקיצת SVG לפנים גוף
         ├── BoxesList.tsx         רשימת קופסאות
+        ├── BodyView.tsx          מסך גוף — עקיפת חומר גוף/חזית + עובי-גב פר-body; כפתור "עריכת פנים" → BoxInteriorEditor (ארון → גוף → פנים)
         ├── BoxInteriorEditor.tsx עורך פנים גוף (overrides W/H/D פר-body, edging, פריטים); hideRodOption ב-kitchen
         ├── DoorEditor.tsx        עורך חזית (צירים, hasDoor, thickness override)
         ├── DoorsList.tsx         רשימת חזיתות

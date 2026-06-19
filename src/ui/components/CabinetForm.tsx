@@ -5,15 +5,20 @@ import { MATERIALS, getMaterialWithCustom } from '../../catalog';
 import { computeInnerWidth } from '../../core/boards/boardModel';
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import type { MaterialId } from '../../types';
+import type { SavedCabinetState } from '../../types/project';
 import type { Edging } from '../../types/edging';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
 import BoxInteriorEditor from './BoxInteriorEditor';
+import BodyView from './BodyView';
+import BoxBodySketch from './BoxBodySketch';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
+import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
+import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
@@ -173,6 +178,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     boardOverridesByStableId,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
+    boxMaterialOverrides, setBoxMaterial, resetBoxMaterials,
     getLastInput, getSnapshot, restoreState,
   } = useCabinet(settings);
 
@@ -280,6 +286,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   // above it.
   type Editing =
     | { type: 'none' }
+    | { type: 'bodyView'; boxId: string }
     | { type: 'box'; boxId: string }
     | { type: 'door'; doorId: string }
     | { type: 'drawer'; drawerId: string }
@@ -287,7 +294,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
   const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
 
-  function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
+  // Clicking a body opens the per-body VIEW (materials); from there the carpenter
+  // drills into the interior editor. main view → body view → interior editor.
+  function handleBoxClick(boxId: string): void { setEditing({ type: 'bodyView', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
   function handleDrawerFrontClick(drawerId: string): void { setEditing({ type: 'drawer', drawerId }); }
   function handlePlinthClick(): void { setEditing({ type: 'plinth' }); }
@@ -673,8 +682,123 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   }
 
   // ── editor views ───────────────────────────────────────────────────────────
-  // The body and door editors fully replace the main view; the drawer editor
-  // renders as a modal overlay (rendered alongside main view, see below).
+  // The body view, interior editor and door editor each fully replace the main
+  // view; the drawer editor renders as a modal overlay (see below).
+
+  if (editing.type === 'bodyView') {
+    const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
+    if (editingBox) {
+      const slotId = boxStableKey(editingBox);
+      const ovr = boxMaterialOverrides.get(slotId);
+      const effBodyMat = ovr?.bodyMaterialId ?? form.bodyMaterialId;
+      const effFrontMat = ovr?.frontMaterialId ?? form.frontMaterialId;
+      const customMats = settings?.customMaterials ?? [];
+      const cabInput = getLastInput();
+
+      // This body's own bodies/fronts/cuts/hardware = the body treated as a
+      // STANDALONE single-body unit (no cabinet plinth or shell — those are
+      // cabinet-level). Reuses the pure compute + fronts, so the per-body tabs
+      // track the cut-list source of truth and the effective per-body material.
+      const bodyInput = cabInput ? {
+        ...cabInput,
+        W: editingBox.W, H: editingBox.H, D: editingBox.D,
+        plinth: 0,
+        hasShell: false, hasShellLeft: false, hasShellRight: false,
+        hasEnvelopeTop: false,
+        doorsPerColumn: 1 as const,
+        bodyMaterialId: effBodyMat,
+        frontMaterialId: effFrontMat,
+        backThickness: ovr?.backThicknessCm ?? cabInput.backThickness,
+      } : null;
+      const bodyState: SavedCabinetState = {
+        interior: { 'single:single': interiorById[editingBox.id] ?? [] },
+        cellInterior: { 'single:single': cellInteriorById[editingBox.id] ?? [[], []] },
+        partitions: { 'single:single': partitionsById.get(editingBox.id) ?? false },
+        doors: {}, plinthGableOverrides: {}, boardOverrides: {},
+      };
+      const bodyResult = bodyInput
+        ? computeUnitCutsAndHardware(bodyInput, bodyState, customMats)
+        : { cuts: [], hardwareItems: [] };
+
+      // Where BoxBodySketch draws the body inside its 300×560 SVG (same padding
+      // + aspect-fit formula). The fronts overlay is positioned over this exact
+      // rect so the Bodies and Fronts tabs show the body at an identical size.
+      const SKW = 300, SKH = 560, BPAD = 8, BDIM_TOP = 30, BDIM_RIGHT = 44;
+      const bDrawW = SKW - BPAD - BDIM_RIGHT;
+      const bDrawH = SKH - BDIM_TOP - BPAD;
+      const bFit = Math.min(bDrawW / Math.max(editingBox.W, 1), bDrawH / Math.max(editingBox.H, 1));
+      const bRectW = editingBox.W * bFit, bRectH = editingBox.H * bFit;
+      const bRectX = BPAD + (bDrawW - bRectW) / 2, bRectY = BDIM_TOP + (bDrawH - bRectH) / 2;
+
+      // One body sketch element, reused as the Bodies tab and as the carcass
+      // behind the Fronts overlay.
+      const bodySketch = (
+        <BoxBodySketch
+          bodyH={editingBox.H}
+          bodyW={editingBox.W}
+          bodyD={editingBox.D}
+          items={interiorById[editingBox.id] ?? []}
+          svgWidth={SKW}
+          svgHeight={SKH}
+          showLabels
+          showDimensions
+          numPartitions={partitionsById.get(editingBox.id) ? 1 : 0}
+          bodyMaterialId={effBodyMat}
+          frontMaterialId={effFrontMat}
+          hasOuterShell={form.hasShell}
+          {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
+          {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
+          {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
+        />
+      );
+
+      return (
+        <BodyView
+          box={editingBox}
+          label=""
+          bodyMaterials={availableBodyMaterials}
+          frontMaterials={availableFrontMaterials}
+          cabinetBodyMaterialId={form.bodyMaterialId}
+          cabinetFrontMaterialId={form.frontMaterialId}
+          cabinetBackThicknessMm={parseFloat(form.backThicknessMm) || 0}
+          override={ovr}
+          onSetBodyMaterial={id => setBoxMaterial(slotId, { bodyMaterialId: id })}
+          onSetFrontMaterial={id => setBoxMaterial(slotId, { frontMaterialId: id })}
+          onSetBackThickness={mm => setBoxMaterial(slotId, { backThicknessCm: mm === undefined ? undefined : mm / 10 })}
+          onReset={() => resetBoxMaterials(slotId)}
+          onEditInterior={() => setEditing({ type: 'box', boxId: editing.boxId })}
+          onBack={closeEditor}
+          tabs={{
+            // Single-body sketch, coloured by the EFFECTIVE materials so a per-body
+            // override recolours it live.
+            bodies: bodySketch,
+            // Same body sketch + the door/drawer faces overlaid on the exact body
+            // rect → identical size to the Bodies tab (no resize on tab switch).
+            fronts: bodyInput ? (
+              <div style={{ position: 'relative', width: SKW, height: SKH }}>
+                {bodySketch}
+                <div style={{ position: 'absolute', left: bRectX, top: bRectY, width: bRectW, height: bRectH, pointerEvents: 'none' }}>
+                  <CabinetFrontsOverlay input={bodyInput} state={bodyState} customMaterials={customMats} viewBoxW={editingBox.W} viewBoxH={editingBox.H} />
+                </div>
+              </div>
+            ) : null,
+            cuts: (
+              <CutsList
+                cuts={bodyResult.cuts}
+                settings={{
+                  bodyMaterialPriceOverrides: settings?.bodyMaterialPriceOverrides,
+                  bodyCustomMaterials: settings?.customMaterials,
+                  frontMaterialPriceOverrides: settings?.frontMaterialPriceOverrides,
+                  frontCustomMaterials: settings?.customMaterials,
+                }}
+              />
+            ),
+            hardware: <HardwareList items={bodyResult.hardwareItems} />,
+          }}
+        />
+      );
+    }
+  }
 
   if (editing.type === 'box') {
     const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
@@ -691,7 +815,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             box={editingBox}
             items={interiorById[editingBox.id] ?? []}
             onChange={items => setBoxInterior(editingBox.id, items)}
-            onBack={closeEditor}
+            onBack={() => setEditing({ type: 'bodyView', boxId: editingBox.id })}
             numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
             hasPartitions={partitionsById.get(editingBox.id) ?? false}
             onAddPartition={() => addPartition(editingBox.id)}
@@ -1187,6 +1311,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(result ? { onBoxClick: handleBoxClick, onDrawerFrontClick: handleDrawerFrontClick } : {})}
               boardOverrides={boardOverridesByStableId}
               boxDimensionOverrides={boxDimensionOverrides}
+              boxMaterialOverrides={boxMaterialOverrides}
               {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})}
               {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
               {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}

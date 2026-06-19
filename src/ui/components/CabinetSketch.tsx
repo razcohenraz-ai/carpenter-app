@@ -10,6 +10,7 @@ import {
 } from '../../core/geometry/frontGeometry';
 import { resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM, type Board } from '../../core/boards/boardModel';
 import { buildSketchBoards } from '../../core/product/cabinetSketchBoards';
+import { boxStableKey } from '../../core/interior/interiorUtils';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
@@ -58,6 +59,10 @@ interface Props {
   /** Per-body dimension overrides keyed by boxStableKey. When provided, the
    *  sketch applies them to box geometry so the visual matches the cut list. */
   boxDimensionOverrides?: ReadonlyMap<string, { W?: number; H?: number; D?: number }>;
+  /** Per-body material override keyed by boxStableKey — colours each body from
+   *  its own material (falling back to the cabinet default). Matches the cut
+   *  list / 3D via the shared `buildSketchBoards`. */
+  boxMaterialOverrides?: ReadonlyMap<string, { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId; backThicknessCm?: number }>;
   /** When true, render only the <svg> (no wrapper div, no title).
    *  Used by KitchenOverview to embed multiple cabinet sketches side by side. */
   embedded?: boolean;
@@ -99,7 +104,7 @@ interface Props {
   cornerSingleWidth?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, cornerSingleWidth }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, boxMaterialOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, cornerSingleWidth }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -187,10 +192,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
       shellSides,
       hasEnvelopeTop: !!hasEnvelopeTop,
       wallEnvelopeCm: wallEnvelopeCm ?? 0,
-      bodyMaterial: bodyMat!,
-      frontMaterial: frontMat!,
+      // Per-body material override (body/front material + back thickness), falling
+      // back to the cabinet default. Resolved the same way the cut list does.
+      materialsForBox: box => {
+        const o = boxMaterialOverrides?.get(boxStableKey(box));
+        return {
+          bodyMaterial: o?.bodyMaterialId ? getMaterialWithCustom(o.bodyMaterialId, customMaterials ?? []) : bodyMat!,
+          frontMaterial: o?.frontMaterialId ? getMaterialWithCustom(o.frontMaterialId, customMaterials ?? []) : frontMat!,
+          backThicknessCm: o?.backThicknessCm ?? backThicknessCm,
+        };
+      },
       fullD,
-      backThicknessCm,
       joint: cabinetJoint,
       ...(topVariant ? { topVariant } : {}),
       ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),

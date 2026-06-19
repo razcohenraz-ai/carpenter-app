@@ -10,6 +10,7 @@ import {
   getMaterial, HINGE_GAP_CM, LEVELER_GAP_CM, type Board, type BoardRole, type BoardOverrides,
 } from '../boards/boardModel';
 import { decomposeBoxes } from '../geometry/boxDecomposition';
+import { resolveBoxMaterials } from '../boards/boxMaterials';
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
@@ -132,6 +133,12 @@ export function cabinetBoardBoxes(
   });
 
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+  // Per-body material override → this body's carcass boards are coloured from
+  // its own materials. The outer shell + plinth stay cabinet-level (below).
+  const boxMaterialOvr = new Map(Object.entries(state.boxMaterialOverrides ?? {}));
+  const boxMaterials = new Map(
+    bodyBoxes.map(b => [b.id, resolveBoxMaterials(b, input, boxMaterialOvr, customMaterials)] as const),
+  );
   const plinth = input.plinth;
   const leftEnv = sides.left ? tF : 0;
 
@@ -181,11 +188,12 @@ export function cabinetBoardBoxes(
     const items = interiorById.get(box.id) ?? [];
     const hasPartition = partitionById.get(box.id) === true;
     const cells = cellById.get(box.id);
+    const bm = boxMaterials.get(box.id)!; // effective per-body materials
 
     const boards = buildBoardModel({
       box,
-      bodyMaterial: bodyMat,
-      frontMaterial: frontMat,
+      bodyMaterial: bm.bodyMaterial,
+      frontMaterial: bm.frontMaterial,
       hasEnvelopeLeft: env.hasEnvelopeLeft,
       hasEnvelopeRight: env.hasEnvelopeRight,
       hasEnvelopeTop: env.hasEnvelopeTop,
@@ -195,7 +203,7 @@ export function cabinetBoardBoxes(
       hasBack: input.hasBack ?? true,
       hasBottom: input.hasBottom ?? true,
       envelopeDepth: fullD,
-      backThicknessCm: backT,
+      backThicknessCm: bm.backThicknessCm,
       joint,
       ...(input.topVariant ? { topVariant: input.topVariant } : {}),
       ...(input.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: input.sinkTraverseWidthCm } : {}),

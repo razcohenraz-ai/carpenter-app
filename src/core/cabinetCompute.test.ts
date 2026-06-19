@@ -146,3 +146,38 @@ describe('computeUnitCutsAndHardware — corner (פינה) front + filler', () =
     expect(face.h).toBeCloseTo(door.h, 1);
   });
 });
+
+// ── Per-body material override drives the cut-list materials ──────────────────
+describe('computeUnitCutsAndHardware — per-body material override', () => {
+  const SHELVES_SLOT = 'single:single';
+
+  it('overrides body/front material + back thickness for that body in the cut list', () => {
+    const input = kitchenModuleInput('shelves'); // body mdf18 / front oak18, single body
+    const base = kitchenModuleState('shelves') as SavedCabinetState;
+    const state: SavedCabinetState = {
+      ...base,
+      boxMaterialOverrides: { [SHELVES_SLOT]: { bodyMaterialId: 'oak18', frontMaterialId: 'mdf18', backThicknessCm: 1.6 } },
+    };
+    const { cuts } = computeUnitCutsAndHardware(input, state, []);
+
+    const body = cuts.filter(c => c.group === 'body');
+    expect(body.length).toBeGreaterThan(0);
+    expect(body.every(c => c.materialId === 'oak18')).toBe(true);   // overridden body material
+
+    const back = cuts.filter(c => c.group === 'back');
+    expect(back.length).toBeGreaterThan(0);
+    expect(back.every(c => c.materialId === 'oak18')).toBe(true);   // back follows the body material
+    expect(back.every(c => c.note === '16mm')).toBe(true);          // overridden back thickness
+
+    const doors = cuts.filter(c => c.group === 'door');
+    expect(doors.length).toBeGreaterThan(0);
+    expect(doors.every(c => c.materialId === 'mdf18')).toBe(true);  // overridden front material
+  });
+
+  it('no override → cabinet-default materials (baseline unchanged)', () => {
+    const input = kitchenModuleInput('shelves');
+    const { cuts } = computeUnitCutsAndHardware(input, kitchenModuleState('shelves'), []);
+    expect(cuts.filter(c => c.group === 'body').every(c => c.materialId === 'mdf18')).toBe(true);
+    expect(cuts.filter(c => c.group === 'door').every(c => c.materialId === 'oak18')).toBe(true);
+  });
+});

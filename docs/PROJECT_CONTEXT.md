@@ -57,6 +57,7 @@
 - **corner module (פינה)** — `cornerFiller?` ב-`CabinetInput`: גוף בסיס רחב (W=125), **דלת קבועה אחת** (60) בצד נבחר + **מילוי בצורת L** מחומר חזית על השאר (פנים מלא-גובה + זקף-ציר 7 ס"מ ניצב שנושא את הצירים). `singleFront` + `noWidthSplit` (גוף יחיד למרות MAX_BOX_W). הגאומטריה ב-`core/product/cornerModule.ts` (מקור יחיד ל-cut/2D/3D). עורך shelf-only + בקרי צד/רוחב/עומק. הצירים תמיד בצד המילוי.
 - **חומרים מותאמים אישית** — `SettingsPage`: לכל חומר checkbox (כלול ב-dropdown), מחיר עריך, custom materials עם id מותאם.
 - **box dimension overrides** — עקיפת W/H/D פר-body דרך `BoxInteriorEditor`; effective dims מוחל בסקיצה ובחיתוכים.
+- **מסך גוף + עקיפת חומרים פר-body** — לחיצה על גוף → `BodyView` (חומר גוף/חזית + עובי-גב פר-body) → "עריכת פנים" → `BoxInteriorEditor`. `SavedCabinetState.boxMaterialOverrides` נפתר ב-`core/boards/boxMaterials.ts` (`resolveBoxMaterials`) ומושחל בכל מסלולי בניית-הלוחות (cut/2D/3D). ה-shell וה-carcassD המשותפים נשארים על חומר-החזית של הארון.
 - **דו-לשוני** — עברית + אנגלית.
 
 ---

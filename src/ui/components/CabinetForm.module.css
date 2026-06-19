@@ -242,3 +242,66 @@
   font-weight: var(--font-weight-medium);
   text-align: center;
 }
+
+/* ── Body view (per-body materials, between main view and interior editor) ── */
+.bodyViewHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.bodyViewTitle {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  margin: 0;
+  flex: 1;
+}
+
+.bodyViewDims {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.bodyViewHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.bodyViewActions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.backButton,
+.resetButton,
+.primaryButton {
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.backButton:hover,
+.resetButton:hover {
+  border-color: var(--color-primary);
+}
+
+.primaryButton {
+  margin-inline-start: auto;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.primaryButton:hover {
+  filter: brightness(1.05);
+}

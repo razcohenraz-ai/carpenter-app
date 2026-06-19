@@ -28,6 +28,7 @@ import {
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
+import { resolveBoxMaterials, type BoxMaterialOverride } from '../../core/boards/boxMaterials';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
 import { calcHardware } from '../../core/hardware/calcHardware';
 import {
@@ -87,6 +88,11 @@ function computePartitionCuts(
   nfMap: Map<string, number>,
   pMap: Map<string, boolean>,
   tBodyCm: number,
+  /** Optional per-body body material (id for cut grouping, thickness in cm) so
+   *  a partition inherits its body's overridden material. Falls back to the
+   *  cabinet `tBodyCm` (and no materialId) when omitted — used by the live
+   *  add/remove-partition handlers that re-key without a full recalc. */
+  bodyMatForBox?: (box: Box) => { id: string; tCm: number },
 ): CutItem[] {
   const cuts: CutItem[] = [];
   for (const box of boxes) {
@@ -95,13 +101,15 @@ function computePartitionCuts(
     const nf = nfMap.get(box.id) ?? 1;
     const count = nf - 1;
     if (count <= 0) continue;
+    const mat = bodyMatForBox?.(box);
     cuts.push({
       name: buildPartitionCutLabel(box),
       qty: count,
       w: box.D * 10,
       h: box.H * 10,
       group: 'body',
-      note: `${Math.round(tBodyCm * 10)}mm`,
+      note: `${Math.round((mat?.tCm ?? tBodyCm) * 10)}mm`,
+      ...(mat ? { materialId: mat.id } : {}),
     });
   }
   return cuts;
@@ -201,6 +209,14 @@ export function useCabinet(settings?: {
   setBoxDimension: (boxSlotId: BoxSlotId, axis: 'W' | 'H' | 'D', value: number | undefined) => void;
   /** Drop all dimension overrides for a body at once. */
   resetBoxDimensions: (boxSlotId: BoxSlotId) => void;
+  /** Per-body material overrides (body/front material + back thickness) keyed by
+   *  `boxStableKey(box)`. Absent fields fall back to the cabinet default. */
+  boxMaterialOverrides: ReadonlyMap<BoxSlotId, BoxMaterialOverride>;
+  /** Merge a partial material override for a body. A field set to `undefined`
+   *  reverts to the cabinet default; an empty result drops the body's entry. */
+  setBoxMaterial: (boxSlotId: BoxSlotId, patch: { [K in keyof BoxMaterialOverride]?: BoxMaterialOverride[K] | undefined }) => void;
+  /** Drop all material overrides for a body at once. */
+  resetBoxMaterials: (boxSlotId: BoxSlotId) => void;
   /** The last CabinetInput passed to `calculate()`. Useful for consumers that
    *  need to know the current input without re-deriving it from form state. */
   getLastInput: () => import('../../types/cabinet').CabinetInput | null;
@@ -234,6 +250,11 @@ export function useCabinet(settings?: {
   const bodyEdgingOverridesRef = useRef<ReadonlyMap<BoxSlotId, Edging>>(new Map());
   const [boxDimensionOverrides, setBoxDimensionOverridesState] = useState<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
   const boxDimensionOverridesRef = useRef<ReadonlyMap<BoxSlotId, BoxDimensionOverride>>(new Map());
+  // Per-body material overrides (body/front material + back thickness) keyed by
+  // `boxStableKey(box)`. Same state+ref+persistence pattern as the dimension
+  // layer; the setter re-calculates so the cut list, sketch and 3D pick it up.
+  const [boxMaterialOverrides, setBoxMaterialOverridesState] = useState<ReadonlyMap<BoxSlotId, BoxMaterialOverride>>(new Map());
+  const boxMaterialOverridesRef = useRef<ReadonlyMap<BoxSlotId, BoxMaterialOverride>>(new Map());
   /** Pending state to restore on the next `calculate()` call (first-run only).
    *  Set by `restoreState()`; consumed and cleared inside `calculate()`. */
   const pendingRestoreRef = useRef<SavedCabinetState | null>(null);
@@ -691,6 +712,30 @@ export function useCabinet(settings?: {
     if (lastInputRef.current) calculate(lastInputRef.current);
   }
 
+  function setBoxMaterial(boxSlotId: BoxSlotId, patch: { [K in keyof BoxMaterialOverride]?: BoxMaterialOverride[K] | undefined }): void {
+    const existing = boxMaterialOverridesRef.current.get(boxSlotId) ?? {};
+    // Build loosely so a field can be set to `undefined`, then strip those keys
+    // (undefined = revert to the cabinet default).
+    const merged: Record<string, unknown> = { ...existing, ...patch };
+    for (const k of Object.keys(merged)) {
+      if (merged[k] === undefined) delete merged[k];
+    }
+    const next = new Map(boxMaterialOverridesRef.current);
+    if (Object.keys(merged).length === 0) next.delete(boxSlotId);
+    else next.set(boxSlotId, merged as BoxMaterialOverride);
+    boxMaterialOverridesRef.current = next;
+    setBoxMaterialOverridesState(next);
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
+  function resetBoxMaterials(boxSlotId: BoxSlotId): void {
+    const next = new Map(boxMaterialOverridesRef.current);
+    next.delete(boxSlotId);
+    boxMaterialOverridesRef.current = next;
+    setBoxMaterialOverridesState(next);
+    if (lastInputRef.current) calculate(lastInputRef.current);
+  }
+
   // ── Snapshot / Restore ────────────────────────────────────────────────────
 
   function getSnapshot(): SavedCabinetState {
@@ -743,6 +788,8 @@ export function useCabinet(settings?: {
       snap.bodyEdgingOverrides = Object.fromEntries(bodyEdgingOverridesRef.current);
     if (boxDimensionOverridesRef.current.size > 0)
       snap.boxDimensionOverrides = Object.fromEntries(boxDimensionOverridesRef.current);
+    if (boxMaterialOverridesRef.current.size > 0)
+      snap.boxMaterialOverrides = Object.fromEntries(boxMaterialOverridesRef.current);
     return snap;
   }
 
@@ -766,6 +813,12 @@ export function useCabinet(settings?: {
       const bdo = new Map(Object.entries(state.boxDimensionOverrides));
       boxDimensionOverridesRef.current = bdo;
       setBoxDimensionOverridesState(bdo);
+    }
+
+    if (state.boxMaterialOverrides) {
+      const bmo = new Map(Object.entries(state.boxMaterialOverrides));
+      boxMaterialOverridesRef.current = bmo;
+      setBoxMaterialOverridesState(bmo);
     }
 
     // Interior / doors / partitions are keyed by boxStableKey — restored
@@ -932,6 +985,11 @@ export function useCabinet(settings?: {
     const newNumFrontsMap = new Map<string, number>();
 
     const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+    // Effective per-body materials (override ?? cabinet default) — shared by the
+    // carcass, partition, door and external-front cut emitters below.
+    const boxMaterials = new Map(
+      bodyBoxes.map(b => [b.id, resolveBoxMaterials(b, input, boxMaterialOverridesRef.current, allCustomMaterials)] as const),
+    );
     const allPositions = bodyBoxes.map(b => b.position);
     boxLevelMapRef.current = new Map(bodyBoxes.map(b => [b.id, b.level]));
 
@@ -1073,6 +1131,7 @@ export function useCabinet(settings?: {
     // ── Door cuts (derived from the finished doors — single source of truth) ──
     const doorCuts = buildDoorCutItems({
       doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
+      frontMaterialForBox: id => boxMaterials.get(id)?.frontMaterial.id,
     });
 
     // ── Corner filler (פינה): face flange + perpendicular hinge-post return ──
@@ -1081,11 +1140,12 @@ export function useCabinet(settings?: {
       const cornerBox = bodyBoxes[0];
       const cornerDoor = cornerBox ? newDoors[makeDoorId(cornerBox.id, 0)] : undefined;
       if (cornerBox && cornerDoor) {
+        const cornerFrontMatId = boxMaterials.get(cornerBox.id)?.frontMaterial.id;
         cornerFillerCuts.push(...cornerFillerCutItems({
           cabinetWcm: cornerBox.W, gapCm: cabinetGapCm, cf: input.cornerFiller!,
           doorHeightCm: cornerDoor.height, innerHeightCm: Math.max(0, cornerBox.H - 2 * tBody),
           edging: cabinetEdging,
-        }));
+        }).map(c => (cornerFrontMatId !== undefined ? { ...c, materialId: cornerFrontMatId } : c)));
       }
     }
 
@@ -1104,16 +1164,20 @@ export function useCabinet(settings?: {
       const rowLayout = layoutByRow.get(box.level);
       if (!rowLayout) continue;
       const rowBoxes = rowsByLevel.get(box.level) ?? [];
+      // External-drawer faces are this body's fronts → its (overridden) front
+      // material, for both the panel thickness and the cut-list grouping.
+      const boxFront = boxMaterials.get(box.id)!.frontMaterial;
+      const tagFront = (cs: CutItem[]): CutItem[] => cs.map(c => ({ ...c, materialId: boxFront.id }));
 
       if (hasPartition) {
         const cellW = rowLayout.frontWidth;
         for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
           const itemsForCell = cellItems?.[ci] ?? [];
           externalDrawerCuts.push(
-            ...calcExternalDrawerFrontCuts(
-              itemsForCell, cellW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+            ...tagFront(calcExternalDrawerFrontCuts(
+              itemsForCell, cellW, doorGapMm, plinth, originalCoversSkirt, boxFront.thickness,
               undefined, cabinetEdging,
-            ),
+            )),
           );
         }
       } else {
@@ -1127,10 +1191,10 @@ export function useCabinet(settings?: {
           gapCm: cabinetGapCm,
         }).width;
         externalDrawerCuts.push(
-          ...calcExternalDrawerFrontCuts(
-            bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, frontMaterial.thickness,
+          ...tagFront(calcExternalDrawerFrontCuts(
+            bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, boxFront.thickness,
             undefined, cabinetEdging,
-          ),
+          )),
         );
       }
     }
@@ -1164,7 +1228,10 @@ export function useCabinet(settings?: {
     setDoors(newDoors, boxes, newNumFrontsMap);
     setDrawerFronts(newDrawerFronts);
 
-    const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody);
+    const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody, box => {
+      const m = boxMaterials.get(box.id)!;
+      return { id: m.bodyMaterial.id, tCm: m.bodyMaterial.thickness / 10 };
+    });
 
     // ── Carcass cuts via BoardModel ────────────────────────────────────────
     // One Board[] per body → boardsToCutItems → flat CutItem[]. Replaces the
@@ -1184,10 +1251,11 @@ export function useCabinet(settings?: {
       const items = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
       const hasPartitionBox = newPartitionsMap.get(box.id) === true;
+      const boxMat = boxMaterials.get(box.id)!; // effective per-body materials
       const boards = buildBoardModel({
         box,
-        bodyMaterial,
-        frontMaterial,
+        bodyMaterial: boxMat.bodyMaterial,
+        frontMaterial: boxMat.frontMaterial,
         hasEnvelopeLeft: envFlags.hasEnvelopeLeft,
         hasEnvelopeRight: envFlags.hasEnvelopeRight,
         hasEnvelopeTop: envFlags.hasEnvelopeTop,
@@ -1200,7 +1268,7 @@ export function useCabinet(settings?: {
         hasBack: input.hasBack ?? true,
         hasBottom: input.hasBottom ?? true,
         envelopeDepth: D,
-        backThicknessCm: backThickness,
+        backThicknessCm: boxMat.backThicknessCm,
         // User's H input is the full external cabinet height (plinth + bodies
         // + envelopeTop). Pass it so envelope-left/right cut to the right
         // length regardless of which body emits them.
@@ -1312,6 +1380,7 @@ export function useCabinet(settings?: {
     resetAllBoardOverrides,
     bodyEdgingOverrides, setBodyEdgingOverride,
     boxDimensionOverrides, setBoxDimension, resetBoxDimensions,
+    boxMaterialOverrides, setBoxMaterial, resetBoxMaterials,
     getLastInput: () => lastInputRef.current,
     getSnapshot, restoreState,
   };
