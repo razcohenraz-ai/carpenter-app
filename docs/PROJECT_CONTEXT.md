@@ -80,6 +80,9 @@
 ### TODO — `core/index.ts` barrel כמעט-מת (ניקוי, לא דחוף)
 `src/core/index.ts` מ-re-export ~30 סמלים, אך רק **2** נצרכים דרכו (`decomposeBoxes`, `calcDoors` — ב-`useCabinet` וב-`CabinetSketch.utils`); כל השאר מיובאים ישירות מקבצי-המקור. הברל מטעה (נראה כ-API ציבורי שאינו), וגם **מסתיר קוד מת** מכלי ניתוח (`ts-prune`) — כל סמל "מיוצא" דרכו ולכן נראה בשימוש. ניקוי: להפנות את 2 הצרכנים ישירות למקור ולמחוק את הקובץ. **אפס באגים, רק ניקיון** (audit 2026-06-19).
 
+### חזיתות 3D/elevation — רב-גופי (תוקן 2026-06-19)
+`cabinetFrontPanels` (`core/product/cabinetFronts.ts`) **מפרק את הארון לגופים** (`decomposeBoxes` + `computeRowFrontLayout` + `deriveDrawerFronts`, כמו ה-cut list ו-`cabinetBoardBoxes`) ומפלט `FrontPanel` per-door + per-external-drawer-front במסגרת cabinet-local (x מהקצה השמאלי החיצוני, y מהרצפה). קודם היה מודל גוף-יחיד שקרא רק `state.interior['single:single']` וחילק עמודות על כל הרוחב — ולכן ארון רחב/רב-קומתי שמתפצל ל-~6 גופים הציג ב-3D/elevation מעט דלתות וללא מגירות. parity נסגר ב-`renderParity.test.ts` (case רב-גופי) + `cabinetFronts.test.ts` (ספירת דלתות = cut list, מגירה בגוף לא-ברירת-מחדל מופיעה).
+
 ---
 
 ## כיוון עתידי

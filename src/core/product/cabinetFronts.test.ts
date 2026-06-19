@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { cabinetFrontPanels } from './cabinetFronts';
+import { computeUnitCutsAndHardware } from '../cabinetCompute';
 import { defaultInputForType, emptyCabinetState } from './productDefaults';
 import { kitchenModuleInput, kitchenModuleState } from './kitchenModules';
 import type { CabinetInput, SavedCabinetState } from '../../types';
+import type { DrawerItem } from '../../types/interior';
 
 function singleBodyInput(): CabinetInput {
   return { ...defaultInputForType('wardrobe'), doorsPerColumn: 1 };
@@ -70,6 +72,69 @@ describe('cabinetFrontPanels', () => {
     const hinged = panels.filter(p => p.hingeSide !== undefined);
     expect(hinged.length).toBeGreaterThan(0);
     expect(hinged.every(p => p.hingeSide === 'top')).toBe(true);
+  });
+
+  // ── Multi-body free-standing cabinet (the bug) ────────────────────────────
+  // A wide + tall wardrobe decomposes into several bodies (3 width columns ×
+  // 2 height rows). The earlier single-body model read only `single:single`
+  // and split columns over the FULL width, so it emitted a handful of doors
+  // and zero drawer faces. The decomposition-based model must produce one door
+  // per body front and surface drawers placed in any body.
+  describe('multi-body wardrobe', () => {
+    const wide = (): CabinetInput => ({ ...defaultInputForType('wardrobe'), W: 240, H: 220, plinth: 0 });
+
+    it('renders one door face per cut-list door (count + width multiset match)', () => {
+      const input = wide();
+      const { cuts } = computeUnitCutsAndHardware(input, state(), []);
+      const cutWidths = cuts.filter(c => c.group === 'door').map(c => c.w).sort((a, b) => a - b);
+      const renderWidths = cabinetFrontPanels(input, state(), [])
+        .filter(p => p.hingeSide !== undefined)
+        .map(p => Math.round((p.x1 - p.x0) * 10))
+        .sort((a, b) => a - b);
+
+      expect(cutWidths.length).toBeGreaterThan(4); // genuinely multi-body, not 1–4 doors
+      expect(renderWidths.length).toBe(cutWidths.length);
+      renderWidths.forEach((rw, i) => expect(Math.abs(rw - cutWidths[i]!)).toBeLessThanOrEqual(2));
+    });
+
+    it('surfaces an external drawer placed in a non-default body', () => {
+      const input = { ...defaultInputForType('wardrobe'), W: 240, H: 80, plinth: 0 };
+      // 240 wide → 3 single-level bodies (unit_1/2/3). Drop a drawer in the middle.
+      const st = state();
+      const drawer: DrawerItem = { type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 20, mount: 'external' };
+      st.interior['single:unit_2'] = [drawer];
+      const panels = cabinetFrontPanels(input, st, []);
+      const drawerFaces = panels.filter(p => p.hingeSide === undefined);
+      expect(drawerFaces.length).toBe(1); // the drawer in unit_2 has a face now
+    });
+  });
+
+  // ── doorCoversPlinth (the skirt) — faces extend DOWN over the plinth ───────
+  describe('doorCoversPlinth', () => {
+    const plinth = 10;
+
+    it('a skirt-covering door drops below the plinth line (~1cm floor clearance)', () => {
+      const covers = { ...singleBodyInput(), plinth, doorCoversPlinth: true };
+      const plain = { ...singleBodyInput(), plinth, doorCoversPlinth: false };
+      const gapCm = covers.doorGapMm / 10;
+      const door = cabinetFrontPanels(covers, state(), []).find(p => p.hingeSide !== undefined)!;
+      const plainDoor = cabinetFrontPanels(plain, state(), []).find(p => p.hingeSide !== undefined)!;
+
+      expect(door.y0).toBeLessThan(plainDoor.y0);       // drops vs a non-covering door
+      expect(door.y0).toBeLessThan(plinth);              // covers the plinth
+      expect(door.y0).toBeCloseTo(1 - gapCm, 1);         // ~1cm clearance off the floor
+    });
+
+    it('a skirt-covering external drawer face drops below the plinth line', () => {
+      const input = { ...singleBodyInput(), plinth, doorCoversPlinth: true };
+      const st = state();
+      const drawer: DrawerItem = { type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 20, mount: 'external' };
+      st.interior['single:single'] = [drawer];
+      const face = cabinetFrontPanels(input, st, []).find(p => p.hingeSide === undefined)!;
+      expect(face).toBeDefined();
+      expect(face.y0).toBeLessThan(plinth);
+      expect(face.y0).toBeGreaterThanOrEqual(0); // never below the floor
+    });
   });
 
   it('קלפה with wall envelope: the lift door sits BETWEEN the caps, not over them', () => {

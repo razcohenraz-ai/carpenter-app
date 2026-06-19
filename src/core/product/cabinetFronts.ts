@@ -1,11 +1,22 @@
 import type { CabinetInput, SavedCabinetState } from '../../types';
 import type { CustomMaterial } from '../../types/materials';
-import type { InteriorItem, DrawerItem } from '../../types/interior';
-import { calcDoors } from '../doors/doorCalc';
+import type { BoxLevel } from '../../types/geometry';
+import type { InteriorById, CellInteriorById, InteriorItem } from '../../types/interior';
+import type { DrawerFront } from '../../types/doors';
+import { decomposeBoxes } from '../geometry/boxDecomposition';
 import {
-  frontColumnsForBox, computeRowFrontLayout, computeFrontGeometry,
+  frontColumnsForBox, computeRowFrontLayout, computeFrontGeometry, computeFrontGeometryForSpan,
+  getBoxFirstGlobalFrontIndex, getTotalFrontsInRow, groupBoxesByRow, type RowFrontLayout,
 } from '../geometry/frontGeometry';
-import { salonHingeSide, defaultHingeSide } from '../doors/doorUtils';
+import {
+  computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM,
+} from '../boards/boardModel';
+import { boxStableKey } from '../interior/interiorUtils';
+import {
+  calcMainDoorHeight, getItemsForFront, salonHingeSide, defaultHingeSide, shouldCoverSkirt,
+  getDrawerFrontVisualHeight, getSkirtCoveringDrawer,
+} from '../doors/doorUtils';
+import { deriveDrawerFronts } from '../doors/drawerFrontsCalc';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
 import { isCorner, cornerFrontXLayout, cornerHingeSide } from './cornerModule';
@@ -24,122 +35,250 @@ export interface FrontPanel {
   hingeSide?: 'left' | 'right' | 'top';
 }
 
-/** Door rows + external-drawer faces of a single cabinet as flat panels.
- *  Pure extraction of the geometry previously inlined in `CabinetFrontsOverlay`
- *  — same `calcDoors` / front-layout math, expressed in floor-up coordinates so
- *  both the 2D overlay and the 3D view derive faces from one place. */
+/** Render threshold (cm): a main door shorter than this above an external-drawer
+ *  stack is not drawn as a face (matches the 2D fronts sketch). */
+const MIN_DOOR_PANEL_H_CM = 0.01;
+
+/** Door rows + external-drawer faces of a WHOLE cabinet as flat panels, in
+ *  cabinet-local floor-up cm (x = 0..outerW from the outer-left edge).
+ *
+ *  This mirrors the cut-list / 3D-board pipeline exactly: the cabinet is
+ *  decomposed into bodies (`decomposeBoxes`), each row of bodies gets its own
+ *  front layout (`computeRowFrontLayout`), and every body emits one door per
+ *  front column plus its external-drawer faces (`deriveDrawerFronts`). The
+ *  earlier single-body model (one body keyed `single:single`, columns split
+ *  over the FULL width) dropped doors and drawers on multi-body free-standing
+ *  cabinets — the wide/tall wardrobe that splits into several bodies. Driving
+ *  the same decomposition the cut list uses keeps the rendered faces in step
+ *  with the actual door / drawer-front cuts.
+ *
+ *  Feeds both the 2D fronts overlay (`CabinetFrontsOverlay`) and the 3D fronts
+ *  view (`cabinetFrontBoxes`). */
 export function cabinetFrontPanels(
   input: CabinetInput,
   state: SavedCabinetState,
   customMaterials: CustomMaterial[],
 ): FrontPanel[] {
   const inp = input;
-  const noFronts = (inp.hasFronts ?? true) === false;
+  if (inp.W <= 0 || inp.H <= 0 || inp.D <= 0) return [];
 
-  const savedItems = state.interior['single:single'] ?? [];
-  const extDrawers = (savedItems as InteriorItem[])
-    .filter((it): it is DrawerItem => it.type === 'drawer' && it.mount === 'external')
-    .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
-
-  if (noFronts && extDrawers.length === 0) return [];
-
-  const ovr = state.boxDimensionOverrides?.['single:single'];
-  const effW = ovr?.W ?? inp.W;
-  const effH = ovr?.H ?? inp.H;
-  const tFront = getMaterialWithCustom(inp.frontMaterialId, customMaterials).thickness / 10;
-  const forceRows = inp.doorsPerColumn === 'auto' ? undefined : inp.doorsPerColumn as 1 | 2 | 3;
+  const frontMat = getMaterialWithCustom(inp.frontMaterialId, customMaterials);
+  const tFront = frontMat.thickness / 10;
   const sides = getShellSides(inp);
   const hasAnyShell = sides.left || sides.right;
   const gapCm = inp.doorGapMm / 10;
-  // Top/bottom envelope caps (front material, tFront each) reduce the door area —
-  // the door must sit BETWEEN them, not over them. `topEnvCm` covers the shell
-  // ceiling (מעטפת תקרה) AND the קלפה top cap; `botEnvCm` is the קלפה bottom cap.
-  // These mirror decomposeBoxes' envelopeTopH / envelopeBottomH, so the rendered
-  // door height equals the cut list's (derived from the already-reduced box.H).
-  // Both zero for a plain cabinet, so no other path moves.
-  const wallEnv = inp.hasWallEnvelope === true && inp.mount === 'wall';
-  const topEnvCm = ((inp.hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
-  const botEnvCm = wallEnv ? tFront : 0;
-  const dl = calcDoors(effW, effH - topEnvCm - botEnvCm, inp.plinth, inp.doorCoversPlinth,
-                       inp.lowerDoorH, hasAnyShell, tFront, forceRows, gapCm);
+  const skipFronts = (inp.hasFronts ?? true) === false;
 
-  // Corner unit (פינה): one fixed-width door at the chosen edge + a filler face
-  // covering the rest of the front. Both share the single door row's height
-  // (a corner is a shelf-only body — no external drawers, no door columns).
+  // Top/bottom envelope caps (front material, tFront each) — same gating as the
+  // cut list / 3D. The body decomposition already drops them from box.H, so the
+  // door/drawer faces fall inside the inner opening automatically.
+  const wallEnv = inp.hasWallEnvelope === true && inp.mount === 'wall';
+  const envelopeTopH = ((inp.hasEnvelopeTop && hasAnyShell) || wallEnv) ? tFront : 0;
+  const envelopeBottomH = wallEnv ? tFront : 0;
+
+  const innerW = computeInnerWidth(inp.W, sides, tFront);
+  const carcassD = computeCarcassDepth(inp.D, inp.backThickness, HINGE_GAP_CM, tFront);
+
+  // ── Decompose into bodies (mirror cabinetCompute / cabinetBoardBoxes) ────────
+  const rawBoxes = decomposeBoxes(
+    innerW, inp.H, carcassD, inp.lowerDoorH, inp.plinth,
+    inp.doorsPerColumn, inp.middleDoorH, envelopeTopH, envelopeBottomH,
+    isCorner(inp),
+  );
+  const overrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
+  const boxes = overrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
+    const o = overrides.get(boxStableKey(box));
+    if (!o) return box;
+    return {
+      ...box,
+      ...(o.W !== undefined ? { W: o.W } : {}),
+      ...(o.H !== undefined ? { H: o.H } : {}),
+      ...(o.D !== undefined ? { D: o.D } : {}),
+    };
+  });
+  const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+  if (bodyBoxes.length === 0) return [];
+  const allPositions = bodyBoxes.map(b => b.position);
+
+  // ── Per-body interior / partitions / front-column counts ────────────────────
+  const interiorById: InteriorById = {};
+  const cellInteriorById: CellInteriorById = {};
+  const partitionsById = new Map<string, boolean>();
+  const numFrontsPerBox = new Map<string, number>();
+  for (const box of bodyBoxes) {
+    const key = boxStableKey(box);
+    const numFronts = frontColumnsForBox(box.W, inp.maxDoorWidth, inp.mount, inp.singleFront);
+    numFrontsPerBox.set(box.id, numFronts);
+    interiorById[box.id] = (state.interior[key] as InteriorItem[] | undefined) ?? [];
+    if (state.partitions[key] && numFronts > 1) {
+      partitionsById.set(box.id, true);
+      cellInteriorById[box.id] = (state.cellInterior[key] as InteriorItem[][] | undefined) ?? [[], []];
+    }
+  }
+
+  // ── Per-row front layouts (mirror cabinetCompute) ───────────────────────────
+  const rowsByLevel = groupBoxesByRow(bodyBoxes);
+  const layoutByRow = new Map<BoxLevel, RowFrontLayout>();
+  for (const [level, rowBoxes] of rowsByLevel) {
+    const totalFrontsInRow = getTotalFrontsInRow(rowBoxes, numFrontsPerBox);
+    const rowInnerW = rowBoxes.reduce((s, b) => s + b.W, 0);
+    const rowEffectiveOuterW = (inp.W - innerW) + rowInnerW;
+    layoutByRow.set(level, computeRowFrontLayout({
+      cabinetW: rowEffectiveOuterW,
+      hasOuterShell: hasAnyShell,
+      shellSides: sides,
+      shellThicknessCm: tFront,
+      totalFrontsInRow,
+      gapCm,
+    }));
+  }
+
+  // ── Per-level vertical stack: each body's bottom-from-floor (mirror 3D) ──────
+  const LEVEL_ORDER: BoxLevel[] = ['top', 'middle', 'bottom', 'single'];
+  const levelHeight = new Map<BoxLevel, number>();
+  for (const b of bodyBoxes) if (!levelHeight.has(b.level)) levelHeight.set(b.level, b.H);
+  const activeLevels = LEVEL_ORDER.filter(l => levelHeight.has(l));
+  const bottomFromFloor = new Map<BoxLevel, number>();
+  {
+    let cumY = inp.plinth + envelopeBottomH;
+    for (const level of [...activeLevels].reverse()) {
+      bottomFromFloor.set(level, cumY);
+      cumY += levelHeight.get(level)!;
+    }
+  }
+
+  // ── Corner unit (פינה): one fixed-width door at the chosen edge + a filler
+  //    face covering the rest. A corner is a single wide body (no width split,
+  //    shelf-only), so its door isn't the equal-split column. ──────────────────
   if (isCorner(inp)) {
+    const box = bodyBoxes[0];
+    if (!box) return [];
     const cf = inp.cornerFiller!;
-    const xl = cornerFrontXLayout(effW, gapCm, cf);
-    const y0 = dl.doorStart;
-    const y1 = dl.doorStart + (dl.lowerH ?? 0);
+    const boxBottom = bottomFromFloor.get(box.level) ?? inp.plinth;
+    const coversSkirt = inp.doorCoversPlinth && shouldCoverSkirt(box.level);
+    const isBottomMost = box.level === 'bottom' || box.level === 'single';
+    const hasBottomGap = !(isBottomMost && inp.plinth > 0 && !coversSkirt);
+    const hasTopGap = box.level === 'top' || box.level === 'single';
+    const panelH = Math.max(0, calcMainDoorHeight(box.H, interiorById[box.id] ?? [], inp.doorGapMm, hasBottomGap, hasTopGap));
+    const outerW = box.W + (sides.left ? tFront : 0) + (sides.right ? tFront : 0);
+    const xl = cornerFrontXLayout(outerW, gapCm, cf);
+    const y0 = boxBottom;
+    const y1 = boxBottom + panelH;
     return [
       { x0: xl.door.x0, x1: xl.door.x1, y0, y1, hingeSide: cornerHingeSide(cf) },
       { x0: xl.fillerFace.x0, x1: xl.fillerFace.x1, y0, y1 },
     ];
   }
 
-  if (dl.n === 0 && extDrawers.length === 0) return [];
-
-  const numFronts = frontColumnsForBox(effW, inp.maxDoorWidth, inp.mount, inp.singleFront);
-  // Front layout MUST match the cut list (cabinetCompute) so the rendered faces
-  // agree with the actual door cuts: with a shell the fronts sit INSIDE the
-  // opening (inset by the shell), not over it. The previous `hasOuterShell:false`
-  // + a manual left-shell shift made the faces span the full W and pushed them
-  // one shell-thickness past the right edge — masked by the old inter-unit gap,
-  // but overlapping the neighbour once kitchen units pack flush.
-  const frontLayout = computeRowFrontLayout({
-    cabinetW: effW,
-    hasOuterShell: hasAnyShell,
-    shellSides: sides,
-    shellThicknessCm: tFront,
-    totalFrontsInRow: numFronts,
-    gapCm,
+  // ── External-drawer faces (shared core — re-stacks from each body's floor) ───
+  const drawerFronts = deriveDrawerFronts({
+    bodyBoxes,
+    interiorById,
+    cellInteriorById,
+    partitionsById,
+    numFrontsPerBox,
+    doorCoversPlinth: inp.doorCoversPlinth,
+    doorGapMm: inp.doorGapMm,
+    layoutByRow,
   });
+
+  // Group drawer fronts so a door above a stack starts at the right height
+  // (mirrors CabinetFrontsSketch.stackTopForDoor).
+  const bodyFrontsByBox = new Map<string, DrawerFront[]>();
+  const cellFrontsByBoxFi = new Map<string, DrawerFront[]>();
+  for (const f of Object.values(drawerFronts)) {
+    if (f.cellIndex !== undefined) {
+      const k = `${f.boxId}:${f.frontIndex}`;
+      const arr = cellFrontsByBoxFi.get(k) ?? [];
+      arr.push(f);
+      cellFrontsByBoxFi.set(k, arr);
+    } else {
+      const arr = bodyFrontsByBox.get(f.boxId) ?? [];
+      arr.push(f);
+      bodyFrontsByBox.set(f.boxId, arr);
+    }
+  }
+  const stackTopForDoor = (boxId: string, fi: number): number => {
+    const list = [
+      ...(cellFrontsByBoxFi.get(`${boxId}:${fi}`) ?? []),
+      ...(bodyFrontsByBox.get(boxId) ?? []),
+    ];
+    if (list.length === 0) return 0;
+    return Math.max(...list.map(f => f.positionFromBoxBottom + f.height + f.gapMm / 10));
+  };
 
   const panels: FrontPanel[] = [];
 
-  // A front face's bottom edge off the floor is `plinth + yFromBodyBottom`
-  // (the body floor sits at the plinth line). Columns come from the shared
-  // front layout — identical to the 2D overlay. `isDoor` tags door rows so the
-  // panel carries the hinge side (the loop index runs left→right; Door.frontIndex
-  // is right→left, so the hinge side derivation inverts the index — matching the
-  // doors map produced by cabinetCompute / useCabinet).
-  function pushFrontRow(heightCm: number, yFromBodyBottom: number, isDoor = false) {
-    const x0base = frontLayout.cabinetLeftOffset;
+  for (const box of bodyBoxes) {
+    const layout = layoutByRow.get(box.level);
+    if (!layout) continue;
+    const boxBottom = bottomFromFloor.get(box.level) ?? inp.plinth;
+    const numFronts = numFrontsPerBox.get(box.id)!;
+    const hasPartition = partitionsById.get(box.id) === true;
+    const bodyItems = interiorById[box.id] ?? [];
+    const cellItems = cellInteriorById[box.id];
+    const rowBoxes = rowsByLevel.get(box.level) ?? [];
+    const boxFirstGlobal = getBoxFirstGlobalFrontIndex({ rowBoxes, numFrontsPerBox, targetBoxId: box.id });
+    const x0base = layout.cabinetLeftOffset;
+
+    // A skirt-covering drawer face extends DOWN over the plinth (visual height),
+    // leaving ~1 cm floor clearance — its `y0` drops, its top stays put.
+    const pushDrawerFront = (x0: number, f: DrawerFront) => {
+      const base = boxBottom + f.positionFromBoxBottom;
+      const ext = getDrawerFrontVisualHeight(f, inp.plinth) - f.height; // 0 unless coversSkirt
+      panels.push({ x0, x1: x0 + Math.max(f.width, 0), y0: base - ext, y1: base + Math.max(f.height, 0) });
+    };
+
+    // ── External-drawer faces of this body ────────────────────────────────────
+    const bodyWide = bodyFrontsByBox.get(box.id) ?? [];
+    if (bodyWide.length > 0) {
+      const span = computeFrontGeometryForSpan({
+        startGlobalIndexInRow: boxFirstGlobal, spanLength: numFronts, layout, gapCm,
+      });
+      for (const f of bodyWide) pushDrawerFront(x0base + span.x, f);
+    }
     for (let fi = 0; fi < numFronts; fi++) {
-      const fp = computeFrontGeometry({ globalFrontIndexInRow: fi, layout: frontLayout, gapCm });
-      const hingeSide = isDoor
-        ? (inp.liftMechanism === true
-            ? 'top' as const // קלפה: lift-up door hinged along the top
-            : (numFronts > 1 ? salonHingeSide(numFronts - 1 - fi, numFronts) : defaultHingeSide('single', ['single'])))
-        : undefined;
+      const cellFronts = cellFrontsByBoxFi.get(`${box.id}:${fi}`) ?? [];
+      if (cellFronts.length === 0) continue;
+      const globalIndex = boxFirstGlobal + (numFronts - 1 - fi);
+      const geo = computeFrontGeometry({ globalFrontIndexInRow: globalIndex, layout, gapCm });
+      for (const f of cellFronts) pushDrawerFront(x0base + geo.x, f);
+    }
+
+    // ── Door faces of this body (one per front column, above any drawer stack) ─
+    if (skipFronts) continue;
+    const originalCoversSkirt = inp.doorCoversPlinth && shouldCoverSkirt(box.level);
+    const isBottomMost = box.level === 'bottom' || box.level === 'single';
+    const hasBottomGap = !(isBottomMost && inp.plinth > 0 && !originalCoversSkirt);
+    const hasTopGap = box.level === 'top' || box.level === 'single';
+
+    for (let fi = 0; fi < numFronts; fi++) {
+      const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
+      const panelH = calcMainDoorHeight(box.H, itemsForFront, inp.doorGapMm, hasBottomGap, hasTopGap);
+      if (panelH <= MIN_DOOR_PANEL_H_CM) continue;
+      // Door.frontIndex 0 is the body's RIGHTMOST column → highest global index.
+      const globalIndex = boxFirstGlobal + (numFronts - 1 - fi);
+      const geo = computeFrontGeometry({ globalFrontIndexInRow: globalIndex, layout, gapCm });
+      const hingeSide: 'left' | 'right' | 'top' =
+        inp.liftMechanism === true
+          ? 'top'
+          : numFronts > 1
+            ? salonHingeSide(fi, numFronts)
+            : defaultHingeSide(box.position, allPositions);
+      // When this door (not an external drawer) carries the skirt, it extends
+      // DOWN over the plinth — its bottom drops, the top stays. Mirrors
+      // getDoorVisualHeight; the structural panelH is unchanged.
+      const doorCoversSkirt = originalCoversSkirt && getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt) === null;
+      const skirtExt = doorCoversSkirt && inp.plinth > 0 ? (inp.plinth - 1) + gapCm : 0;
+      const bottom = boxBottom + stackTopForDoor(box.id, fi);
       panels.push({
-        x0: x0base + fp.x,
-        x1: x0base + fp.x + Math.max(fp.width, 0),
-        y0: inp.plinth + botEnvCm + yFromBodyBottom,
-        y1: inp.plinth + botEnvCm + yFromBodyBottom + Math.max(heightCm, 0),
-        ...(hingeSide ? { hingeSide } : {}),
+        x0: x0base + geo.x,
+        x1: x0base + geo.x + Math.max(geo.width, 0),
+        y0: bottom - skirtExt,
+        y1: bottom + panelH,
+        hingeSide,
       });
     }
-  }
-
-  let totalDrawerH = 0;
-  extDrawers.forEach(d => {
-    const gap = gapCm / 2;
-    pushFrontRow(d.drawerHeight - gap, d.heightFromFloor + gap / 2);
-    totalDrawerH = Math.max(totalDrawerH, d.heightFromFloor + d.drawerHeight);
-  });
-
-  const doorStartFromBodyBottom = dl.doorStart - inp.plinth;
-  const doorTopFromBodyBottom = doorStartFromBodyBottom + (dl.lowerH ?? 0);
-
-  if (!noFronts && extDrawers.length === 0) {
-    const rows: { h: number; yFromBodyBottom: number }[] = [];
-    if (dl.rows >= 1) rows.push({ h: dl.lowerH!, yFromBodyBottom: doorStartFromBodyBottom });
-    if (dl.rows >= 2) rows.push({ h: dl.upperH!, yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + 0.2 });
-    if (dl.rows >= 3) rows.push({ h: dl.topH!,  yFromBodyBottom: doorStartFromBodyBottom + dl.lowerH! + dl.upperH! + 0.4 });
-    rows.forEach(r => pushFrontRow(r.h, r.yFromBodyBottom, true));
-  } else if (!noFronts && totalDrawerH < doorTopFromBodyBottom - 3) {
-    pushFrontRow(doorTopFromBodyBottom - totalDrawerH, totalDrawerH, true);
   }
 
   return panels;

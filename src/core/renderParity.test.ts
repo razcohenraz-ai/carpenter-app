@@ -107,6 +107,7 @@ const empty = () => emptyCabinetState() as SavedCabinetState;
 
 const CASES: Case[] = [
   { name: 'base — single body, no plinth/shell', input: base(), state: empty() },
+  { name: 'base — multi-body (wide + tall: 3 cols × 2 rows)', input: { ...base(), W: 240, H: 220, plinth: 10 }, state: empty() },
   { name: 'base — plinth + 1 door', input: { ...base(), H: 90, plinth: 10 }, state: empty() },
   {
     name: 'base — shell + envelope-top + plinth',
