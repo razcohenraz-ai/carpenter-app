@@ -1,6 +1,6 @@
 import type { Box, BoxPosition } from '../../types/geometry';
-import type { InteriorItem, InteriorById, DrawerItem } from '../../types/interior';
-import type { Door, DoorById, DrawerFront, Hinge } from '../../types/doors';
+import type { InteriorItem, DrawerItem } from '../../types/interior';
+import type { Door, DrawerFront, Hinge } from '../../types/doors';
 import type { MaterialId } from '../../types/materials';
 import { newItemId } from '../interior/interiorUtils';
 import { getMaterial } from '../../catalog';
@@ -209,46 +209,6 @@ export function getDoorVisualHeight(door: Door, plinthH: number): number {
   if (!door.coversSkirt || !(plinthH > 0)) return door.height;
   const gapCm = (door.gapMm ?? 0) / 10;
   return door.height + (plinthH - 1) + gapCm;
-}
-
-// ── Init doors from boxes ─────────────────────────────────────────────────────
-
-// NOTE: not called from production (useCabinet.calculate builds doors inline).
-// Kept for symmetry; gapMm=0 here is safe because no external-drawer stack
-// offset is known at this seed point and `calcExternalStackHeight` returns 0
-// when there are no externals in items.
-export function initDoorsFromBoxes(
-  boxes: Box[],
-  interiorById: InteriorById,
-): DoorById {
-  const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
-  const allPositions = bodyBoxes.map(b => b.position);
-
-  const result: DoorById = {};
-  for (const box of bodyBoxes) {
-    const items = interiorById[box.id] ?? [];
-    const defaultPos = computeDefaultHingePositions(box.H);
-    const rawHinges: Hinge[] = defaultPos.map(p => ({
-      id: newItemId(),
-      positionFromBottom: p,
-      isManual: false,
-    }));
-    const { hinges } = adjustHingesForInterior(rawHinges, items, 0, box.H);
-
-    result[box.id] = {
-      id: box.id,
-      boxId: box.id,
-      frontIndex: 0,
-      height: box.H,
-      width: box.W,
-      hingeSide: defaultHingeSide(box.position, allPositions),
-      hingeCount: 'auto',
-      hinges,
-      hasDoor: true,
-      coversSkirt: false,
-    };
-  }
-  return result;
 }
 
 // ── Recompute non-manual hinges after interior or height change ───────────────

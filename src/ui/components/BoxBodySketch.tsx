@@ -154,7 +154,11 @@ export default function BoxBodySketch({
         hasEnvelopeRight: false,
         hasEnvelopeTop: false,
         items,
-        hasPartition: false,
+        // Emit the centered partition as a real board (length H−2t, thickness t)
+        // when this body has one — so the body-view sketch shows it with
+        // thickness like the main cabinet / 3D / cut sketch, not a hairline.
+        // Cell & single-box callers pass numPartitions=0 → stays false.
+        hasPartition: numPartitions > 0,
         ...(topVariant ? { topVariant } : {}),
         ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
       })
@@ -376,7 +380,9 @@ export default function BoxBodySketch({
         });
       })()}
 
-      {numPartitions > 0 && Array.from({ length: numPartitions }, (_, i) => {
+      {/* Fallback hairline — only when no board model exists (no material yet /
+          pre-calc). With material the partition renders as a real board above. */}
+      {numPartitions > 0 && boards.length === 0 && Array.from({ length: numPartitions }, (_, i) => {
         const x = bX + bW * (i + 1) / (numPartitions + 1);
         return (
           <line

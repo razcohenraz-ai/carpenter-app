@@ -16,6 +16,7 @@
 import { decomposeBoxes } from './index';
 import { buildDoorCutItems } from './cuts/doorCuts';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/cornerModule';
+import { computePartitionCuts } from './cuts/partitionCuts';
 import { boxStableKey } from './interior/interiorUtils';
 import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
 import {
@@ -64,45 +65,6 @@ function buildBoxLabel(box: Box): string {
   else if (box.position === 'right') parts.push('ימין');
   else if (box.unitIndex !== undefined) parts.push(`יחידה ${box.unitIndex}`);
   return parts.join(' — ');
-}
-
-function buildPartitionCutLabel(box: Box): string {
-  const parts: string[] = ['מחיצה פנימית'];
-  const levelMap: Record<string, string> = { top: 'עליונה', middle: 'אמצעית', bottom: 'תחתונה' };
-  if (box.level !== 'single' && levelMap[box.level]) parts.push(levelMap[box.level]!);
-  if (box.position === 'left') parts.push('שמאל');
-  else if (box.position === 'right') parts.push('ימין');
-  else if (box.unitIndex !== undefined) parts.push(`יחידה ${box.unitIndex}`);
-  return parts.join(' — ');
-}
-
-function computePartitionCuts(
-  boxes: Box[],
-  nfMap: Map<string, number>,
-  pMap: Map<string, boolean>,
-  /** Per-body effective body material (id for cut grouping, thickness in cm for
-   *  the note) — a partition inherits its body's (possibly overridden) material. */
-  bodyMatForBox: (box: Box) => { id: MaterialId | string; tCm: number },
-): CutItem[] {
-  const cuts: CutItem[] = [];
-  for (const box of boxes) {
-    if (box.level === 'plinth') continue;
-    if (!pMap.get(box.id)) continue;
-    const nf = nfMap.get(box.id) ?? 1;
-    const count = nf - 1;
-    if (count <= 0) continue;
-    const mat = bodyMatForBox(box);
-    cuts.push({
-      name: buildPartitionCutLabel(box),
-      qty: count,
-      w: box.D * 10,
-      h: box.H * 10,
-      group: 'body',
-      note: `${Math.round(mat.tCm * 10)}mm`,
-      materialId: mat.id,
-    });
-  }
-  return cuts;
 }
 
 // ── Main compute function ────────────────────────────────────────────────────
@@ -388,7 +350,7 @@ export function computeUnitCutsAndHardware(
     }
   }
 
-  const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, box => {
+  const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody, box => {
     const m = boxMaterials.get(box.id)!;
     return { id: m.bodyMaterial.id, tCm: m.bodyMaterial.thickness / 10 };
   });

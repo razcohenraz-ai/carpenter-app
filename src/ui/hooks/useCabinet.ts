@@ -30,6 +30,7 @@ import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts'
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
 import { resolveBoxMaterials, type BoxMaterialOverride } from '../../core/boards/boxMaterials';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
+import { computePartitionCuts } from '../../core/cuts/partitionCuts';
 import { calcHardware } from '../../core/hardware/calcHardware';
 import {
   buildBoardModel,
@@ -73,47 +74,6 @@ function buildBoxLabel(box: Box): string {
 
 // ── Partition helpers ─────────────────────────────────────────────────────────
 
-function buildPartitionCutLabel(box: Box): string {
-  const parts: string[] = ['מחיצה פנימית'];
-  const levelMap: Record<string, string> = { top: 'עליונה', middle: 'אמצעית', bottom: 'תחתונה' };
-  if (box.level !== 'single' && levelMap[box.level]) parts.push(levelMap[box.level]!);
-  if (box.position === 'left') parts.push('שמאל');
-  else if (box.position === 'right') parts.push('ימין');
-  else if (box.unitIndex !== undefined) parts.push(`יחידה ${box.unitIndex}`);
-  return parts.join(' — ');
-}
-
-function computePartitionCuts(
-  boxes: Box[],
-  nfMap: Map<string, number>,
-  pMap: Map<string, boolean>,
-  tBodyCm: number,
-  /** Optional per-body body material (id for cut grouping, thickness in cm) so
-   *  a partition inherits its body's overridden material. Falls back to the
-   *  cabinet `tBodyCm` (and no materialId) when omitted — used by the live
-   *  add/remove-partition handlers that re-key without a full recalc. */
-  bodyMatForBox?: (box: Box) => { id: string; tCm: number },
-): CutItem[] {
-  const cuts: CutItem[] = [];
-  for (const box of boxes) {
-    if (box.level === 'plinth') continue;
-    if (!pMap.get(box.id)) continue;
-    const nf = nfMap.get(box.id) ?? 1;
-    const count = nf - 1;
-    if (count <= 0) continue;
-    const mat = bodyMatForBox?.(box);
-    cuts.push({
-      name: buildPartitionCutLabel(box),
-      qty: count,
-      w: box.D * 10,
-      h: box.H * 10,
-      group: 'body',
-      note: `${Math.round((mat?.tCm ?? tBodyCm) * 10)}mm`,
-      ...(mat ? { materialId: mat.id } : {}),
-    });
-  }
-  return cuts;
-}
 
 export interface BoxDimensionOverride {
   W?: number;

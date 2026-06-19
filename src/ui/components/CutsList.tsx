@@ -3,6 +3,7 @@ import type { CutItem } from '../../types/cuts';
 import type { MaterialId } from '../../types/materials';
 import { MATERIALS, getMaterialWithCustom } from '../../catalog';
 import { mergeCutItems } from '../../core/cuts/mergeCutItems';
+import { sheetsNeeded as sheetsForGroup } from '../../core/cuts/sheetCalculator';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './CutsList.module.css';
 
@@ -197,8 +198,12 @@ export default function CutsList({ cuts, settings }: CutsListProps): React.JSX.E
                       effectivePrice = allPriceOverrides[group.materialId as MaterialId] ?? mat.pricePerSheet;
                     }
 
-                    const sheetAreaCm2 = mat.sheetW * mat.sheetH; // 244 × 122 = 29,768
-                    const sheetsNeeded = Math.ceil(totalAreaCm2 / sheetAreaCm2);
+                    // Sheets + cost via the shared core calculator: it excludes
+                    // the thin back panel (different stock — shares the body
+                    // materialId but is 4mm, not the 18mm sheet) and adds the
+                    // 10% waste margin (APP_DEFAULTS.wasteFactor). Single source
+                    // of truth — see core/cuts/sheetCalculator.ts.
+                    const sheetsNeeded = sheetsForGroup(group.cuts, mat);
                     const woodCost = sheetsNeeded * effectivePrice;
                     return (
                       <>

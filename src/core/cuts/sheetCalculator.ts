@@ -14,7 +14,7 @@ import { APP_DEFAULTS } from "../../types";
  * @param mat  - חומר הגלם; sheetW ו-sheetH ב-ס"מ (מומרים ×10 לחישוב)
  * @returns מספר לוחות (מעוגל כלפי מעלה)
  */
-export function sheetsNeeded(cuts: CutItem[], mat: Material): number {
+export function sheetsNeeded(cuts: CutItem[], mat: Pick<Material, "sheetW" | "sheetH">): number {
   let area = 0;
   for (const c of cuts) {
     if (c.group === "back") continue;

@@ -90,7 +90,7 @@ src/
 │
 └── ui/
     ├── hooks/
-    │   ├── useCabinet.ts         state יחיד של cabinet — calc + interior + doors + overrides (boxDimension/bodyEdging/board)
+    │   ├── useCabinet.ts         state יחיד של cabinet — calc + interior + doors + overrides (boxDimension/boxMaterial/bodyEdging/board)
     │   ├── useProject.ts         Project + products[] + kitchen units + localStorage save/load
     │   ├── useSettings.ts        AppSettings (customMaterials, enabled IDs per body/front, price overrides) — localStorage 'carpenter-settings-v2'
     │   └── useTranslation.ts
@@ -157,6 +157,10 @@ useCabinet.setBoardDimensionOverride(stableId, key, value)
 ```
 
 `Board.stableId` is the persistence key (e.g. `side-left@bottom:left`, `plinth-gable-a@joint:0`). `Board.id` is freshly generated each `calculate()` and is only safe as a React key.
+
+### שכבת override לחומרי גוף (per-body material)
+
+`boxMaterialOverrides` (keyed by `BoxSlotId`) עוקף את חומר הגוף/החזית + עובי-הגב לגוף בודד. `useCabinet.setBoxMaterial(slotId, patch)` → ref+state → `calculate()` רץ. בכל מסלולי בניית-הלוחות (cut/2D/3D) הגוף נפתר דרך `resolveBoxMaterials(box, input, overrides, customMaterials)` (מקור יחיד) → `buildBoardModel` מקבל את החומר האפקטיבי; חיתוכי הדלת/מגירה-חיצונית/מילוי-פינה/מחיצה מתויגים בחומר-החזית של הגוף. ה-shell וה-carcassD המשותפים נשארים על חומר-החזית של הארון (מעטפת אחת). מסך הגוף (`BodyView`) מציג טאבים (גופים/חזיתות/חיתוכים/פרזולים) שמחושבים על הגוף **כיחידה עצמאית**.
 
 ## ממשקים מרכזיים
 
@@ -283,6 +287,7 @@ interface SavedCabinetState {
   bodyEdgingOverrides?:   Record<BoxSlotId, Edging>;       // per-body edging
   doorEdgingOverrides?:   Record<DoorSlotKey, Edging>;     // per-door edging
   boxDimensionOverrides?: Record<BoxSlotId, { W?: number; H?: number; D?: number }>;
+  boxMaterialOverrides?:  Record<BoxSlotId, { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId; backThicknessCm?: number }>; // per-body material (resolveBoxMaterials)
 }
 ```
 
