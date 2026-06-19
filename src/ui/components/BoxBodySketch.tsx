@@ -38,6 +38,12 @@ interface Props {
    *  traverse boards (front + back) instead of a top board. */
   topVariant?: 'standard' | 'sink-open';
   sinkTraverseWidthCm?: number;
+  /** Partition cell items (cell 0 = right half, cell 1 = left half). When
+   *  provided with `numPartitions > 0`, the sketch draws each cell's shelves
+   *  (via the board model) plus its rods/drawers in that half, alongside the
+   *  centered partition board — matching the main cabinet view. Body-level
+   *  `items` is then expected to be empty (the parts live in the cells). */
+  cellItems?: [InteriorItem[], InteriorItem[]];
 }
 
 interface DragState {
@@ -84,7 +90,7 @@ export default function BoxBodySketch({
   showLabels = false, showDimensions = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
   bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
-  topVariant, sinkTraverseWidthCm,
+  topVariant, sinkTraverseWidthCm, cellItems,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -159,6 +165,9 @@ export default function BoxBodySketch({
         // thickness like the main cabinet / 3D / cut sketch, not a hairline.
         // Cell & single-box callers pass numPartitions=0 → stays false.
         hasPartition: numPartitions > 0,
+        // With a partition, the cell shelves are emitted as boards from each
+        // half (rods/drawers are drawn separately below). Body items stay empty.
+        ...(cellItems && numPartitions > 0 ? { cellItems } : {}),
         ...(topVariant ? { topVariant } : {}),
         ...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {}),
       })
@@ -377,6 +386,69 @@ export default function BoxBodySketch({
           );
           cumulative += drawer.drawerHeight + gapCm;
           return node;
+        });
+      })()}
+
+      {/* Partition cells — each cell's rods + drawers in its half (shelves come
+          from the board model above). Cell 0 = right half, cell 1 = left half,
+          matching the main cabinet view. */}
+      {cellItems && numPartitions > 0 && (() => {
+        const partitionX = bX + bW / 2;
+        const gapCm = gapMm / 10;
+        return cellItems.flatMap((cell, ci) => {
+          const xLeft  = ci === 0 ? partitionX : bX;
+          const xRight = ci === 0 ? bX + bW : partitionX;
+          const cellInnerX = xLeft + tBodyCm * scale;
+          const cellInnerW = (xRight - xLeft) - 2 * tBodyCm * scale;
+          const externals = cell
+            .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
+            .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
+          const externalIds = new Set(externals.map(d => d.id));
+
+          const internalNodes = cell.map(item => {
+            if (externalIds.has(item.id) || item.type === 'shelf') return null; // shelves → boards
+            if (item.type === 'rod') {
+              const y = toY(item.heightFromFloor);
+              return (
+                <line key={item.id} x1={cellInnerX} y1={y} x2={cellInnerX + cellInnerW} y2={y}
+                  className={styles.rodLine} />
+              );
+            }
+            // Internal drawer → inner box (inset), like the full-body case.
+            const d = item as DrawerItem;
+            const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
+            const yBottom = toY(bottomCm);
+            const yTop    = toY(topCm);
+            const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * scale;
+            return (
+              <rect key={item.id} x={cellInnerX + sideGapPx} y={yTop}
+                width={Math.max(cellInnerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
+                className={styles.drawerRect} />
+            );
+          });
+
+          let cumulative = 0; // cm from cell bottom — externals stack upward
+          const externalNodes = externals.map(drawer => {
+            const yBottom = toY(cumulative);
+            const yTop    = toY(cumulative + drawer.drawerHeight);
+            cumulative += drawer.drawerHeight + gapCm;
+            return (
+              <g key={`ext-${drawer.id}`}>
+                <rect x={cellInnerX} y={yTop} width={cellInnerW} height={Math.max(yBottom - yTop, 0)}
+                  className={styles.externalDrawerRect} />
+                <line x1={cellInnerX + 2} y1={yTop + 2} x2={cellInnerX + cellInnerW - 2} y2={yTop + 2}
+                  className={styles.externalDrawerFaceHint} />
+                {showLabels && (yBottom - yTop) >= 12 && (
+                  <text x={cellInnerX + cellInnerW / 2} y={(yTop + yBottom) / 2 + 3}
+                    textAnchor="middle" className={styles.externalDrawerLabel}>
+                    {t.interior.drawer} {Math.round(drawer.drawerHeight)}
+                  </text>
+                )}
+              </g>
+            );
+          });
+
+          return [...internalNodes, ...externalNodes];
         });
       })()}
 

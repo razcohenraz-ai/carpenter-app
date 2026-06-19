@@ -6,6 +6,7 @@ import { computeInnerWidth } from '../../core/boards/boardModel';
 import { boxStableKey } from '../../core/interior/interiorUtils';
 import type { MaterialId } from '../../types';
 import type { SavedCabinetState } from '../../types/project';
+import type { InteriorItem } from '../../types/interior';
 import type { Edging } from '../../types/edging';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
@@ -743,6 +744,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
           showLabels
           showDimensions
           numPartitions={partitionsById.get(editingBox.id) ? 1 : 0}
+          {...(partitionsById.get(editingBox.id)
+            ? { cellItems: (cellInteriorById[editingBox.id] ?? [[], []]) as [InteriorItem[], InteriorItem[]] }
+            : {})}
           bodyMaterialId={effBodyMat}
           frontMaterialId={effFrontMat}
           hasOuterShell={form.hasShell}
