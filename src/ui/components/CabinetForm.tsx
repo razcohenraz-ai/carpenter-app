@@ -809,10 +809,29 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // is unaware of slot identity.
       const editingBoxSlotId = boxStableKey(editingBox);
       const cabinetEdging = buildCabinetEdging(form);
+      // Isolated single-body input for the editor's 3D preview — same standalone
+      // unit as the body view (no cabinet plinth/shell), with the effective
+      // per-body materials. The editor builds the live SavedCabinetState from
+      // its local items and feeds this through cabinetBoardBoxes (single source).
+      const ovr3d = boxMaterialOverrides.get(editingBoxSlotId);
+      const cabInput3d = getLastInput();
+      const bodyInput3d = cabInput3d ? {
+        ...cabInput3d,
+        W: editingBox.W, H: editingBox.H, D: editingBox.D,
+        plinth: 0,
+        hasShell: false, hasShellLeft: false, hasShellRight: false,
+        hasEnvelopeTop: false,
+        doorsPerColumn: 1 as const,
+        bodyMaterialId: ovr3d?.bodyMaterialId ?? form.bodyMaterialId,
+        frontMaterialId: ovr3d?.frontMaterialId ?? form.frontMaterialId,
+        backThickness: ovr3d?.backThicknessCm ?? cabInput3d.backThickness,
+      } : null;
       return (
         <div className={styles.form}>
           <BoxInteriorEditor
             box={editingBox}
+            bodyInput={bodyInput3d}
+            customMaterials={settings?.customMaterials ?? []}
             items={interiorById[editingBox.id] ?? []}
             onChange={items => setBoxInterior(editingBox.id, items)}
             onBack={() => setEditing({ type: 'bodyView', boxId: editingBox.id })}

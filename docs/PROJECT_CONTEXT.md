@@ -41,7 +41,7 @@
 - **מחשבון חיתוכים** — קורפוס, מדפים, מגירות, דלתות, מעטפת, צוקל, חיפוי, צוקל נסוג.
 - **פיצול לגופים** — אוטומטי לפי `MAX_BOX_W=100`; doorsPerColumn 1/2/3; איחוד גופים קטנים <60 ס"מ.
 - **שני חומרים נפרדים** — body + front; עובי חזית פר-דלת ופר-drawer חיצוני.
-- **עורך חזיתות + עורך פנים גוף** — צירים, מדפים, מגירות (internal/external), מוט תליה (לא ב-kitchen), מחיצות פנימיות.
+- **עורך חזיתות + עורך פנים גוף** — צירים, מדפים, מגירות (internal/external), מוט תליה (לא ב-kitchen), מחיצות פנימיות. עורך הפנים כולל **מתג סקיצה 2D ⇄ תלת־ממד** (ברירת מחדל 3D — `Body3DView`, נבנה מ-`cabinetBoardBoxes` כמו תצוגת החדר; צבעי-תפקיד ב-`boards3DStyle.ts`).
 - **חלוקת מדפים חכמה** — round-robin בין אזורים ≥25 ס"מ, hanger logic, אזהרות `small_zone` / `rod_low` / `rod_drawer_close`.
 - **מגירות חיצוניות** — חזיתות עצמאיות, `coversSkirt` עובר לתחתונה, מדף קבוע (`syncFixedShelf`), drawer-box visualization (צר ב-2.5, נמוך ב-5), `equalizeExternalDrawersIfOverflow` כשהstack חורג.
 - **מעטפת** — `hasShell` (סימטרי) או `hasShellLeft`/`hasShellRight` (kitchen — `splitShellSides`); `getShellSides` מאחד.

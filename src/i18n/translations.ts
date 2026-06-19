@@ -126,6 +126,14 @@ export interface Translations {
     levelSingle: string;
   };
 
+  camViews: {
+    front: string;
+    top: string;
+    side: string;
+    diagLeft: string;
+    diagRight: string;
+  };
+
   interior: {
     shelf: string;
     drawer: string;
@@ -173,6 +181,8 @@ export interface Translations {
     dimOverrideH: string;
     dimOverrideD: string;
     dimOverrideReset: string;
+    view2d: string;
+    view3d: string;
     warnHeightMismatch: string;
     warnWidthMismatch: string;
     warnVerticalGap: string;
@@ -453,6 +463,14 @@ const he: Translations = {
     levelSingle: 'גוף יחיד',
   },
 
+  camViews: {
+    front: 'חזית',
+    top: 'מבט-על',
+    side: 'צד',
+    diagLeft: 'אלכסון שמאל',
+    diagRight: 'אלכסון ימין',
+  },
+
   interior: {
     shelf: 'מדף',
     drawer: 'מגירה',
@@ -500,6 +518,8 @@ const he: Translations = {
     dimOverrideH: 'גובה (ס"מ)',
     dimOverrideD: 'עומק (ס"מ)',
     dimOverrideReset: 'אפס מידות',
+    view2d: 'סקיצה',
+    view3d: 'תלת־ממד',
     warnHeightMismatch: 'שים לב: גופים צמודים עם גובה שונה — הפרש {diff} ס"מ',
     warnWidthMismatch: 'שים לב: קומות מוערמות עם רוחב שונה — הפרש {diff} ס"מ',
     warnVerticalGap: 'שים לב: חלל ריק בין הקומות — {diff} ס"מ ללא גוף',
@@ -757,6 +777,14 @@ const en: Translations = {
     levelSingle: 'Single Body',
   },
 
+  camViews: {
+    front: 'Front',
+    top: 'Top',
+    side: 'Side',
+    diagLeft: 'Diagonal L',
+    diagRight: 'Diagonal R',
+  },
+
   interior: {
     shelf: 'Shelf',
     drawer: 'Drawer',
@@ -804,6 +832,8 @@ const en: Translations = {
     dimOverrideH: 'Height (cm)',
     dimOverrideD: 'Depth (cm)',
     dimOverrideReset: 'Reset dimensions',
+    view2d: '2D',
+    view3d: '3D',
     warnHeightMismatch: 'Note: adjacent bodies have different heights — difference {diff} cm',
     warnWidthMismatch: 'Note: stacked levels have different total widths — difference {diff} cm',
     warnVerticalGap: 'Note: empty gap between levels — {diff} cm without a body',

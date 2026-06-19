@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
+import { cabinetBoardBoxes } from '../../core/product/cabinetBoards3D';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import {
   addShelfRedistributed,
@@ -15,8 +16,13 @@ import styles from './BoxInteriorEditor.module.css';
 import type { InteriorItem, DrawerItem, DrawerMount, InteriorWarning, ShelfWarning } from '../../types/interior';
 import type { Box, BoxPosition } from '../../types/geometry';
 import type { Edging } from '../../types/edging';
-import type { MaterialId } from '../../types/materials';
+import type { MaterialId, CustomMaterial } from '../../types/materials';
+import type { CabinetInput } from '../../types/cabinet';
+import type { SavedCabinetState } from '../../types/project';
 import type { Translations } from '../../i18n/translations';
+
+/** Lazy — pulls in react-three-fiber / three only when the 3D toggle is used. */
+const Body3DView = lazy(() => import('./Body3DView'));
 
 function shelfWarningText(w: ShelfWarning, t: Translations): string {
   if (w.kind === 'small_zone')        return t.interior.warnShelfSmallZone;
@@ -86,6 +92,11 @@ interface Props {
    *  top board. Both undefined for non-sink units. */
   topVariant?: 'standard' | 'sink-open';
   sinkTraverseWidthCm?: number;
+  /** Isolated single-body input for the 3D preview (no cabinet plinth/shell),
+   *  with the effective per-body materials. Null when no compute input exists
+   *  — the 3D toggle is then hidden. */
+  bodyInput: CabinetInput | null;
+  customMaterials: CustomMaterial[];
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -107,6 +118,7 @@ export default function BoxInteriorEditor({
   hideInteriorControls,
   shelfOnly,
   topVariant, sinkTraverseWidthCm,
+  bodyInput, customMaterials,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -114,6 +126,18 @@ export default function BoxInteriorEditor({
     cellItems.length === 2 ? cellItems : [[], []],
   );
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
+  const [view, setView] = useState<'2d' | '3d'>('3d');
+
+  // Live 3D boxes for THIS body, built from the editor's local items via the
+  // same cabinetBoardBoxes pipeline as the room view (single source — no drift).
+  const bodyState3d: SavedCabinetState = {
+    interior: { 'single:single': localItems },
+    cellInterior: { 'single:single': [localCellItems[0] ?? [], localCellItems[1] ?? []] },
+    partitions: { 'single:single': hasPartitions },
+    doors: {}, plinthGableOverrides: {}, boardOverrides: {},
+  };
+  const boxes3D = bodyInput ? cabinetBoardBoxes(bodyInput, bodyState3d, customMaterials) : [];
+  const show3d = view === '3d' && bodyInput !== null && boxes3D.length > 0;
   const [boxShelfWarnings,  setBoxShelfWarnings]  = useState<ShelfWarning[]>([]);
   const [cellShelfWarnings, setCellShelfWarnings] = useState<ShelfWarning[][]>([[], []]);
   // Where to drop the new drawer once the user picks internal/external.
@@ -692,6 +716,34 @@ export default function BoxInteriorEditor({
         )}
       </div>
 
+      {/* ── 2D / 3D preview toggle ──────────────────────────────────────── */}
+      {bodyInput && (
+        <div className={styles.viewToggle}>
+          <button
+            type="button"
+            className={`${styles.viewBtn} ${view === '3d' ? styles.viewBtnActive : ''}`}
+            onClick={() => setView('3d')}
+          >
+            {t.interior.view3d}
+          </button>
+          <button
+            type="button"
+            className={`${styles.viewBtn} ${view === '2d' ? styles.viewBtnActive : ''}`}
+            onClick={() => setView('2d')}
+          >
+            {t.interior.view2d}
+          </button>
+        </div>
+      )}
+
+      {/* 3D model of the whole body (carcass + shelves/drawers). Editing stays
+          on the controls below; switch to 2D for drag-to-move. */}
+      {show3d && (
+        <Suspense fallback={<div className={styles.view3dFallback} />}>
+          <Body3DView boxes={boxes3D} />
+        </Suspense>
+      )}
+
       {hasPartitions ? (
         /* ── Cell editor (partition mode) ── */
         <div className={styles.partitionBody}>
@@ -714,23 +766,25 @@ export default function BoxInteriorEditor({
                     </span>
                   </div>
 
-                  <div className={styles.cellSketch}>
-                    <BoxBodySketch
-                      bodyH={bodyH}
-                      bodyW={cellW}
-                      bodyD={box.D}
-                      items={cellItemList}
-                      svgWidth={CELL_SKETCH_W}
-                      svgHeight={CELL_SKETCH_H}
-                      showLabels={false}
-                      onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
-                      numPartitions={0}
-                      bodyMaterialId={bodyMaterialId}
-                      frontMaterialId={frontMaterialId}
-                      hasOuterShell={false}
-                      hasEnvelopeTop={false}
-                    />
-                  </div>
+                  {!show3d && (
+                    <div className={styles.cellSketch}>
+                      <BoxBodySketch
+                        bodyH={bodyH}
+                        bodyW={cellW}
+                        bodyD={box.D}
+                        items={cellItemList}
+                        svgWidth={CELL_SKETCH_W}
+                        svgHeight={CELL_SKETCH_H}
+                        showLabels={false}
+                        onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
+                        numPartitions={0}
+                        bodyMaterialId={bodyMaterialId}
+                        frontMaterialId={frontMaterialId}
+                        hasOuterShell={false}
+                        hasEnvelopeTop={false}
+                      />
+                    </div>
+                  )}
 
                   {!hideInteriorControls && (
                     <div className={styles.addRow}>
@@ -771,27 +825,29 @@ export default function BoxInteriorEditor({
       ) : (
         /* ── Single-box editor ── */
         <div className={styles.body}>
-          {/* Sketch */}
-          <div className={styles.sketchCol}>
-            <BoxBodySketch
-              bodyH={bodyH}
-              bodyW={box.W}
-              bodyD={box.D}
-              items={localItems}
-              svgWidth={SKETCH_W}
-              svgHeight={SKETCH_H}
-              showLabels
-              showDimensions
-              onItemMove={onItemMove}
-              numPartitions={0}
-              bodyMaterialId={bodyMaterialId}
-              frontMaterialId={frontMaterialId}
-              hasOuterShell={hasOuterShell}
-              hasEnvelopeTop={hasEnvelopeTop}
-              {...(topVariant ? { topVariant } : {})}
-              {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
-            />
-          </div>
+          {/* Sketch (2D) — hidden while the 3D model is showing */}
+          {!show3d && (
+            <div className={styles.sketchCol}>
+              <BoxBodySketch
+                bodyH={bodyH}
+                bodyW={box.W}
+                bodyD={box.D}
+                items={localItems}
+                svgWidth={SKETCH_W}
+                svgHeight={SKETCH_H}
+                showLabels
+                showDimensions
+                onItemMove={onItemMove}
+                numPartitions={0}
+                bodyMaterialId={bodyMaterialId}
+                frontMaterialId={frontMaterialId}
+                hasOuterShell={hasOuterShell}
+                hasEnvelopeTop={hasEnvelopeTop}
+                {...(topVariant ? { topVariant } : {})}
+                {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
+              />
+            </div>
+          )}
 
           {/* Controls */}
           <div className={styles.controlsCol}>

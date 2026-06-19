@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Html, Line } from '@react-three/drei';
 import { DoubleSide } from 'three';
@@ -7,27 +7,16 @@ import type { CustomMaterial } from '../../types/materials';
 import { productBounds, productSubBoxes } from '../../core/room/productBounds';
 import { placementSubBoxAABBs } from '../../core/room/roomGeometry';
 import { productBoardBoxes, productFrontBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
+import { colorForRole, SELECTED_COLOR, mixHex } from './boards3DStyle';
+import { ViewButtons, CameraRig, type CamCmd, type ViewPreset } from './cameraViews';
 import styles from './RoomView.module.css';
 
 /** Distinct fill colours cycled per placed product (used by the fallback
  *  simple-box render; the detailed render colours by board role). */
 const PALETTE = ['#6b8cae', '#b08968', '#7a9e7e', '#a87ca0', '#c0a062', '#8a8a8a'];
-const SELECTED_COLOR = '#f5a662';
 
 /** Interior pieces hidden behind closed doors — dropped in the fronts view. */
 const INTERIOR_ROLES = new Set<BoardBox3D['role']>(['rod', 'drawer-box', 'shelf', 'fixed-shelf', 'internal-shelf']);
-
-/** Wood-tone palette by board role family — reads as carpentry in the 3D view. */
-function colorForRole(role: BoardBox3D['role']): string {
-  if (role === 'front') return '#e8934a';      // door / drawer face
-  if (role === 'rod') return '#9aa0a6';        // brushed metal
-  if (role === 'drawer-box') return '#b59f82'; // greyer tray
-  if (role === 'back') return '#9c7f55';
-  if (role === 'shelf' || role === 'fixed-shelf' || role === 'internal-shelf') return '#d8bb8a';
-  if (role.startsWith('envelope')) return '#b89668';
-  if (role.startsWith('plinth')) return '#8a6f4a';
-  return '#c8a877'; // sides / top / bottom / partition / traverses
-}
 
 type Vec3 = [number, number, number];
 interface Aabb { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; }
@@ -108,13 +97,17 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
   const { width: W, height: H, depth: D } = room;
   const center: [number, number, number] = [W / 2, H / 2, D / 2];
   const span = Math.max(W, H, D);
+  const [camCmd, setCamCmd] = useState<CamCmd | null>(null);
+  const pick = (p: ViewPreset) => setCamCmd(c => ({ preset: p, tick: (c?.tick ?? 0) + 1 }));
 
   return (
     <div className={styles.canvas3d}>
+      <ViewButtons onPick={pick} />
       <Canvas
         camera={{ position: [W + span * 0.6, H + span * 0.7, D + span * 0.9], fov: 45, near: 1, far: span * 12 + 2000 }}
         onPointerMissed={() => onSelect(null)}
       >
+        <CameraRig cmd={camCmd} center={center} dist={span * 1.6} />
         <ambientLight intensity={0.75} />
         <directionalLight position={[W, H * 2.2, D * 1.6]} intensity={1.1} />
         <directionalLight position={[-W * 0.5, H, -D * 0.5]} intensity={0.3} />
@@ -164,16 +157,18 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           const labelX = (Math.min(...aabbs.map(b => b.x0)) + Math.max(...aabbs.map(b => b.x1))) / 2;
           const labelZ = (Math.min(...aabbs.map(b => b.z0)) + Math.max(...aabbs.map(b => b.z1))) / 2;
           const labelTop = Math.max(...aabbs.map(b => b.y1));
-          const fallbackColor = isSel ? SELECTED_COLOR : PALETTE[pi % PALETTE.length]!;
+          const fallbackColor = PALETTE[pi % PALETTE.length]!;
 
           return (
             <group key={pl.productId}>
               {aabbs.map((b, i) => {
                 const role = roles ? roles[i]! : undefined;
                 const hingeSide = hingeSides ? hingeSides[i] : undefined;
-                const color = isSel
-                  ? SELECTED_COLOR
-                  : role ? colorForRole(role) : fallbackColor;
+                // Keep each board's own role colour; when selected, wash it
+                // part-way toward the grey shade so the item reads as highlighted
+                // WITHOUT flattening its detail (a single flat fill hid it all).
+                const base = role ? colorForRole(role) : fallbackColor;
+                const color = isSel ? mixHex(base, SELECTED_COLOR, 0.5) : base;
                 const center: [number, number, number] = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2];
                 const onClick = (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect(pl.productId); };
                 const onDoubleClick = (e: { stopPropagation: () => void }) => { e.stopPropagation(); onOpenProduct(pl.productId); };
@@ -189,7 +184,7 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
                   return (
                     <mesh key={i} position={center} rotation={rotation} onClick={onClick} onDoubleClick={onDoubleClick}>
                       <cylinderGeometry args={[radius, radius, length, 12]} />
-                      <meshStandardMaterial color={isSel ? SELECTED_COLOR : '#9aa0a6'} metalness={0.6} roughness={0.4} />
+                      <meshStandardMaterial color={isSel ? mixHex('#9aa0a6', SELECTED_COLOR, 0.5) : '#9aa0a6'} metalness={0.6} roughness={0.4} />
                     </mesh>
                   );
                 }
