@@ -54,6 +54,26 @@ describe('computeSketchGeometry', () => {
     expect(g.cabinet.y + g.cabinet.h).toBeLessThanOrEqual(g.svgHeight);
   });
 
+  it('a width override on a non-bottom row keeps every body rect inside the outline', () => {
+    // Regression: the outline + scale used to follow the BOTTOM row only. Widen
+    // the TOP-left body (W=200 → left/right columns, H=220 → top+bottom rows): the
+    // top row (260) is now wider than the bottom (200). The outline must grow to
+    // the widest row so the top boxes + fronts don't overflow it / mis-scale
+    // against the per-row front layout (which the cut list sizes correctly).
+    const ovr = new Map([['top:left', { W: 160 }]]);
+    const g = computeSketchGeometry(200, 220, Dn, 0, undefined, undefined, undefined, undefined, false, ovr);
+    const rects = Object.values(g.boxSvgRects);
+    expect(rects.length).toBeGreaterThan(0);
+    const right = g.cabinet.x + g.cabinet.w;
+    for (const r of rects) {
+      expect(r.x).toBeGreaterThanOrEqual(g.cabinet.x - 0.5);
+      expect(r.x + r.w).toBeLessThanOrEqual(right + 0.5); // no overflow past the outline
+    }
+    // The widened top body is visibly the widest rect (≈160 vs ≈100 columns).
+    const widths = rects.map(r => r.w).sort((a, b) => b - a);
+    expect(widths[0]).toBeGreaterThan(widths[1]! * 1.2);
+  });
+
   it('returns plinthRect when plinth > 0', () => {
     const g = computeSketchGeometry(100, 200, Dn, 10);
     expect(g.plinthRect).not.toBeNull();

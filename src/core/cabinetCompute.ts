@@ -14,6 +14,7 @@
  */
 
 import { decomposeBoxes } from './index';
+import { applyBoxDimensionOverrides } from './geometry/boxDecomposition';
 import { buildDoorCutItems } from './cuts/doorCuts';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/cornerModule';
 import { computePartitionCuts } from './cuts/partitionCuts';
@@ -85,8 +86,15 @@ export function computeUnitCutsAndHardware(
   /** When true, skip emitting plinth boards (front/back/cladding/gables).
    *  Used by KitchenOverview to aggregate plinths at the kitchen level —
    *  adjacent units sharing plinth attributes get a single unified plinth
-   *  instead of one per unit. */
-  options?: { skipPlinth?: boolean },
+   *  instead of one per unit.
+   *
+   *  `onlyBoxStableKey`: body-view projection. The whole cabinet is decomposed
+   *  and its row front-layout is computed (full context — real shell, sibling
+   *  bodies), but cuts + hardware are emitted for the ONE target body only
+   *  (matched by `boxStableKey`). The body view thus shows a faithful SLICE of
+   *  the cabinet's cut list rather than a standalone re-derivation that drifts.
+   *  Implies plinth is skipped (the plinth is cabinet-level). */
+  options?: { skipPlinth?: boolean; onlyBoxStableKey?: string },
 ): UnitComputeResult {
   const {
     W, H, D, backThickness, hasEnvelopeTop,
@@ -117,18 +125,8 @@ export function computeUnitCutsAndHardware(
     isCorner(input), // corner (פינה): one wide carcass, no 100 cm column split
   );
 
-  // Apply box dimension overrides from saved state
-  const boxDimOvr = new Map(Object.entries(savedState.boxDimensionOverrides ?? {}));
-  const boxes = boxDimOvr.size === 0 ? rawBoxes : rawBoxes.map(box => {
-    const ovr = boxDimOvr.get(boxStableKey(box));
-    if (!ovr) return box;
-    return {
-      ...box,
-      ...(ovr.W !== undefined ? { W: ovr.W } : {}),
-      ...(ovr.H !== undefined ? { H: ovr.H } : {}),
-      ...(ovr.D !== undefined ? { D: ovr.D } : {}),
-    };
-  });
+  // Apply box dimension overrides from saved state (shared single source).
+  const boxes = applyBoxDimensionOverrides(rawBoxes, savedState.boxDimensionOverrides);
 
   const cabinetEdging = input.edging ?? DEFAULT_EDGING;
   const bodyEdgingOverrides = new Map(Object.entries(savedState.bodyEdgingOverrides ?? {}));
@@ -149,6 +147,12 @@ export function computeUnitCutsAndHardware(
 
   // ── Build interior/cells/partitions/doors maps from saved state ─────────────
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
+  // Body-view projection: layout/doors use the FULL body set (row context),
+  // but cuts/hardware are emitted only for the target body (matched by
+  // stableKey). When unset, emitBoxes === bodyBoxes (whole-cabinet behaviour).
+  const onlyKey = options?.onlyBoxStableKey;
+  const emitBoxes = onlyKey ? bodyBoxes.filter(b => boxStableKey(b) === onlyKey) : bodyBoxes;
+  const emitBoxIds = new Set(emitBoxes.map(b => b.id));
   // Effective per-body materials (override ?? cabinet default) — one lookup
   // shared by the carcass, partition, door and external-front cut emitters.
   const boxMaterials = new Map(
@@ -284,14 +288,14 @@ export function computeUnitCutsAndHardware(
 
   // ── Door cuts (derived from the finished doors — single source of truth) ──
   const doorCuts = buildDoorCutItems({
-    doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
+    doors: newDoors, bodyBoxes: emitBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
     frontMaterialForBox: id => boxMaterials.get(id)?.frontMaterial.id,
   });
 
   // ── Corner filler (פינה): face flange + perpendicular hinge-post return ──
   const cornerFillerCuts: CutItem[] = [];
   if (isCorner(input)) {
-    const cornerBox = bodyBoxes[0];
+    const cornerBox = emitBoxes[0];
     const cornerDoor = cornerBox ? newDoors[makeDoorId(cornerBox.id, 0)] : undefined;
     if (cornerBox && cornerDoor) {
       const cornerFrontMatId = boxMaterials.get(cornerBox.id)?.frontMaterial.id;
@@ -305,7 +309,7 @@ export function computeUnitCutsAndHardware(
 
   // ── External-drawer front cuts ─────────────────────────────────────────────
   const externalDrawerCuts: CutItem[] = [];
-  for (const box of bodyBoxes) {
+  for (const box of emitBoxes) {
     const numFronts = newNumFrontsMap.get(box.id)!;
     const hasPartition = newPartitionsMap.has(box.id);
     const bodyItems = newInterior[box.id] ?? [];
@@ -350,7 +354,7 @@ export function computeUnitCutsAndHardware(
     }
   }
 
-  const partitionCuts = computePartitionCuts(bodyBoxes, newNumFrontsMap, newPartitionsMap, tBody, box => {
+  const partitionCuts = computePartitionCuts(emitBoxes, newNumFrontsMap, newPartitionsMap, tBody, box => {
     const m = boxMaterials.get(box.id)!;
     return { id: m.bodyMaterial.id, tCm: m.bodyMaterial.thickness / 10 };
   });
@@ -358,7 +362,7 @@ export function computeUnitCutsAndHardware(
   // ── Carcass boards ──────────────────────────────────────────────────────────
   const cabinetJoint = resolveCabinetJointMethod(W, H);
   const boardCuts: CutItem[] = [];
-  for (const box of bodyBoxes) {
+  for (const box of emitBoxes) {
     const envFlags = deriveEnvelopeFlags(box, shellSides, hasEnvelopeTop, wallEnv);
     const items = newInterior[box.id] ?? [];
     const cellItems = newCellInteriorById[box.id];
@@ -394,8 +398,9 @@ export function computeUnitCutsAndHardware(
   }
 
   // Plinth boards — skipped when the caller (KitchenOverview) aggregates
-  // plinths at the kitchen level across adjacent units.
-  if (!options?.skipPlinth) {
+  // plinths at the kitchen level across adjacent units, or for a body-view
+  // projection (the plinth is cabinet-level, not part of one body).
+  if (!options?.skipPlinth && !onlyKey) {
     const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
     const plinthGableOverrides = new Map(Object.entries(savedState.plinthGableOverrides ?? {}));
     const plinthBoards = buildPlinthBoardModel({
@@ -442,8 +447,19 @@ export function computeUnitCutsAndHardware(
     ...enrich(externalDrawerCuts),
   ];
 
+  // Hardware: scope to the projected body too (its doors' hinges/handles +
+  // its interior's runners), so the body-view hardware matches the cabinet's.
+  const hwDoors = onlyKey
+    ? Object.fromEntries(Object.entries(newDoors).filter(([, d]) => emitBoxIds.has(d.boxId)))
+    : newDoors;
+  const hwInterior = onlyKey
+    ? Object.fromEntries(Object.entries(newInterior).filter(([id]) => emitBoxIds.has(id)))
+    : newInterior;
+  const hwCells = onlyKey
+    ? Object.fromEntries(Object.entries(newCellInteriorById).filter(([id]) => emitBoxIds.has(id)))
+    : newCellInteriorById;
   const hardwareItems = calcHardware(
-    newDoors, newInterior, newCellInteriorById,
+    hwDoors, hwInterior, hwCells,
     input.liftMechanism === true ? 'wall_cabinet' : 'cabinet',
   );
 

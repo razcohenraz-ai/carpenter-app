@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { computeUnitCutsAndHardware } from './cabinetCompute';
 import { kitchenModuleInput, kitchenModuleState } from './product/kitchenModules';
+import { defaultInputForType, emptyCabinetState } from './product/productDefaults';
+import type { CutItem } from '../types/cuts';
 import type { SavedCabinetState } from '../types/project';
 
 // ── Per-body W override → front geometry ─────────────────────────────────────
@@ -69,6 +71,36 @@ describe('computeUnitCutsAndHardware — per-body W override drives front width'
     const wide   = drawerFrontWidthMm(input, withWidthOverride(state, 80));
     expect(narrow).toBeLessThan(mid);
     expect(mid).toBeLessThan(wide);
+  });
+});
+
+// ── Body-view projection (onlyBoxStableKey) — Phase 0 ────────────────────────
+// The body view must show a faithful SLICE of the cabinet cut list, not a
+// standalone re-derivation. With `onlyBoxStableKey`, the whole cabinet is
+// decomposed + laid out (full row context), but cuts are emitted for the one
+// target body — so the per-body projections must PARTITION the cabinet's cuts.
+describe('computeUnitCutsAndHardware — body-view projection', () => {
+  // 240 wide, no shell, single level → 3 carcasses unit_1/2/3 (80 cm each).
+  const input = { ...defaultInputForType('wardrobe'), W: 240, H: 80, plinth: 0, doorsPerColumn: 1 as const };
+  const st = () => emptyCabinetState() as SavedCabinetState;
+  const bodyKeys = ['single:unit_1', 'single:unit_2', 'single:unit_3'];
+  const sig = (cuts: CutItem[]) =>
+    cuts.map(c => `${c.name}|${c.w}|${c.h}|${c.qty}|${c.group}`).sort();
+
+  it('per-body projections partition the cabinet cut list (no plinth here)', () => {
+    const full = computeUnitCutsAndHardware(input, st(), []).cuts;
+    const union = bodyKeys.flatMap(key =>
+      computeUnitCutsAndHardware(input, st(), [], { onlyBoxStableKey: key }).cuts);
+    expect(union.length).toBeGreaterThan(0);
+    expect(sig(union)).toEqual(sig(full));
+  });
+
+  it("a body's projected door widths are all present in the cabinet door cuts", () => {
+    const doorW = (cuts: CutItem[]) => cuts.filter(c => c.group === 'door').map(c => c.w);
+    const full = doorW(computeUnitCutsAndHardware(input, st(), []).cuts);
+    const proj = doorW(computeUnitCutsAndHardware(input, st(), [], { onlyBoxStableKey: 'single:unit_2' }).cuts);
+    expect(proj.length).toBeGreaterThan(0);
+    for (const w of proj) expect(full).toContain(w);
   });
 });
 

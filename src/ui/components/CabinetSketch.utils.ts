@@ -183,17 +183,26 @@ export function computeSketchGeometry(
       })
     : rawBoxes;
 
-  // Effective outer cabinet width: sum of bottom-row box widths + envelope
-  // (only the sides that actually have a shell). Falls back to the input W
-  // when no body boxes exist.
+  // Effective outer cabinet width: the WIDEST row's summed box widths + envelope
+  // (only the sides that actually have a shell). A per-body W override can make
+  // rows differ (e.g. a widened top body); the outline + scale must encompass the
+  // widest row so no row overflows the outline / mis-scales against the per-row
+  // front layout. Mirrors cabinetBoardBoxes' effInnerW. Falls back to innerW when
+  // there are no body boxes.
+  const shellW = (sides.left ? envelopeCm : 0) + (sides.right ? envelopeCm : 0);
+  const rowWidths = new Map<BoxLevel, number>();
+  for (const box of boxes) {
+    if (box.level === 'plinth') continue;
+    rowWidths.set(box.level, (rowWidths.get(box.level) ?? 0) + box.W);
+  }
+  const widestRowW = rowWidths.size > 0 ? Math.max(...rowWidths.values()) : innerW;
+  const effectiveCabW = widestRowW + shellW;
+  // The plinth sits under the BOTTOM row only — keep its width tied to that row
+  // (a widened top body grows the outline, not the kick-board).
   const bottomRowBoxesForW = boxes.filter(b => b.level === 'bottom' || b.level === 'single');
-  const bottomRowTotalW = bottomRowBoxesForW.length > 0
+  const bottomRowCabW = (bottomRowBoxesForW.length > 0
     ? bottomRowBoxesForW.reduce((s, b) => s + b.W, 0)
-    : innerW;
-  const effectiveCabW =
-    bottomRowTotalW +
-    (sides.left ? envelopeCm : 0) +
-    (sides.right ? envelopeCm : 0);
+    : innerW) + shellW;
 
   // ── Build level → H map (body boxes only) ────────────────────────────────────
   // Built BEFORE the scale so the effective total height (below) can drive both
@@ -231,7 +240,7 @@ export function computeSketchGeometry(
   const bodyH = (effectiveH - plinth) * scale;
 
   const plinthRect = plinth > 0
-    ? { x: cabX, y: cabY + bodyH, w: cabW, h: plinth * scale }
+    ? { x: cabX, y: cabY + bodyH, w: bottomRowCabW * scale, h: plinth * scale }
     : null;
 
   const envelopePx = envelopeCm * scale;

@@ -19,10 +19,20 @@ export interface VerticalGapWarning {
   gapCm: number;
 }
 
+export interface BodyTooWideWarning {
+  /** גוף בודד רחב מהמותר לקרון יחיד (בעקבות עקיפת רוחב). תצוגת-הגוף מפצלת
+   *  רוחב כזה למספר קרונות, ולכן רשימת-החיתוך של הארון (שמשאירה אותו כקרון אחד)
+   *  לא תתאם — אזהרה לנגר לפצל לעמודות. אינפורמטיבי, לא חוסם (עקרון החופש). */
+  kind: 'body_too_wide';
+  widthCm: number;
+  maxCm: number;
+}
+
 export type ConsistencyWarning =
   | DimensionMismatchWarning
   | WidthMismatchWarning
-  | VerticalGapWarning;
+  | VerticalGapWarning
+  | BodyTooWideWarning;
 
 /**
  * Checks whether box dimensions are mutually consistent after overrides.
@@ -42,6 +52,11 @@ export function checkBoxConsistency(
   cabinetH?: number,
   plinth?: number,
   envelopeTopH = 0,
+  /** Single-carcass max body width (cm). When set, a body wider than this (only
+   *  possible via a W override) is flagged: the body view re-splits such a width
+   *  into multiple carcasses, so its cut list won't match the cabinet's. Omit
+   *  (e.g. corner units, intentionally one wide carcass) to skip the check. */
+  maxBodyWidthCm?: number,
 ): ConsistencyWarning[] {
   const warnings: ConsistencyWarning[] = [];
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
@@ -91,6 +106,16 @@ export function checkBoxConsistency(
     const gap = Math.round((expectedBodyH - totalLevelH) * 10) / 10;
     if (gap > 0.1) {
       warnings.push({ kind: 'v_gap', gapCm: gap });
+    }
+  }
+
+  // Over-wide body (override past the single-carcass limit). The body view
+  // rebuilds from this width and re-splits it into multiple carcasses, so its
+  // cut list / door sizes diverge from the cabinet, which keeps it as one box.
+  if (maxBodyWidthCm !== undefined && bodyBoxes.length > 0) {
+    const widest = Math.max(...bodyBoxes.map(b => b.W));
+    if (widest > maxBodyWidthCm + 0.05) {
+      warnings.push({ kind: 'body_too_wide', widthCm: Math.round(widest * 10) / 10, maxCm: maxBodyWidthCm });
     }
   }
 

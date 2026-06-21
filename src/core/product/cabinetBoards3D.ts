@@ -9,7 +9,7 @@ import {
   resolveCabinetJointMethod, computeInnerWidth, computeCarcassDepth,
   getMaterial, HINGE_GAP_CM, LEVELER_GAP_CM, type Board, type BoardRole, type BoardOverrides,
 } from '../boards/boardModel';
-import { decomposeBoxes } from '../geometry/boxDecomposition';
+import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
 import { resolveBoxMaterials } from '../boards/boxMaterials';
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
@@ -115,22 +115,12 @@ export function cabinetBoardBoxes(
   const envelopeTopH = ((input.hasEnvelopeTop && hasAnyShell) || wallEnv) ? tF : 0;
   const envelopeBottomH = wallEnv ? tF : 0;
 
-  const overrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
   const rawBoxes = decomposeBoxes(
     innerW, input.H, carcassD, input.lowerDoorH, input.plinth,
     input.doorsPerColumn, input.middleDoorH, envelopeTopH, envelopeBottomH,
     isCorner(input), // corner (פינה): one wide carcass, no 100 cm column split
   );
-  const boxes = overrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
-    const o = overrides.get(boxStableKey(box));
-    if (!o) return box;
-    return {
-      ...box,
-      ...(o.W !== undefined ? { W: o.W } : {}),
-      ...(o.H !== undefined ? { H: o.H } : {}),
-      ...(o.D !== undefined ? { D: o.D } : {}),
-    };
-  });
+  const boxes = applyBoxDimensionOverrides(rawBoxes, state.boxDimensionOverrides);
 
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
   // Per-body material override → this body's carcass boards are coloured from
@@ -295,7 +285,16 @@ export function cabinetBoardBoxes(
   //    bottom band. The wall-cabinet (קלפה) caps wrap the body with no side
   //    shell — full external width, top AND bottom. ─────────────────────────────
   if (hasAnyShell || wallEnv) {
-    const outerW = innerW + leftEnv + (sides.right ? tF : 0);
+    // Wrap the shell around the ACTUAL bodies, not the original innerW: the
+    // bodies are laid out from their (possibly overridden) box.W via boxLeftX,
+    // so the inner span is the widest level's summed body widths. Using innerW
+    // here left the shell at the pre-override width, clipping a widened body.
+    // Mirrors the plinth's outerCabW and the cut list's rowEffectiveOuterW.
+    const effInnerW = activeLevels.length > 0
+      ? Math.max(...activeLevels.map(level =>
+          bodyBoxes.filter(b => b.level === level).reduce((s, b) => s + b.W, 0)))
+      : innerW;
+    const outerW = effInnerW + leftEnv + (sides.right ? tF : 0);
     const frontMatId = frontMat.id;
     if (sides.left) {
       out.push({ x0: 0, x1: tF, y0: 0, y1: input.H, z0: 0, z1: fullD, role: 'envelope-left', materialId: frontMatId });
@@ -305,11 +304,11 @@ export function cabinetBoardBoxes(
     }
     // Top cap: shell envelope-top (needs a side shell) OR wall-cabinet top cap.
     if ((input.hasEnvelopeTop && hasAnyShell) || wallEnv) {
-      out.push({ x0: leftEnv, x1: leftEnv + innerW, y0: input.H - tF, y1: input.H, z0: 0, z1: fullD, role: 'envelope-top', materialId: frontMatId });
+      out.push({ x0: leftEnv, x1: leftEnv + effInnerW, y0: input.H - tF, y1: input.H, z0: 0, z1: fullD, role: 'envelope-top', materialId: frontMatId });
     }
     // Bottom cap: wall cabinet only (base cabinets sit on a plinth, not a cap).
     if (wallEnv) {
-      out.push({ x0: leftEnv, x1: leftEnv + innerW, y0: plinth, y1: plinth + tF, z0: 0, z1: fullD, role: 'envelope-bottom', materialId: frontMatId });
+      out.push({ x0: leftEnv, x1: leftEnv + effInnerW, y0: plinth, y1: plinth + tF, z0: 0, z1: fullD, role: 'envelope-bottom', materialId: frontMatId });
     }
   }
 

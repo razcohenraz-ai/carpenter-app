@@ -3,7 +3,7 @@ import type { CustomMaterial } from '../../types/materials';
 import type { BoxLevel } from '../../types/geometry';
 import type { InteriorById, CellInteriorById, InteriorItem } from '../../types/interior';
 import type { DrawerFront } from '../../types/doors';
-import { decomposeBoxes } from '../geometry/boxDecomposition';
+import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
 import {
   frontColumnsForBox, computeRowFrontLayout, computeFrontGeometry, computeFrontGeometryForSpan,
   getBoxFirstGlobalFrontIndex, getTotalFrontsInRow, groupBoxesByRow, type RowFrontLayout,
@@ -85,17 +85,7 @@ export function cabinetFrontPanels(
     inp.doorsPerColumn, inp.middleDoorH, envelopeTopH, envelopeBottomH,
     isCorner(inp),
   );
-  const overrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
-  const boxes = overrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
-    const o = overrides.get(boxStableKey(box));
-    if (!o) return box;
-    return {
-      ...box,
-      ...(o.W !== undefined ? { W: o.W } : {}),
-      ...(o.H !== undefined ? { H: o.H } : {}),
-      ...(o.D !== undefined ? { D: o.D } : {}),
-    };
-  });
+  const boxes = applyBoxDimensionOverrides(rawBoxes, state.boxDimensionOverrides);
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
   if (bodyBoxes.length === 0) return [];
   const allPositions = bodyBoxes.map(b => b.position);

@@ -186,6 +186,7 @@ export interface Translations {
     warnHeightMismatch: string;
     warnWidthMismatch: string;
     warnVerticalGap: string;
+    warnBodyTooWide: string;
   };
 
   doors: {
@@ -523,6 +524,7 @@ const he: Translations = {
     warnHeightMismatch: 'שים לב: גופים צמודים עם גובה שונה — הפרש {diff} ס"מ',
     warnWidthMismatch: 'שים לב: קומות מוערמות עם רוחב שונה — הפרש {diff} ס"מ',
     warnVerticalGap: 'שים לב: חלל ריק בין הקומות — {diff} ס"מ ללא גוף',
+    warnBodyTooWide: 'שים לב: גוף ברוחב {w} ס"מ חורג מרוחב קרון בודד ({max} ס"מ) — פצל לעמודות; רשימת החיתוך לא תתאם לתצוגת הגוף',
   },
 
   doors: {
@@ -837,6 +839,7 @@ const en: Translations = {
     warnHeightMismatch: 'Note: adjacent bodies have different heights — difference {diff} cm',
     warnWidthMismatch: 'Note: stacked levels have different total widths — difference {diff} cm',
     warnVerticalGap: 'Note: empty gap between levels — {diff} cm without a body',
+    warnBodyTooWide: 'Note: a body is {w} cm wide, over the {max} cm single-carcass limit — split it into columns; the cut list won\'t match the body preview',
   },
 
   doors: {

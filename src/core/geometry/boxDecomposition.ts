@@ -244,3 +244,29 @@ export function decomposeBoxes(
       : {}),
   }));
 }
+
+/** Per-body W/H/D dimension overrides, keyed by `${box.level}:${box.position}`
+ *  (i.e. `boxStableKey`). The single source for applying a carpenter's per-body
+ *  size override onto the decomposed boxes — previously copy-pasted across the
+ *  five decompose+override call sites (useCabinet, cabinetCompute, cabinetFronts,
+ *  cabinetBoards3D, cabinetSketchModel). Centralising it is the seam where the
+ *  over-wide split (a body whose overridden W exceeds {@link MAX_BOX_W}) will
+ *  later be introduced in ONE place. Returns the input array unchanged when there
+ *  are no overrides. */
+export function applyBoxDimensionOverrides(
+  rawBoxes: Box[],
+  overrides: Record<string, { W?: number; H?: number; D?: number }> | undefined,
+): Box[] {
+  const map = new Map(Object.entries(overrides ?? {}));
+  if (map.size === 0) return rawBoxes;
+  return rawBoxes.map(box => {
+    const o = map.get(`${box.level}:${box.position}`);
+    if (!o) return box;
+    return {
+      ...box,
+      ...(o.W !== undefined ? { W: o.W } : {}),
+      ...(o.H !== undefined ? { H: o.H } : {}),
+      ...(o.D !== undefined ? { D: o.D } : {}),
+    };
+  });
+}

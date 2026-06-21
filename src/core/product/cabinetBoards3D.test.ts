@@ -97,6 +97,28 @@ describe('cabinetBoardBoxes', () => {
     expect(top.x0).toBeGreaterThanOrEqual(left.x1 - 1e-6);
   });
 
+  it('a per-body width override widens the shell so it wraps the body (no clipping)', () => {
+    // Regression: a shelled multi-column cabinet whose body is widened via a
+    // boxDimensionOverride. The bodies lay out from their overridden widths, so
+    // the outer shell must follow — previously it stayed at the original innerW
+    // and the right panel clipped the widened body (see the user's 3D screenshot).
+    const base = { ...defaultInputForType('wardrobe'), W: 180, H: 80, doorsPerColumn: 1 as const, hasShell: true };
+    const noOvr = cabinetBoardBoxes(base, state(), []);
+    const ovrState = {
+      ...emptyCabinetState(),
+      boxDimensionOverrides: { 'single:left': { W: 130 } },
+    } as unknown as SavedCabinetState;
+    const withOvr = cabinetBoardBoxes(base, ovrState, []);
+
+    const envRightX0 = (bs: typeof withOvr) => bs.find(b => b.role === 'envelope-right')!.x0;
+    const bodyMaxX1 = (bs: typeof withOvr) =>
+      Math.max(...bs.filter(b => !b.role.startsWith('envelope') && !b.role.startsWith('plinth')).map(b => b.x1));
+
+    expect(envRightX0(withOvr)).toBeGreaterThan(envRightX0(noOvr));           // shell moved out
+    expect(envRightX0(withOvr)).toBeGreaterThanOrEqual(bodyMaxX1(withOvr) - 0.01); // wraps the body, no clip
+    expect(envRightX0(noOvr)).toBeLessThan(bodyMaxX1(withOvr));               // the bug it guards against
+  });
+
   it('wall cabinet (קלפה): top + bottom front caps wrap the body, no side shell', () => {
     const input = { ...singleBodyInput(), mount: 'wall' as const, hasWallEnvelope: true, plinth: 0 };
     const boards = cabinetBoardBoxes(input, state(), []);

@@ -23,6 +23,7 @@ import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
+import { MAX_BOX_W } from '../../core/geometry/boxDecomposition';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -717,8 +718,12 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
         partitions: { 'single:single': partitionsById.get(editingBox.id) ?? false },
         doors: {}, plinthGableOverrides: {}, boardOverrides: {},
       };
-      const bodyResult = bodyInput
-        ? computeUnitCutsAndHardware(bodyInput, bodyState, customMats)
+      // Body-view cuts/hardware = the cabinet's cuts SCOPED to this body
+      // (onlyBoxStableKey) — a faithful slice of the cabinet's cut list (full
+      // row context + real shell), never a standalone re-derivation that drifts
+      // from the cabinet on a per-body width override.
+      const bodyResult = cabInput
+        ? computeUnitCutsAndHardware(cabInput, getSnapshot(), customMats, { onlyBoxStableKey: slotId })
         : { cuts: [], hardwareItems: [] };
 
       // Where BoxBodySketch draws the body inside its 300×560 SVG (same padding
@@ -1414,6 +1419,8 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
           parseFloat(form.H) || undefined,
           parseFloat(form.plinth) || 0,
           envTopH,
+          // A corner unit is intentionally one wide carcass — skip the check there.
+          initialInput?.cornerFiller ? undefined : MAX_BOX_W,
         );
         return dimWarnings.length > 0 ? (
           <div className={styles.dimMismatchBanner}>
@@ -1423,7 +1430,9 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   ? t.interior.warnHeightMismatch.replace('{diff}', String(w.diffCm))
                   : w.kind === 'w_mismatch'
                   ? t.interior.warnWidthMismatch.replace('{diff}', String(w.diffCm))
-                  : t.interior.warnVerticalGap.replace('{diff}', String(w.gapCm))}
+                  : w.kind === 'v_gap'
+                  ? t.interior.warnVerticalGap.replace('{diff}', String(w.gapCm))
+                  : t.interior.warnBodyTooWide.replace('{w}', String(w.widthCm)).replace('{max}', String(w.maxCm))}
               </span>
             ))}
           </div>
