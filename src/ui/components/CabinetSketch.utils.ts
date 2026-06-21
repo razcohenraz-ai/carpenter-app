@@ -1,6 +1,6 @@
 import { decomposeBoxes } from '../../core';
 import { computeInnerWidth } from '../../core/boards/boardModel';
-import { boxStableKey } from '../../core/interior/interiorUtils';
+import { applyBoxDimensionOverrides } from '../../core/geometry/boxDecomposition';
 import type { Box, BoxLevel } from '../../types';
 import type { BodyLevel } from '../../types/interior';
 
@@ -170,18 +170,10 @@ export function computeSketchGeometry(
     innerW, H, D, lowerDoorH, plinth, doorsPerColumn, middleDoorH,
     topEnvCm, botEnvCm, noWidthSplit,
   );
-  const boxes = (boxDimensionOverrides && boxDimensionOverrides.size > 0)
-    ? rawBoxes.map(box => {
-        const ovr = boxDimensionOverrides.get(boxStableKey(box));
-        if (!ovr) return box;
-        return {
-          ...box,
-          ...(ovr.W !== undefined ? { W: ovr.W } : {}),
-          ...(ovr.H !== undefined ? { H: ovr.H } : {}),
-          ...(ovr.D !== undefined ? { D: ovr.D } : {}),
-        };
-      })
-    : rawBoxes;
+  const boxes = applyBoxDimensionOverrides(
+    rawBoxes,
+    boxDimensionOverrides ? Object.fromEntries(boxDimensionOverrides) : undefined,
+  );
 
   // Effective outer cabinet width: the WIDEST row's summed box widths + envelope
   // (only the sides that actually have a shell). A per-body W override can make

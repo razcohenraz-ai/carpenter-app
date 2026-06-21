@@ -6,7 +6,7 @@ import {
   computeRowFrontLayout, getTotalFrontsInRow, groupBoxesByRow,
   frontColumnsForBox, type RowFrontLayout,
 } from '../geometry/frontGeometry';
-import { decomposeBoxes } from '../geometry/boxDecomposition';
+import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
 import { computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM, type BoardOverrides } from '../boards/boardModel';
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
@@ -65,16 +65,7 @@ export function buildCabinetSketchModel(
 
   const boxDimensionOverrides = new Map(Object.entries(state.boxDimensionOverrides ?? {}));
   const rawBoxes = decomposeBoxes(innerW, input.H, carcassD, input.lowerDoorH, input.plinth, input.doorsPerColumn, input.middleDoorH, envelopeTopH, 0, isCorner(input));
-  const boxes = boxDimensionOverrides.size === 0 ? rawBoxes : rawBoxes.map(box => {
-    const o = boxDimensionOverrides.get(boxStableKey(box));
-    if (!o) return box;
-    return {
-      ...box,
-      ...(o.W !== undefined ? { W: o.W } : {}),
-      ...(o.H !== undefined ? { H: o.H } : {}),
-      ...(o.D !== undefined ? { D: o.D } : {}),
-    };
-  });
+  const boxes = applyBoxDimensionOverrides(rawBoxes, state.boxDimensionOverrides);
   const bodyBoxes = boxes.filter(b => b.level !== 'plinth');
 
   const numFrontsPerBox = new Map<string, number>();

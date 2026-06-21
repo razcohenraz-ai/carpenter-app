@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { decomposeBoxes, calcDoors } from '../../core';
+import { applyBoxDimensionOverrides } from '../../core/geometry/boxDecomposition';
 import { initInteriorFromBoxes, boxStableKey, filterItemsForHeight } from '../../core/interior/interiorUtils';
 import {
   recomputeDoorHinges,
@@ -828,17 +829,10 @@ export function useCabinet(settings?: {
     // The override affects only the board model for that body — it does NOT
     // change the global decomposition or adjacent bodies. The carpenter is
     // responsible for ensuring the dimensions stay coherent.
-    const boxDimOvr = boxDimensionOverridesRef.current;
-    const boxes = boxDimOvr.size === 0 ? rawBoxes : rawBoxes.map(box => {
-      const ovr = boxDimOvr.get(boxStableKey(box));
-      if (!ovr) return box;
-      return {
-        ...box,
-        ...(ovr.W !== undefined ? { W: ovr.W } : {}),
-        ...(ovr.H !== undefined ? { H: ovr.H } : {}),
-        ...(ovr.D !== undefined ? { D: ovr.D } : {}),
-      };
-    });
+    const boxes = applyBoxDimensionOverrides(
+      rawBoxes,
+      Object.fromEntries(boxDimensionOverridesRef.current),
+    );
     // Cabinet-wide edging default — drives per-board front bands and the
     // perimeter band applied to door / drawer-front cuts. Body and per-board
     // override layers exist on the type surface (stage 2) but no setters
