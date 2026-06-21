@@ -4,10 +4,10 @@ import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils
 import { computeHingeSpacingWarnings, getDoorVisualHeight, getDrawerFrontVisualHeight } from '../../core/doors/doorUtils';
 import {
   type RowFrontLayout,
-  computeFrontGeometry,
-  computeFrontGeometryForSpan,
-  getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
+  bodyFrontLayout,
+  bodyFrontX,
+  bodySpanGeometry,
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
 import styles from './CabinetFrontsSketch.module.css';
@@ -253,18 +253,14 @@ export default function CabinetFrontsSketch({
 
             const sortedDoors = [...doors].sort((a, b) => a.frontIndex - b.frontIndex);
             const numFronts = numFrontsPerBox.get(boxId) ?? 1;
-            const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
-              rowBoxes, numFrontsPerBox, targetBoxId: boxId,
-            });
+            // Per-body sizing: this body's columns tile its own width.
+            const bodyLayout = bodyFrontLayout({ rowBoxes, numFrontsPerBox, targetBoxId: boxId, gapCm });
 
             const doorNodes = sortedDoors.map(door => {
               const panelW   = door.width * geo.scale;
               const fi       = door.frontIndex;
-              // frontIndex 0 is the box's rightmost column → highest
-              // globalFrontIndexInRow within the box.
-              const globalIndexInRow = boxFirstGlobalIndexInRow + (numFronts - 1 - fi);
-              const frontGeo = computeFrontGeometry({ globalFrontIndexInRow: globalIndexInRow, layout: rowLayout, gapCm });
-              const panelX = innerLeftSvg + frontGeo.x * geo.scale;
+              // frontIndex 0 is the box's RIGHTMOST column → leftmost = nf-1-fi.
+              const panelX = innerLeftSvg + bodyFrontX(bodyLayout, numFronts - 1 - fi) * geo.scale;
               const panelH   = door.height * geo.scale;
               const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
               const panelY   = rect.y + rect.h - stackPx - panelH;
@@ -416,12 +412,7 @@ export default function CabinetFrontsSketch({
             // box. Position from cabinet-level layout (matches the leftmost
             // door's left edge; width includes inner gaps + door widths).
             const bodyFronts = bodyFrontsByBox.get(boxId) ?? [];
-            const bodySpanGeo = computeFrontGeometryForSpan({
-              startGlobalIndexInRow: boxFirstGlobalIndexInRow,
-              spanLength: numFronts,
-              layout: rowLayout,
-              gapCm,
-            });
+            const bodySpanGeo = bodySpanGeometry(bodyLayout);
             const bodyFrontNodes = bodyFronts.map(front => {
               const fH      = front.height * geo.scale;
               const visualH = getDrawerFrontVisualHeight(front, plinthH) * geo.scale;

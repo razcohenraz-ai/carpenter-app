@@ -22,11 +22,11 @@ import { boxStableKey } from './interior/interiorUtils';
 import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
 import {
   computeRowFrontLayout,
-  getBoxFirstGlobalFrontIndex,
   getTotalFrontsInRow,
   groupBoxesByRow,
-  computeFrontGeometryForSpan,
   frontColumnsForBox,
+  bodyFrontLayout,
+  bodySpanGeometry,
   type RowFrontLayout,
 } from './geometry/frontGeometry';
 import type { BoxLevel } from '../types/geometry';
@@ -219,12 +219,17 @@ export function computeUnitCutsAndHardware(
     const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
     const hasTopGap = box.level === 'top' || box.level === 'single';
 
-    const rowLayout = layoutByRow.get(box.level);
+    // Per-body door sizing: each body sizes its doors from its OWN width so a
+    // door never straddles a carcass boundary when bodies differ in width
+    // (a per-body W override). For uniform bodies this matches the row-even
+    // width within ≤1 mm. See core/geometry/frontGeometry.ts.
+    const rowBoxesForDoor = rowsByLevel.get(box.level) ?? [];
+    const bodyLayout = bodyFrontLayout({ rowBoxes: rowBoxesForDoor, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id, gapCm: cabinetGapCm });
     // Corner unit (פינה): the single door is a fixed `doorWidthCm` at the chosen
-    // edge (not the equal-split row width), and its hinges always land on the
+    // edge (not the per-body split width), and its hinges always land on the
     // filler side. See core/product/cornerModule.ts.
     const cornerCf = isCorner(input) ? input.cornerFiller! : null;
-    const frontW = cornerCf ? cornerCf.doorWidthCm : (rowLayout?.frontWidth ?? 0);
+    const frontW = cornerCf ? cornerCf.doorWidthCm : bodyLayout.frontWidth;
 
     for (let fi = 0; fi < numFronts; fi++) {
       const doorId = makeDoorId(box.id, fi);
@@ -310,7 +315,6 @@ export function computeUnitCutsAndHardware(
   // ── External-drawer front cuts ─────────────────────────────────────────────
   const externalDrawerCuts: CutItem[] = [];
   for (const box of emitBoxes) {
-    const numFronts = newNumFrontsMap.get(box.id)!;
     const hasPartition = newPartitionsMap.has(box.id);
     const bodyItems = newInterior[box.id] ?? [];
     const cellItems = newCellInteriorById[box.id];
@@ -319,13 +323,15 @@ export function computeUnitCutsAndHardware(
     const rowLayout = layoutByRow.get(box.level);
     if (!rowLayout) continue;
     const rowBoxes = rowsByLevel.get(box.level) ?? [];
+    // Per-body sizing: drawer faces size from this body's own width.
+    const drawerLayout = bodyFrontLayout({ rowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id, gapCm: cabinetGapCm });
     // External-drawer faces are this body's fronts → its (overridden) front
     // material, both for the panel thickness and the cut-list grouping.
     const boxFront = boxMaterials.get(box.id)!.frontMaterial;
     const tagFront = (cs: CutItem[]): CutItem[] => cs.map(c => ({ ...c, materialId: boxFront.id }));
 
     if (hasPartition) {
-      const cellW = rowLayout.frontWidth;
+      const cellW = drawerLayout.frontWidth;
       for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
         const itemsForCell = cellItems?.[ci] ?? [];
         externalDrawerCuts.push(
@@ -336,15 +342,7 @@ export function computeUnitCutsAndHardware(
         );
       }
     } else {
-      const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
-        rowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id,
-      });
-      const bodyDrawerW = computeFrontGeometryForSpan({
-        startGlobalIndexInRow: boxFirstGlobalIndexInRow,
-        spanLength: numFronts,
-        layout: rowLayout,
-        gapCm: cabinetGapCm,
-      }).width;
+      const bodyDrawerW = bodySpanGeometry(drawerLayout).width;
       externalDrawerCuts.push(
         ...tagFront(calcExternalDrawerFrontCuts(
           bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt,

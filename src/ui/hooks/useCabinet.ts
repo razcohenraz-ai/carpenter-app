@@ -19,11 +19,11 @@ import {
 import { deriveDrawerFronts } from '../../core/doors/drawerFrontsCalc';
 import {
   computeRowFrontLayout,
-  computeFrontGeometryForSpan,
-  getBoxFirstGlobalFrontIndex,
   getTotalFrontsInRow,
   groupBoxesByRow,
   frontColumnsForBox,
+  bodyFrontLayout,
+  bodySpanGeometry,
   type RowFrontLayout,
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
@@ -1026,12 +1026,14 @@ export function useCabinet(settings?: {
       const hasBottomGap = !(isBottomMost && plinth > 0 && !originalCoversSkirt);
       const hasTopGap = box.level === 'top' || box.level === 'single';
 
-      // Every door — partition or not — uses its row's frontWidth. Corner
-      // unit (פינה): the single door is a fixed `doorWidthCm` at the chosen
-      // edge with hinges on the filler side (see core/product/cornerModule.ts).
-      const rowLayout = layoutByRow.get(box.level);
+      // Per-body door sizing: each body sizes its doors from its OWN width so a
+      // door never straddles a carcass boundary (matters on a per-body W
+      // override). Corner unit (פינה): a fixed `doorWidthCm` at the chosen edge
+      // with hinges on the filler side (see core/product/cornerModule.ts).
+      const doorRowBoxes = rowsByLevel.get(box.level) ?? [];
+      const bodyLayout = bodyFrontLayout({ rowBoxes: doorRowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id, gapCm: cabinetGapCm });
       const cornerCf = isCorner(input) ? input.cornerFiller! : null;
-      const frontW = cornerCf ? cornerCf.doorWidthCm : (rowLayout?.frontWidth ?? 0);
+      const frontW = cornerCf ? cornerCf.doorWidthCm : bodyLayout.frontWidth;
 
       for (let fi = 0; fi < numFronts; fi++) {
         const doorId = makeDoorId(box.id, fi);
@@ -1109,7 +1111,6 @@ export function useCabinet(settings?: {
     //   body-wide drawer:         N columns    → spanLength = numFronts
     const externalDrawerCuts: CutItem[] = [];
     for (const box of bodyBoxes) {
-      const numFronts = newNumFrontsMap.get(box.id)!;
       const hasPartition = newPartitionsMap.has(box.id);
       const bodyItems = newInterior[box.id] ?? [];
       const cellItems = newCellInteriorById[box.id];
@@ -1118,13 +1119,15 @@ export function useCabinet(settings?: {
       const rowLayout = layoutByRow.get(box.level);
       if (!rowLayout) continue;
       const rowBoxes = rowsByLevel.get(box.level) ?? [];
+      // Per-body sizing: drawer faces size from this body's own width.
+      const drawerLayout = bodyFrontLayout({ rowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id, gapCm: cabinetGapCm });
       // External-drawer faces are this body's fronts → its (overridden) front
       // material, for both the panel thickness and the cut-list grouping.
       const boxFront = boxMaterials.get(box.id)!.frontMaterial;
       const tagFront = (cs: CutItem[]): CutItem[] => cs.map(c => ({ ...c, materialId: boxFront.id }));
 
       if (hasPartition) {
-        const cellW = rowLayout.frontWidth;
+        const cellW = drawerLayout.frontWidth;
         for (let ci = 0 as 0 | 1; ci <= 1; ci = (ci + 1) as 0 | 1) {
           const itemsForCell = cellItems?.[ci] ?? [];
           externalDrawerCuts.push(
@@ -1135,15 +1138,7 @@ export function useCabinet(settings?: {
           );
         }
       } else {
-        const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
-          rowBoxes, numFrontsPerBox: newNumFrontsMap, targetBoxId: box.id,
-        });
-        const bodyDrawerW = computeFrontGeometryForSpan({
-          startGlobalIndexInRow: boxFirstGlobalIndexInRow,
-          spanLength: numFronts,
-          layout: rowLayout,
-          gapCm: cabinetGapCm,
-        }).width;
+        const bodyDrawerW = bodySpanGeometry(drawerLayout).width;
         externalDrawerCuts.push(
           ...tagFront(calcExternalDrawerFrontCuts(
             bodyItems, bodyDrawerW, doorGapMm, plinth, originalCoversSkirt, boxFront.thickness,

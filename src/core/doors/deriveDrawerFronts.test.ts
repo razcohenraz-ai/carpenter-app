@@ -152,9 +152,10 @@ describe('deriveDrawerFronts — body-wide externals', () => {
   });
 
   it('3-body cabinet: middle box body-wide drawer spans its 2 columns only', () => {
-    // 3 bodies of 80cm × numFronts=2 → 6 columns in a 240cm cabinet,
-    // gap=2mm. layout.frontWidth = (240 − 7·0.2)/6 ≈ 39.7667; a 2-column
-    // span = 2·39.7667 + 1·0.2 ≈ 79.7333.
+    // Per-body sizing: box b (80cm, 2 columns, gap=2mm) sizes its own drawer
+    // from its OWN width — a body-wide span covers the body minus its 2 edge
+    // gaps: 80 − 2·0.2 = 79.6. (Row-even sizing would smear the boundary gaps
+    // and give ≈79.7333; per-body charges the carcass-edge gap correctly.)
     const boxes = [box('a', 80, 200), box('b', 80, 200), box('c', 80, 200)];
     const nf = new Map([['a', 2], ['b', 2], ['c', 2]]);
     const result = deriveDrawerFronts({
@@ -167,7 +168,7 @@ describe('deriveDrawerFronts — body-wide externals', () => {
       doorGapMm: GAP_MM,
       layoutByRow: mkLayoutByRow({ boxes, numFronts: nf }),
     });
-    expect(result['drawer-in-b']!.width).toBeCloseTo(79.7333, 3);
+    expect(result['drawer-in-b']!.width).toBeCloseTo(79.6, 3);
     expect(result['drawer-in-b']!.boxId).toBe('b');
   });
 

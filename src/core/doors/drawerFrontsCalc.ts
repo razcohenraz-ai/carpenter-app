@@ -3,9 +3,9 @@ import type { InteriorById, CellInteriorById } from '../../types/interior';
 import type { DrawerFront, DrawerFrontById } from '../../types/doors';
 import {
   type RowFrontLayout,
-  computeFrontGeometryForSpan,
-  getBoxFirstGlobalFrontIndex,
   groupBoxesByRow,
+  bodyFrontLayout,
+  bodySpanGeometry,
 } from '../geometry/frontGeometry';
 import { getExternalDrawers } from './doorUtils';
 
@@ -51,11 +51,9 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
     const bodyItems = interiorById[box.id] ?? [];
     const cellItems = cellInteriorById[box.id];
     const layout = layoutByRow.get(box.level);
-    const rowBoxes = rowsByLevel.get(box.level) ?? [];
     if (!layout) continue; // box on a level without a layout (e.g. plinth) — skip
-    const boxFirstGlobalIndexInRow = getBoxFirstGlobalFrontIndex({
-      rowBoxes, numFrontsPerBox, targetBoxId: box.id,
-    });
+    const rowBoxes = rowsByLevel.get(box.level) ?? [];
+    const bodyLayout = bodyFrontLayout({ rowBoxes, numFrontsPerBox, targetBoxId: box.id, gapCm });
 
     const originalCoversSkirt = doorCoversPlinth && (box.level === 'bottom' || box.level === 'single');
 
@@ -67,12 +65,8 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
         const externals = getExternalDrawers(items);
         if (externals.length === 0) continue;
         const fi = ci === 0 ? 0 : numFronts - 1;
-        const span = computeFrontGeometryForSpan({
-          startGlobalIndexInRow: boxFirstGlobalIndexInRow + (numFronts - 1 - fi),
-          spanLength: 1,
-          layout,
-          gapCm,
-        });
+        // A partition cell is a single column → the body's per-front width.
+        const cellWidth = bodyLayout.frontWidth;
         const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
 
         let positionFromBoxBottom = 0;
@@ -86,7 +80,7 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
             cellIndex: ci,
             positionFromBoxBottom,
             height: drawer.drawerHeight,
-            width: span.width,
+            width: cellWidth,
             coversSkirt: isSkirt,
             gapMm: doorGapMm,
             ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),
@@ -100,13 +94,8 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
 
     const externals = getExternalDrawers(bodyItems);
     if (externals.length === 0) continue;
-    // Body-wide drawer: one panel spanning all `numFronts` columns of the box.
-    const span = computeFrontGeometryForSpan({
-      startGlobalIndexInRow: boxFirstGlobalIndexInRow,
-      spanLength: numFronts,
-      layout,
-      gapCm,
-    });
+    // Body-wide drawer: one panel spanning all the body's columns (its own width).
+    const bodyWideWidth = bodySpanGeometry(bodyLayout).width;
     const skirtDrawerId = originalCoversSkirt ? externals[0]!.id : null;
     let positionFromBoxBottom = 0;
     for (const drawer of externals) {
@@ -118,7 +107,7 @@ export function deriveDrawerFronts(input: DeriveDrawerFrontsInput): DrawerFrontB
         frontIndex: 0,
         positionFromBoxBottom,
         height: drawer.drawerHeight,
-        width: span.width,
+        width: bodyWideWidth,
         coversSkirt: isSkirt,
         gapMm: doorGapMm,
         ...(drawer.frontThicknessOverride ? { thicknessOverride: drawer.frontThicknessOverride } : {}),

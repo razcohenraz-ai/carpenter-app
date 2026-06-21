@@ -139,6 +139,67 @@ export function getBoxFirstGlobalFrontIndex(args: {
   return -1;
 }
 
+// ── Per-body front layout (per-body door sizing) ──────────────────────────────
+// Each body sizes its OWN doors from its OWN width, instead of one even width
+// spread across the whole row. This keeps doors aligned to their carcass: a
+// door never straddles the boundary between two bodies, which matters once
+// bodies differ in width (a per-body W override). For UNIFORM bodies the result
+// differs from the row-even width by ≤1 mm — per-body correctly charges the door
+// gap at every carcass boundary, which the row-even model smeared across the row.
+//
+// `x` runs from the cabinet INNER-left (after the left shell) — the same frame
+// as `computeFrontGeometry`, so callers keep adding `cabinetLeftOffset`.
+
+export interface BodyFrontLayout {
+  /** cm from inner-left to this body's left edge (= sum of preceding body widths
+   *  within the row). */
+  leftOffset: number;
+  /** cm — width of one front column within this body. */
+  frontWidth: number;
+  /** number of front columns in this body. */
+  numFronts: number;
+  /** cm — per-side gap (echoed for downstream geometry). */
+  gapCm: number;
+}
+
+/** The per-body front layout for `targetBoxId` within its row. `rowBoxes` must be
+ *  the bodies sharing the target's level, left→right (the same order callers pass
+ *  to {@link getBoxFirstGlobalFrontIndex}). */
+export function bodyFrontLayout(args: {
+  rowBoxes: ReadonlyArray<Pick<Box, 'id' | 'W'>>;
+  numFrontsPerBox: ReadonlyMap<string, number>;
+  targetBoxId: string;
+  gapCm: number;
+}): BodyFrontLayout {
+  const { rowBoxes, numFrontsPerBox, targetBoxId, gapCm } = args;
+  let leftOffset = 0;
+  for (const box of rowBoxes) {
+    const nf = numFrontsPerBox.get(box.id) ?? 1;
+    if (box.id === targetBoxId) {
+      const frontWidth = nf > 0 ? (box.W - (nf + 1) * gapCm) / nf : 0;
+      return { leftOffset, frontWidth, numFronts: nf, gapCm };
+    }
+    leftOffset += box.W;
+  }
+  return { leftOffset: 0, frontWidth: 0, numFronts: 0, gapCm };
+}
+
+/** x (cm from inner-left) of the column at `localFrontIndex` (0 = LEFTMOST within
+ *  the body) for a per-body layout. */
+export function bodyFrontX(layout: BodyFrontLayout, localFrontIndex: number): number {
+  return layout.leftOffset + layout.gapCm + localFrontIndex * (layout.frontWidth + layout.gapCm);
+}
+
+/** x + width (cm from inner-left) of a body-wide front spanning ALL the body's
+ *  columns — e.g. a body-wide external-drawer face. Covers the body's inner area
+ *  minus the two edge gaps. */
+export function bodySpanGeometry(layout: BodyFrontLayout): { x: number; width: number } {
+  const width = layout.numFronts > 0
+    ? layout.numFronts * layout.frontWidth + (layout.numFronts - 1) * layout.gapCm
+    : 0;
+  return { x: layout.leftOffset + layout.gapCm, width };
+}
+
 /** Number of front columns a single body splits into.
  *
  *  Standard bodies split once per `maxDoorWidth` of width — a 130 cm body at

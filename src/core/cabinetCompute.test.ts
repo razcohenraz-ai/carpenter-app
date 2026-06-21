@@ -74,6 +74,42 @@ describe('computeUnitCutsAndHardware — per-body W override drives front width'
   });
 });
 
+// ── Per-body door sizing — an override changes only that body ────────────────
+// Each body sizes its doors from its OWN width (not one even width spread across
+// the whole row). So widening one body widens ONLY its door; its neighbours are
+// untouched. (Row-even sizing would instead spread the extra width across every
+// door in the row — the bug this replaces.)
+describe('per-body door sizing — override changes only that body', () => {
+  const base = {
+    ...defaultInputForType('wardrobe'),
+    W: 240, H: 80, plinth: 0, doorsPerColumn: 1 as const, maxDoorWidth: 120,
+  };
+  const empty = () => emptyCabinetState() as SavedCabinetState;
+
+  /** Door-cut widths (mm), expanded by qty, ascending. */
+  function doorWidthsMm(state: SavedCabinetState): number[] {
+    const { cuts } = computeUnitCutsAndHardware(base, state);
+    return cuts.filter(c => c.group === 'door')
+      .flatMap(c => Array<number>(c.qty).fill(c.w))
+      .sort((a, b) => a - b);
+  }
+
+  it('widening the middle body widens only its door; the two neighbours are unchanged', () => {
+    // 240 cm → 3 carcasses (unit_1/2/3) of 80 cm, one door each.
+    const baseline = doorWidthsMm(empty());
+    expect(baseline).toHaveLength(3);
+    const w0 = baseline[0]!;
+    expect(baseline.every(w => Math.abs(w - w0) < 0.5)).toBe(true);
+
+    const ovr = { ...empty(), boxDimensionOverrides: { 'single:unit_2': { W: 100 } } } as SavedCabinetState;
+    const widened = doorWidthsMm(ovr);
+    expect(widened).toHaveLength(3);
+    expect(widened[0]).toBeCloseTo(w0, 0);          // neighbour unchanged
+    expect(widened[1]).toBeCloseTo(w0, 0);          // neighbour unchanged
+    expect(widened[2]! - w0).toBeCloseTo(200, 0);   // +20 cm goes ENTIRELY to its own door
+  });
+});
+
 // ── Body-view projection (onlyBoxStableKey) — Phase 0 ────────────────────────
 // The body view must show a faithful SLICE of the cabinet cut list, not a
 // standalone re-derivation. With `onlyBoxStableKey`, the whole cabinet is

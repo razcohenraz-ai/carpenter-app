@@ -5,8 +5,8 @@ import type { InteriorById, CellInteriorById, InteriorItem } from '../../types/i
 import type { DrawerFront } from '../../types/doors';
 import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
 import {
-  frontColumnsForBox, computeRowFrontLayout, computeFrontGeometry, computeFrontGeometryForSpan,
-  getBoxFirstGlobalFrontIndex, getTotalFrontsInRow, groupBoxesByRow, type RowFrontLayout,
+  frontColumnsForBox, computeRowFrontLayout, getTotalFrontsInRow, groupBoxesByRow,
+  bodyFrontLayout, bodyFrontX, bodySpanGeometry, type RowFrontLayout,
 } from '../geometry/frontGeometry';
 import {
   computeInnerWidth, computeCarcassDepth, HINGE_GAP_CM,
@@ -208,7 +208,7 @@ export function cabinetFrontPanels(
     const bodyItems = interiorById[box.id] ?? [];
     const cellItems = cellInteriorById[box.id];
     const rowBoxes = rowsByLevel.get(box.level) ?? [];
-    const boxFirstGlobal = getBoxFirstGlobalFrontIndex({ rowBoxes, numFrontsPerBox, targetBoxId: box.id });
+    const bodyLayout = bodyFrontLayout({ rowBoxes, numFrontsPerBox, targetBoxId: box.id, gapCm });
     const x0base = layout.cabinetLeftOffset;
 
     // A skirt-covering drawer face extends DOWN over the plinth (visual height),
@@ -222,17 +222,14 @@ export function cabinetFrontPanels(
     // ── External-drawer faces of this body ────────────────────────────────────
     const bodyWide = bodyFrontsByBox.get(box.id) ?? [];
     if (bodyWide.length > 0) {
-      const span = computeFrontGeometryForSpan({
-        startGlobalIndexInRow: boxFirstGlobal, spanLength: numFronts, layout, gapCm,
-      });
+      const span = bodySpanGeometry(bodyLayout);
       for (const f of bodyWide) pushDrawerFront(x0base + span.x, f);
     }
     for (let fi = 0; fi < numFronts; fi++) {
       const cellFronts = cellFrontsByBoxFi.get(`${box.id}:${fi}`) ?? [];
       if (cellFronts.length === 0) continue;
-      const globalIndex = boxFirstGlobal + (numFronts - 1 - fi);
-      const geo = computeFrontGeometry({ globalFrontIndexInRow: globalIndex, layout, gapCm });
-      for (const f of cellFronts) pushDrawerFront(x0base + geo.x, f);
+      const x = bodyFrontX(bodyLayout, numFronts - 1 - fi);
+      for (const f of cellFronts) pushDrawerFront(x0base + x, f);
     }
 
     // ── Door faces of this body (one per front column, above any drawer stack) ─
@@ -246,9 +243,8 @@ export function cabinetFrontPanels(
       const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
       const panelH = calcMainDoorHeight(box.H, itemsForFront, inp.doorGapMm, hasBottomGap, hasTopGap);
       if (panelH <= MIN_DOOR_PANEL_H_CM) continue;
-      // Door.frontIndex 0 is the body's RIGHTMOST column → highest global index.
-      const globalIndex = boxFirstGlobal + (numFronts - 1 - fi);
-      const geo = computeFrontGeometry({ globalFrontIndexInRow: globalIndex, layout, gapCm });
+      // Door.frontIndex 0 is the body's RIGHTMOST column → leftmost = nf-1-fi.
+      const doorX = bodyFrontX(bodyLayout, numFronts - 1 - fi);
       const hingeSide: 'left' | 'right' | 'top' =
         inp.liftMechanism === true
           ? 'top'
@@ -262,8 +258,8 @@ export function cabinetFrontPanels(
       const skirtExt = doorCoversSkirt && inp.plinth > 0 ? (inp.plinth - 1) + gapCm : 0;
       const bottom = boxBottom + stackTopForDoor(box.id, fi);
       panels.push({
-        x0: x0base + geo.x,
-        x1: x0base + geo.x + Math.max(geo.width, 0),
+        x0: x0base + doorX,
+        x1: x0base + doorX + Math.max(bodyLayout.frontWidth, 0),
         y0: bottom - skirtExt,
         y1: bottom + panelH,
         hingeSide,
