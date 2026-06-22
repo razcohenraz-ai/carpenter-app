@@ -23,7 +23,7 @@ import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
-import { MAX_BOX_W } from '../../core/geometry/boxDecomposition';
+import { MAX_BOX_W, plinthOuterWidth } from '../../core/geometry/boxDecomposition';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -881,17 +881,22 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     // body sitting on top), not the raw input D. Lifted off `result` so the
     // formula has a single source of truth (useCabinet via
     // computeCarcassDepth) — no carcassD arithmetic in this component.
+    // Plinth follows the bottom row's EFFECTIVE (overridden) width, not the raw
+    // typed `form.W` — same `plinthOuterWidth` the cut list + 3D/2D plinth use,
+    // so a per-body W override is reflected in this editor view too.
+    const plinthBottomBoxes = result.boxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    const plinthEditorW = plinthOuterWidth(plinthBottomBoxes, parseFloat(form.W) || 0, result.innerW);
     return (
       <div className={styles.form}>
         <PlinthEditor
-          cabinetW={parseFloat(form.W) || 0}
+          cabinetW={plinthEditorW}
           cabinetD={result.carcassD}
           plinthHeight={parseFloat(form.plinth) || 0}
           plinthRecess={(() => {
             const r = parseFloat(form.plinthRecess);
             return Number.isFinite(r) && r > 0 ? r : 0;
           })()}
-          boxes={result.boxes.filter(b => b.level === 'bottom' || b.level === 'single')}
+          boxes={plinthBottomBoxes}
           bodyMaterial={getMaterialWithCustom(form.bodyMaterialId, settings?.customMaterials)}
           frontMaterial={getMaterialWithCustom(form.frontMaterialId, settings?.customMaterials)}
           gableOverrides={plinthGableOverrides}

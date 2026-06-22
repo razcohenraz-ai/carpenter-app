@@ -68,3 +68,33 @@ describe('groupKitchenUnitsForPlinth — dishwasher breaks plinth groups', () =>
     expect(groups).toHaveLength(0);
   });
 });
+
+describe('groupKitchenUnitsForPlinth — totalW follows the per-body W override', () => {
+  // A kitchen unit is always one body (the 'single:single' slot). Overriding
+  // its width must grow the plinth in step with the layout/3D (which space
+  // units by `unitOuterW` = the effective, overridden width) — not stay at the
+  // raw input.W. Regression for the "kitchen plinth ignored the override" bug.
+  function widthOverride(id: string, w: number): KitchenUnit {
+    const u = unit(id);
+    return {
+      ...u,
+      cabinet: {
+        ...u.cabinet,
+        state: { ...u.cabinet.state, boxDimensionOverrides: { 'single:single': { W: w } } },
+      },
+    };
+  }
+
+  it('widening the middle unit (60 → 90) grows the group totalW (180 → 210)', () => {
+    const groups = groupKitchenUnitsForPlinth([
+      unit('a'), widthOverride('b', 90), unit('c'),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.totalW).toBe(210); // 60 + 90 + 60
+  });
+
+  it('no override → totalW unchanged (uses input.W)', () => {
+    const groups = groupKitchenUnitsForPlinth([unit('a'), unit('b')]);
+    expect(groups[0]!.totalW).toBe(120); // 60 + 60
+  });
+});

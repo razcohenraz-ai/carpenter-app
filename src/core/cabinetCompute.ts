@@ -14,7 +14,7 @@
  */
 
 import { decomposeBoxes } from './index';
-import { applyBoxDimensionOverrides } from './geometry/boxDecomposition';
+import { applyBoxDimensionOverrides, plinthOuterWidth } from './geometry/boxDecomposition';
 import { buildDoorCutItems } from './cuts/doorCuts';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/cornerModule';
 import { computePartitionCuts } from './cuts/partitionCuts';
@@ -406,10 +406,8 @@ export function computeUnitCutsAndHardware(
   if (!options?.skipPlinth && !onlyKey) {
     const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
     // Plinth follows the bottom row's EFFECTIVE (overridden) width, not input.W
-    // (`W − innerW` = the shell offset) — mirrors the 3D/2D plinth.
-    const plinthOuterW = bottomRowBoxes.length > 0
-      ? bottomRowBoxes.reduce((s, b) => s + b.W, 0) + (W - innerW)
-      : W;
+    // (`W − innerW` = the shell offset) — mirrors the 3D/2D plinth + PlinthEditor.
+    const plinthOuterW = plinthOuterWidth(bottomRowBoxes, W, innerW);
     const plinthGableOverrides = new Map(Object.entries(savedState.plinthGableOverrides ?? {}));
     const plinthBoards = buildPlinthBoardModel({
       cabinetW: plinthOuterW,

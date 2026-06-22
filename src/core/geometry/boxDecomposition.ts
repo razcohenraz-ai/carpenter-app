@@ -270,3 +270,15 @@ export function applyBoxDimensionOverrides(
     };
   });
 }
+
+/** Outer width of the cabinet plinth = the bottom row's EFFECTIVE (overridden)
+ *  width plus the shell offset (`outerW − innerW`). A per-body W override grows
+ *  the bottom-row sum past the raw input W, and the plinth must follow it — this
+ *  is the single source the cut list, the 3D/2D render and the PlinthEditor all
+ *  read so they never diverge. `bottomRowBoxes` are the already-decomposed
+ *  bottom/single boxes (overrides applied). Falls back to `outerW` when empty. */
+export function plinthOuterWidth(bottomRowBoxes: Box[], outerW: number, innerW: number): number {
+  return bottomRowBoxes.length > 0
+    ? bottomRowBoxes.reduce((s, b) => s + b.W, 0) + (outerW - innerW)
+    : outerW;
+}

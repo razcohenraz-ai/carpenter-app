@@ -6,6 +6,7 @@ import type { CustomMaterial } from '../../types/materials';
 import { buildPlinthBoardModel, boardsToCutItems, computeCarcassDepth, HINGE_GAP_CM } from '../boards/boardModel';
 import { getMaterialWithCustom } from '../../catalog/materialCombiner';
 import { MAX_PLINTH_W, splitWidth } from '../geometry/boxDecomposition';
+import { unitOuterW } from './kitchenFootprint';
 import { roundInternal } from '../utils/round';
 
 /** Adjacent units sharing the same plinth attributes share a single physical
@@ -23,7 +24,9 @@ interface PlinthKey {
 
 export interface KitchenPlinthGroup {
   units: KitchenUnit[];
-  /** Sum of unit widths in the group (cm). */
+  /** Sum of unit EFFECTIVE widths in the group (cm) — `unitOuterW`, so a
+   *  per-body W override grows the plinth in step with the layout/3D/elevation
+   *  (which all space units by the same `unitOuterW`), not the raw `input.W`. */
   totalW: number;
   key: PlinthKey;
 }
@@ -61,9 +64,9 @@ export function groupKitchenUnitsForPlinth(units: KitchenUnit[]): KitchenPlinthG
     if (!key) { current = null; continue; }
     if (current && sameKey(current.key, key)) {
       current.units.push(u);
-      current.totalW += u.cabinet.input.W;
+      current.totalW += unitOuterW(u);
     } else {
-      current = { units: [u], totalW: u.cabinet.input.W, key };
+      current = { units: [u], totalW: unitOuterW(u), key };
       groups.push(current);
     }
   }

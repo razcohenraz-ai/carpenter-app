@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { decomposeBoxes } from "./boxDecomposition";
+import { decomposeBoxes, plinthOuterWidth } from "./boxDecomposition";
 import { roundInternal } from "../utils/round";
+import type { Box } from "../../types";
 
 describe("decomposeBoxes", () => {
   // ── קופסה יחידה ─────────────────────────────────────────────────────────────
@@ -465,5 +466,30 @@ describe("decomposeBoxes", () => {
     const bottom = boxes.find(b => b.level === "bottom")!;
     expect(top.H).toBe(140);
     expect(bottom.H).toBeCloseTo(98.2, 5);  // 100 - 1.8
+  });
+});
+
+// ── plinthOuterWidth ─────────────────────────────────────────────────────────
+describe("plinthOuterWidth", () => {
+  const mkBox = (W: number): Box =>
+    ({ id: `b-${W}`, W, H: 70, D: 56, position: "single", level: "bottom" });
+
+  it("ללא קופסאות תחתונות → מחזיר את outerW", () => {
+    expect(plinthOuterWidth([], 120, 116)).toBe(120);
+  });
+
+  it("ללא shell (outerW===innerW) → סכום רוחבי הקופסאות", () => {
+    expect(plinthOuterWidth([mkBox(60), mkBox(40)], 100, 100)).toBe(100);
+  });
+
+  it("עם shell offset → סכום הקופסאות + (outerW − innerW)", () => {
+    // innerW=116, outerW=120 → shell offset 4; boxes sum 116 → 120
+    expect(plinthOuterWidth([mkBox(58), mkBox(58)], 120, 116)).toBe(120);
+  });
+
+  it("override שמרחיב גוף → הצוקל גדל בהתאם (לא נשאר על input.W)", () => {
+    // body overridden 58 → 98: bottom-row sum 156, shell offset 4 → 160,
+    // even though the raw outerW was only 120.
+    expect(plinthOuterWidth([mkBox(98), mkBox(58)], 120, 116)).toBe(160);
   });
 });
