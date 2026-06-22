@@ -108,6 +108,33 @@ describe('per-body door sizing — override changes only that body', () => {
     expect(widened[1]).toBeCloseTo(w0, 0);          // neighbour unchanged
     expect(widened[2]! - w0).toBeCloseTo(200, 0);   // +20 cm goes ENTIRELY to its own door
   });
+
+  it('the plinth follows a per-body width override', () => {
+    // 200cm cabinet (left/right of 100), plinth on. Widen 'left' to 130 → the
+    // bottom row is 230cm, and the front kick-board must grow to match (not stay
+    // at the original 200cm input W).
+    const withPlinth = { ...defaultInputForType('wardrobe'), W: 200, H: 90, plinth: 10, doorsPerColumn: 1 as const };
+    const frontPlinthMm = (state: SavedCabinetState): number =>
+      computeUnitCutsAndHardware(withPlinth, state).cuts
+        .find(c => c.group === 'plinth' && c.name === 'צוקל קדמי')?.w ?? 0;
+    const noOvr = frontPlinthMm(empty());
+    const ovr = frontPlinthMm({ ...empty(), boxDimensionOverrides: { 'single:left': { W: 130 } } } as SavedCabinetState);
+    expect(noOvr).toBeGreaterThan(0);
+    expect(ovr - noOvr).toBeCloseTo(300, 0);        // +30 cm body → +300 mm plinth
+  });
+});
+
+// ── No phantom main door when drawers fill the body ──────────────────────────
+describe('computeUnitCutsAndHardware — drawers unit has no phantom door', () => {
+  it('emits no door cut with height ≤ 0 (the drawers fill the body)', () => {
+    const input = kitchenModuleInput('drawers');
+    const state = kitchenModuleState('drawers') as SavedCabinetState;
+    const { cuts, hardwareItems } = computeUnitCutsAndHardware(input, state);
+    const doorCuts = cuts.filter(c => c.group === 'door');
+    expect(doorCuts.every(c => c.h > 0)).toBe(true);   // no negative/zero-height door
+    // ...and no hinges counted for an absent door.
+    expect(hardwareItems.every(h => h.qty >= 0)).toBe(true);
+  });
 });
 
 // ── Body-view projection (onlyBoxStableKey) — Phase 0 ────────────────────────

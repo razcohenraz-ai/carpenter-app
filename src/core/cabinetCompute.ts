@@ -291,6 +291,11 @@ export function computeUnitCutsAndHardware(
     }
   }
 
+  // A main door with no room above a full external-drawer stack (height ≤ 0) is
+  // ABSENT — don't cut it or count its hinges (e.g. the drawers unit, whose
+  // drawers fill the body). Mirrors the 3D/elevation render, which omits it.
+  for (const id in newDoors) if (newDoors[id]!.height <= 0) newDoors[id]!.hasDoor = false;
+
   // ── Door cuts (derived from the finished doors — single source of truth) ──
   const doorCuts = buildDoorCutItems({
     doors: newDoors, bodyBoxes: emitBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
@@ -400,9 +405,14 @@ export function computeUnitCutsAndHardware(
   // projection (the plinth is cabinet-level, not part of one body).
   if (!options?.skipPlinth && !onlyKey) {
     const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    // Plinth follows the bottom row's EFFECTIVE (overridden) width, not input.W
+    // (`W − innerW` = the shell offset) — mirrors the 3D/2D plinth.
+    const plinthOuterW = bottomRowBoxes.length > 0
+      ? bottomRowBoxes.reduce((s, b) => s + b.W, 0) + (W - innerW)
+      : W;
     const plinthGableOverrides = new Map(Object.entries(savedState.plinthGableOverrides ?? {}));
     const plinthBoards = buildPlinthBoardModel({
-      cabinetW: W,
+      cabinetW: plinthOuterW,
       cabinetD: carcassD,
       plinthHeight: plinth,
       bodyMaterial,

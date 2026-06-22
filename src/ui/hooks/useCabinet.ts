@@ -1084,6 +1084,11 @@ export function useCabinet(settings?: {
       }
     }
 
+    // A main door with no room above a full external-drawer stack (height ≤ 0)
+    // is ABSENT — don't cut it or count its hinges (e.g. a drawers unit whose
+    // drawers fill the body). Mirrors the 3D/elevation render, which omits it.
+    for (const id in newDoors) if (newDoors[id]!.height <= 0) newDoors[id]!.hasDoor = false;
+
     // ── Door cuts (derived from the finished doors — single source of truth) ──
     const doorCuts = buildDoorCutItems({
       doors: newDoors, bodyBoxes, numFrontsPerBox: newNumFrontsMap, edging: cabinetEdging,
@@ -1240,8 +1245,13 @@ export function useCabinet(settings?: {
     // gables (L-shaped supports). We feed it only the bottom-row bodies so it
     // knows where to place internal gables (joints + mid-body for wide ones).
     const bottomRowBoxes = bodyBoxes.filter(b => b.level === 'bottom' || b.level === 'single');
+    // Plinth follows the bottom row's EFFECTIVE (overridden) width, not input.W
+    // (`W − innerW` = the shell offset) — mirrors the 3D/2D plinth.
+    const plinthOuterW = bottomRowBoxes.length > 0
+      ? bottomRowBoxes.reduce((s, b) => s + b.W, 0) + (W - innerW)
+      : W;
     const plinthBoards = buildPlinthBoardModel({
-      cabinetW: W,
+      cabinetW: plinthOuterW,
       // Plinth depth = carcass depth (same as the body sitting on top), NOT
       // the raw input D. The cabinet's front-facing reductions (back panel,
       // hinge gap, front material) shrink the carcass, and the plinth follows
