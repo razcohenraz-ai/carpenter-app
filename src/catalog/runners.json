@@ -1,0 +1,48 @@
+{
+  "tandem-16": {
+    "id": "tandem-16",
+    "name": "בלום TANDEM 16",
+    "family": "TANDEM",
+    "manufacturer": "blum",
+    "loadKg": 30,
+    "sidePanelThicknessMm": { "min": 11, "max": 16 },
+    "nominalLengthsMm": [250, 270, 300, 320, 350, 380, 400, 420, 450, 480, 500, 520, 550, 600],
+    "skwOffsetMm": 42,
+    "bottomWidthOffsetMm": 31,
+    "sklOffsetMm": 10,
+    "minDepthExtraMm": 3,
+    "mountOverRunnerMm": 11,
+    "screwHeightMm": 37,
+    "fixing": {
+      "frontHoleMm": 69,
+      "backHoleByNlMm": [
+        { "maxNlMm": 270, "holeMm": 197 },
+        { "maxNlMm": 480, "holeMm": 165 },
+        { "maxNlMm": 600, "holeMm": 261 }
+      ]
+    }
+  },
+  "tandem-19": {
+    "id": "tandem-19",
+    "name": "בלום TANDEM 19",
+    "family": "TANDEM",
+    "manufacturer": "blum",
+    "loadKg": 30,
+    "sidePanelThicknessMm": { "min": 17, "max": 19 },
+    "nominalLengthsMm": [250, 270, 300, 350, 400, 450, 500, 550, 600],
+    "skwOffsetMm": 49,
+    "bottomWidthOffsetMm": 39,
+    "sklOffsetMm": 10,
+    "minDepthExtraMm": 3,
+    "mountOverRunnerMm": 11,
+    "screwHeightMm": 37,
+    "fixing": {
+      "frontHoleMm": 69,
+      "backHoleByNlMm": [
+        { "maxNlMm": 270, "holeMm": 197 },
+        { "maxNlMm": 480, "holeMm": 165 },
+        { "maxNlMm": 600, "holeMm": 261 }
+      ]
+    }
+  }
+}
