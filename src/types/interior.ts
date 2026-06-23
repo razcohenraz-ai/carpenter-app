@@ -33,6 +33,14 @@ export interface DrawerItem extends BaseInteriorItem {
   /** Per-drawer override of the global frontMaterial. Only meaningful when
    *  mount === 'external' (internal drawers have no facade panel). */
   frontThicknessOverride?: MaterialId;
+  /** Chosen drawer-runner system id (catalog/runners.json). When set, the
+   *  drawer BOX parts (sides/front/back/bottom) are sized from that runner. */
+  runnerId?: string;
+  /** Carpenter's drawer side-panel thickness (mm); defaults to the runner's
+   *  max. */
+  drawerSideThicknessMm?: number;
+  /** Carpenter's drawer bottom thickness T (mm) = the groove. */
+  drawerBottomThicknessMm?: number;
 }
 
 export interface RodItem extends BaseInteriorItem {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
+import { RUNNERS } from '../../catalog/runners';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './SettingsPage.module.css';
 
@@ -11,6 +12,7 @@ interface SettingsPageProps {
     frontEnabledMaterialIds: string[];
     bodyMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
     frontMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
+    enabledRunnerIds: string[];
   };
   onToggleBodyMaterial: (id: string) => void;
   onToggleFrontMaterial: (id: string) => void;
@@ -21,6 +23,7 @@ interface SettingsPageProps {
   onAddCustomMaterial: (material: CustomMaterial) => void;
   onRemoveCustomMaterial: (id: string) => void;
   onUpdateCustomMaterial: (id: string, updates: Partial<CustomMaterial>) => void;
+  onToggleRunner: (id: string) => void;
   onBack: () => void;
 }
 
@@ -30,7 +33,7 @@ function generateId(): string {
   return 'custom_' + Array.from(arr, x => x.toString(16).padStart(2, '0')).join('');
 }
 
-type Tab = 'body' | 'front';
+type Tab = 'body' | 'front' | 'drawers';
 
 export function SettingsPage({
   settings,
@@ -43,6 +46,7 @@ export function SettingsPage({
   onAddCustomMaterial,
   onRemoveCustomMaterial,
   onUpdateCustomMaterial,
+  onToggleRunner,
   onBack,
 }: SettingsPageProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -106,8 +110,69 @@ export function SettingsPage({
         >
           חומר חזית
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('drawers')}
+          className={activeTab === 'drawers' ? styles.tabActive : styles.tab}
+        >
+          מגירות
+        </button>
       </div>
 
+      {activeTab === 'drawers' ? (
+        <div className={styles.content}>
+          <section className={styles.section}>
+            <p className={styles.readOnly}>
+              סמן את מערכות המסילות שברשותך — רק המסומנות יוצעו בהוספת מגירה לגוף.
+            </p>
+            <div className={styles.tableContainer}>
+              <table className={styles.materialTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.colCheck}></th>
+                    <th>מסילה</th>
+                    <th>עובי דופן (מ"מ)</th>
+                    <th>עומס (ק"ג)</th>
+                    <th>אורכים נומינליים (מ"מ)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(RUNNERS).map(r => {
+                    const isEnabled = settings.enabledRunnerIds.includes(r.id);
+                    const nls = r.nominalLengthsMm;
+                    return (
+                      <tr key={r.id} className={!isEnabled ? styles.rowDisabled : undefined}>
+                        <td className={styles.colCheck}>
+                          <input
+                            type="checkbox"
+                            checked={isEnabled}
+                            onChange={() => onToggleRunner(r.id)}
+                            className={styles.checkbox}
+                          />
+                        </td>
+                        <td className={styles.colName}>
+                          <span className={styles.materialName}>{r.name}</span>
+                        </td>
+                        <td>
+                          <span className={styles.readOnly}>
+                            {r.sidePanelThicknessMm.min}–{r.sidePanelThicknessMm.max}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={styles.readOnly}>{r.loadKg}</span>
+                        </td>
+                        <td className={styles.sheetDim}>
+                          {nls[0]}–{nls[nls.length - 1]}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      ) : (
       <div className={styles.content}>
         <section className={styles.section}>
           <div className={styles.tableContainer}>
@@ -286,6 +351,7 @@ export function SettingsPage({
           </fieldset>
         </section>
       </div>
+      )}
     </div>
   );
 }

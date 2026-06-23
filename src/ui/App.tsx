@@ -34,6 +34,7 @@ export default function App(): React.JSX.Element {
     addCustomMaterial,
     removeCustomMaterial,
     updateCustomMaterial,
+    toggleRunner,
   } = useSettings();
 
   // Active kitchen unit id (third navigation level)
@@ -92,6 +93,7 @@ export default function App(): React.JSX.Element {
         onAddCustomMaterial={addCustomMaterial}
         onRemoveCustomMaterial={removeCustomMaterial}
         onUpdateCustomMaterial={updateCustomMaterial}
+        onToggleRunner={toggleRunner}
         onBack={() => setShowSettingsPage(false)}
       />
     );

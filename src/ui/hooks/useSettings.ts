@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
+import { runnerIds } from '../../catalog/runners';
 
 interface AppSettings {
   // Master list of custom materials (shared across body & front)
@@ -13,6 +14,8 @@ interface AppSettings {
   frontMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
   // Hardware
   hardwarePriceOverrides: Partial<Record<string, number>>;
+  // Which drawer-runner systems the carpenter offers when adding a drawer
+  enabledRunnerIds: string[];
 }
 
 export type { AppSettings };
@@ -29,6 +32,7 @@ function defaultSettings(): AppSettings {
     bodyMaterialPriceOverrides: {},
     frontMaterialPriceOverrides: {},
     hardwarePriceOverrides: {},
+    enabledRunnerIds: runnerIds(),
   };
 }
 
@@ -44,6 +48,7 @@ function loadSettings(): AppSettings {
         bodyMaterialPriceOverrides: parsed.bodyMaterialPriceOverrides ?? {},
         frontMaterialPriceOverrides: parsed.frontMaterialPriceOverrides ?? {},
         hardwarePriceOverrides: parsed.hardwarePriceOverrides ?? {},
+        enabledRunnerIds: parsed.enabledRunnerIds ?? runnerIds(),
       };
     }
   } catch {
@@ -85,6 +90,14 @@ export function useSettings() {
       setSettingsState(prev => ({
         ...prev,
         frontEnabledMaterialIds: toggleId(prev.frontEnabledMaterialIds, id),
+      }));
+    },
+
+    // ── Toggle which drawer-runner systems are offered ────────────────────────
+    toggleRunner: (id: string) => {
+      setSettingsState(prev => ({
+        ...prev,
+        enabledRunnerIds: toggleId(prev.enabledRunnerIds, id),
       }));
     },
 

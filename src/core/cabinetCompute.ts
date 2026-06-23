@@ -31,6 +31,7 @@ import {
 } from './geometry/frontGeometry';
 import type { BoxLevel } from '../types/geometry';
 import { calcExternalDrawerFrontCuts } from './cuts/externalDrawerCuts';
+import { buildDrawerBoxCuts } from './drawers/drawerBoxCuts';
 import { calcHardware } from './hardware/calcHardware';
 import {
   buildBoardModel,
@@ -354,6 +355,11 @@ export function computeUnitCutsAndHardware(
           boxFront.thickness, undefined, cabinetEdging,
         )),
       );
+      // Drawer-BOX parts (sides/front/back/bottom), sized from each drawer's
+      // chosen runner. Clear inner width (LW) = body width − the two gables;
+      // depth = carcass depth. No catalog material (fixed drawer-box stock).
+      const tBodyCm = boxMaterials.get(box.id)!.bodyMaterial.thickness / 10;
+      externalDrawerCuts.push(...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD));
     }
   }
 

@@ -4,6 +4,7 @@ import { kitchenModuleInput, kitchenModuleState } from './product/kitchenModules
 import { defaultInputForType, emptyCabinetState } from './product/productDefaults';
 import type { CutItem } from '../types/cuts';
 import type { SavedCabinetState } from '../types/project';
+import type { DrawerItem } from '../types/interior';
 
 // ── Per-body W override → front geometry ─────────────────────────────────────
 // A manual body-size override (boxDimensionOverrides) widens/narrows the body.
@@ -274,5 +275,31 @@ describe('computeUnitCutsAndHardware — per-body material override', () => {
     const { cuts } = computeUnitCutsAndHardware(input, kitchenModuleState('shelves'), []);
     expect(cuts.filter(c => c.group === 'body').every(c => c.materialId === 'mdf18')).toBe(true);
     expect(cuts.filter(c => c.group === 'door').every(c => c.materialId === 'oak18')).toBe(true);
+  });
+});
+
+// ── Drawer-box cuts wired from the chosen runner ─────────────────────────────
+describe('computeUnitCutsAndHardware — drawer box parts from a runner', () => {
+  const baseInput = { ...defaultInputForType('wardrobe'), W: 60, H: 80, D: 60, plinth: 0, doorsPerColumn: 1 as const };
+  const withDrawer = (d: DrawerItem): SavedCabinetState =>
+    ({ ...emptyCabinetState(), interior: { 'single:single': [d] } } as SavedCabinetState);
+
+  it('an external drawer with a runnerId emits 4 group="drawer" box parts', () => {
+    const drawer: DrawerItem = {
+      id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external',
+      runnerId: 'tandem-16', drawerSideThicknessMm: 16, drawerBottomThicknessMm: 12,
+    };
+    const boxCuts = computeUnitCutsAndHardware(baseInput, withDrawer(drawer), []).cuts
+      .filter(c => c.group === 'drawer');
+    expect(boxCuts).toHaveLength(4);
+    expect(boxCuts.some(c => c.name === 'דופן מגירה')).toBe(true);
+    expect(boxCuts.find(c => c.name === 'תחתית מגירה')!.note).toBe('12mm');
+  });
+
+  it('a drawer without a runnerId emits no box parts (front path unchanged)', () => {
+    const drawer: DrawerItem = { id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external' };
+    const boxCuts = computeUnitCutsAndHardware(baseInput, withDrawer(drawer), []).cuts
+      .filter(c => c.group === 'drawer');
+    expect(boxCuts).toHaveLength(0);
   });
 });

@@ -28,6 +28,7 @@ import {
 } from '../../core/geometry/frontGeometry';
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
+import { buildDrawerBoxCuts } from '../../core/drawers/drawerBoxCuts';
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
 import { resolveBoxMaterials, type BoxMaterialOverride } from '../../core/boards/boxMaterials';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
@@ -1150,6 +1151,9 @@ export function useCabinet(settings?: {
             undefined, cabinetEdging,
           )),
         );
+        // Drawer-BOX parts sized from each drawer's runner (mirrors cabinetCompute).
+        const tBodyCm = boxMaterials.get(box.id)!.bodyMaterial.thickness / 10;
+        externalDrawerCuts.push(...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD));
       }
     }
 
