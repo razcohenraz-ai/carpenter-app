@@ -304,4 +304,58 @@ describe('computeUnitCutsAndHardware — drawer box parts from a runner', () => 
       .filter(c => c.group === 'drawer');
     expect(boxCuts).toHaveLength(0);
   });
+
+  it('a per-body depth override reselects the runner NL → side length (SKL) follows', () => {
+    const drawer: DrawerItem = {
+      id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external',
+      runnerId: 'tandem-16', drawerSideThicknessMm: 16, drawerBottomThicknessMm: 12,
+    };
+    const sideLenMm = (depthCm: number): number => {
+      const state = {
+        ...withDrawer(drawer),
+        boxDimensionOverrides: { 'single:single': { D: depthCm } },
+      } as SavedCabinetState;
+      return computeUnitCutsAndHardware(baseInput, state, []).cuts
+        .find(c => c.group === 'drawer' && c.name === 'דופן מגירה')!.w;
+    };
+    // box.D (mm) drives selectNominalLength (largest NL with NL+3 ≤ depth):
+    // 60 cm → NL 550 → SKL 540; 40 cm → NL 380 → SKL 370. The distinct NL
+    // buckets prove a per-body depth override flows to the runner choice, not
+    // just a proportional shrink.
+    expect(sideLenMm(60)).toBeCloseTo(540, 0);
+    expect(sideLenMm(40)).toBeCloseTo(370, 0);
+  });
+});
+
+// ── Runner hardware (NL-priced) replaces the generic telescopic slide ─────────
+describe('computeUnitCutsAndHardware — runner hardware', () => {
+  const baseInput = { ...defaultInputForType('wardrobe'), W: 60, H: 80, D: 60, plinth: 0, doorsPerColumn: 1 as const };
+  const stateWith = (d: DrawerItem, depthCm?: number): SavedCabinetState => ({
+    ...emptyCabinetState(),
+    interior: { 'single:single': [d] },
+    ...(depthCm !== undefined ? { boxDimensionOverrides: { 'single:single': { D: depthCm } } } : {}),
+  } as SavedCabinetState);
+  const runnerDrawer: DrawerItem = {
+    id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external', runnerId: 'tandem-16',
+  };
+
+  it('a runner drawer adds a priced runner set and drops the generic slide', () => {
+    const hw = computeUnitCutsAndHardware(baseInput, stateWith(runnerDrawer, 60), []).hardwareItems;
+    const runnerLine = hw.find(h => h.specId.startsWith('runner-tandem-16'));
+    expect(runnerLine).toBeDefined();
+    expect(runnerLine!.unitPrice).toBe(150);                              // NL 550 → ≥50 cm band
+    expect(hw.some(h => h.specId === 'slide-telescopic')).toBe(false);   // generic slide superseded
+  });
+
+  it('runner price follows the NL band (shallow body → 100)', () => {
+    const hw = computeUnitCutsAndHardware(baseInput, stateWith(runnerDrawer, 40), []).hardwareItems;
+    expect(hw.find(h => h.specId.startsWith('runner-tandem-16'))!.unitPrice).toBe(100); // NL 380
+  });
+
+  it('a drawer without a runner keeps the generic telescopic slide', () => {
+    const plain: DrawerItem = { id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external' };
+    const hw = computeUnitCutsAndHardware(baseInput, stateWith(plain), []).hardwareItems;
+    expect(hw.some(h => h.specId === 'slide-telescopic')).toBe(true);
+    expect(hw.some(h => h.specId.startsWith('runner-'))).toBe(false);
+  });
 });

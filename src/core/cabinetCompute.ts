@@ -32,6 +32,7 @@ import {
 import type { BoxLevel } from '../types/geometry';
 import { calcExternalDrawerFrontCuts } from './cuts/externalDrawerCuts';
 import { buildDrawerBoxCuts } from './drawers/drawerBoxCuts';
+import { buildDrawerRunnerHardware, mergeRunnerHardware } from './drawers/drawerRunnerHardware';
 import { calcHardware } from './hardware/calcHardware';
 import {
   buildBoardModel,
@@ -320,6 +321,9 @@ export function computeUnitCutsAndHardware(
 
   // ── External-drawer front cuts ─────────────────────────────────────────────
   const externalDrawerCuts: CutItem[] = [];
+  // Per-drawer runner hardware (one set per runner-equipped drawer), priced from
+  // the runner's NL band; merged into the hardware list below.
+  const runnerHardware: HardwareLineItem[] = [];
   for (const box of emitBoxes) {
     const hasPartition = newPartitionsMap.has(box.id);
     const bodyItems = newInterior[box.id] ?? [];
@@ -357,13 +361,16 @@ export function computeUnitCutsAndHardware(
       );
       // Drawer-BOX parts (sides/front/back/bottom), sized from each drawer's
       // chosen runner and cut from this body's material. Clear inner width (LW) =
-      // body width − the two gables; depth = carcass depth.
+      // body width − the two gables; depth = THIS body's carcass depth (box.D,
+      // not the cabinet-wide carcassD) so a per-body W/D override flows through —
+      // and the runner's NL (→ SKL, bottom length) is reselected from box.D.
       const boxBody = boxMaterials.get(box.id)!.bodyMaterial;
       const tBodyCm = boxBody.thickness / 10;
       externalDrawerCuts.push(
-        ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD)
+        ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, box.D)
           .map(c => ({ ...c, materialId: boxBody.id })),
       );
+      runnerHardware.push(...buildDrawerRunnerHardware(bodyItems, box.D));
     }
   }
 
@@ -474,10 +481,13 @@ export function computeUnitCutsAndHardware(
   const hwCells = onlyKey
     ? Object.fromEntries(Object.entries(newCellInteriorById).filter(([id]) => emitBoxIds.has(id)))
     : newCellInteriorById;
-  const hardwareItems = calcHardware(
+  const baseHardware = calcHardware(
     hwDoors, hwInterior, hwCells,
     input.liftMechanism === true ? 'wall_cabinet' : 'cabinet',
   );
+  // Runner-equipped drawers replace the generic telescopic slide with their
+  // priced runner set (NL-banded).
+  const hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
 
   return { cuts: allCuts, hardwareItems };
 }

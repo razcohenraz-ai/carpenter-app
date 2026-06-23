@@ -29,6 +29,7 @@ import {
 import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { buildDrawerBoxCuts } from '../../core/drawers/drawerBoxCuts';
+import { buildDrawerRunnerHardware, mergeRunnerHardware } from '../../core/drawers/drawerRunnerHardware';
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
 import { resolveBoxMaterials, type BoxMaterialOverride } from '../../core/boards/boxMaterials';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
@@ -1116,6 +1117,9 @@ export function useCabinet(settings?: {
     //   cell drawer (partition):  one column   → layout.frontWidth
     //   body-wide drawer:         N columns    → spanLength = numFronts
     const externalDrawerCuts: CutItem[] = [];
+    // Per-drawer runner hardware (one set per runner-equipped drawer), NL-priced;
+    // merged into the hardware list below.
+    const runnerHardware: HardwareLineItem[] = [];
     for (const box of bodyBoxes) {
       const hasPartition = newPartitionsMap.has(box.id);
       const bodyItems = newInterior[box.id] ?? [];
@@ -1152,13 +1156,16 @@ export function useCabinet(settings?: {
           )),
         );
         // Drawer-BOX parts sized from each drawer's runner, cut from this body's
-        // material (mirrors cabinetCompute).
+        // material (mirrors cabinetCompute). Depth = THIS body's carcass depth
+        // (box.D, not the cabinet-wide carcassD) so a per-body W/D override flows
+        // through — the runner NL (→ SKL, bottom length) is reselected from box.D.
         const boxBody = boxMaterials.get(box.id)!.bodyMaterial;
         const tBodyCm = boxBody.thickness / 10;
         externalDrawerCuts.push(
-          ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD)
+          ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, box.D)
             .map(c => ({ ...c, materialId: boxBody.id })),
         );
+        runnerHardware.push(...buildDrawerRunnerHardware(bodyItems, box.D));
       }
     }
 
@@ -1317,10 +1324,13 @@ export function useCabinet(settings?: {
       ...enrich(partitionCuts),
       ...enrich(externalDrawerCuts),
     ];
-    const hardwareItems = calcHardware(
+    const baseHardware = calcHardware(
       newDoors, newInterior, newCellInteriorById,
       input.liftMechanism === true ? 'wall_cabinet' : 'cabinet',
     );
+    // Runner-equipped drawers replace the generic telescopic slide with their
+    // priced runner set (NL-banded).
+    const hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
     const derivedBoxDims = new Map(
       rawBoxes
         .filter(b => b.level !== 'plinth')

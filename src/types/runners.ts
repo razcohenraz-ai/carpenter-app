@@ -37,6 +37,17 @@ export interface RunnerSpec {
   screwHeightMm: number;
   /** Side-panel fixing-hole positions (the two screws this carpenter uses). */
   fixing: RunnerFixing;
+  /** Price (₪) of one runner SET (left+right pair) banded by nominal length —
+   *  first entry whose `maxNlMm ≥ NL` wins (entries ascending by `maxNlMm`;
+   *  NL longer than the last band falls back to it). Edit in the JSON. */
+  priceByNlMm: RunnerPriceRange[];
+}
+
+export interface RunnerPriceRange {
+  /** Applies to nominal lengths up to and including this (mm). */
+  maxNlMm: number;
+  /** Price of one runner set (₪) for this length band. */
+  priceShekel: number;
 }
 
 /** Which runner fixing holes to screw into the body side panel. The front hole

@@ -20,7 +20,11 @@
         { "maxNlMm": 480, "holeMm": 165 },
         { "maxNlMm": 600, "holeMm": 261 }
       ]
-    }
+    },
+    "priceByNlMm": [
+      { "maxNlMm": 499, "priceShekel": 100 },
+      { "maxNlMm": 600, "priceShekel": 150 }
+    ]
   },
   "tandem-19": {
     "id": "tandem-19",
@@ -43,6 +47,10 @@
         { "maxNlMm": 480, "holeMm": 165 },
         { "maxNlMm": 600, "holeMm": 261 }
       ]
-    }
+    },
+    "priceByNlMm": [
+      { "maxNlMm": 499, "priceShekel": 100 },
+      { "maxNlMm": 600, "priceShekel": 150 }
+    ]
   }
 }
