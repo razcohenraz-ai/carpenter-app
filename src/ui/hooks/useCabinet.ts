@@ -1151,9 +1151,14 @@ export function useCabinet(settings?: {
             undefined, cabinetEdging,
           )),
         );
-        // Drawer-BOX parts sized from each drawer's runner (mirrors cabinetCompute).
-        const tBodyCm = boxMaterials.get(box.id)!.bodyMaterial.thickness / 10;
-        externalDrawerCuts.push(...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD));
+        // Drawer-BOX parts sized from each drawer's runner, cut from this body's
+        // material (mirrors cabinetCompute).
+        const boxBody = boxMaterials.get(box.id)!.bodyMaterial;
+        const tBodyCm = boxBody.thickness / 10;
+        externalDrawerCuts.push(
+          ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD)
+            .map(c => ({ ...c, materialId: boxBody.id })),
+        );
       }
     }
 

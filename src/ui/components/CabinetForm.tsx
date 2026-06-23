@@ -111,6 +111,7 @@ interface CabinetFormProps {
     frontEnabledMaterialIds?: string[];
     bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
+    enabledRunnerIds?: string[];
   };
   /** When true, hide the main W/H/D fields. Used for kitchen units where
    *  dimensions are owned exclusively by per-body overrides via the
@@ -850,6 +851,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onRemovePartition={() => removePartition(editingBox.id)}
             cellItems={cellInteriorById[editingBox.id] ?? [[], []]}
             onCellItemsChange={(ci, items) => setCellItems(editingBox.id, ci, items)}
+            enabledRunnerIds={settings?.enabledRunnerIds ?? []}
             tBody={getMaterialWithCustom(form.bodyMaterialId, settings?.customMaterials).thickness / 10}
             doorGapMm={parseFloat(form.doorGap) || 2}
             bodyMaterialId={form.bodyMaterialId}

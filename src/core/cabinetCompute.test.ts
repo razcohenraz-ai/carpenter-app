@@ -294,6 +294,8 @@ describe('computeUnitCutsAndHardware — drawer box parts from a runner', () => 
     expect(boxCuts).toHaveLength(4);
     expect(boxCuts.some(c => c.name === 'דופן מגירה')).toBe(true);
     expect(boxCuts.find(c => c.name === 'תחתית מגירה')!.note).toBe('12mm');
+    // Box parts are cut from this body's material.
+    expect(boxCuts.every(c => c.materialId === baseInput.bodyMaterialId)).toBe(true);
   });
 
   it('a drawer without a runnerId emits no box parts (front path unchanged)', () => {

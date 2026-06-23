@@ -29,6 +29,11 @@ describe('buildDrawerBoxCuts', () => {
     expect(side!.note).toBe('19mm 45°'); // TANDEM 19 max
   });
 
+  it('drawer bottom defaults to 6 mm when omitted', () => {
+    const cuts = buildDrawerBoxCuts([drawer({ runnerId: 'tandem-16' })], 56.7, 60);
+    expect(cuts.find(c => c.name === 'תחתית מגירה')!.note).toBe('6mm');
+  });
+
   it('falls back to the default runner when the drawer has none', () => {
     const cuts = buildDrawerBoxCuts([drawer({})], 56.7, 60, { defaultRunnerId: 'tandem-16' });
     expect(cuts).toHaveLength(4);

@@ -14,6 +14,7 @@ import {
 import { MATERIALS } from '../../catalog';
 import styles from './BoxInteriorEditor.module.css';
 import type { InteriorItem, DrawerItem, DrawerMount, InteriorWarning, ShelfWarning } from '../../types/interior';
+import { RUNNERS } from '../../catalog/runners';
 import type { Box, BoxPosition } from '../../types/geometry';
 import type { Edging } from '../../types/edging';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
@@ -42,6 +43,9 @@ interface Props {
   onRemovePartition: () => void;
   cellItems: InteriorItem[][];
   onCellItemsChange: (cellIndex: number, items: InteriorItem[]) => void;
+  /** Drawer-runner systems the carpenter enabled (Settings → "Drawers"). Only
+   *  these appear in a drawer's runner picker. Empty = none offered. */
+  enabledRunnerIds?: string[];
   tBody: number;
   /** Cabinet-wide door/front gap in mm — needed locally so the editor can
    *  run `syncFixedShelf` on its optimistic copy and reflect the auto fixed
@@ -119,6 +123,7 @@ export default function BoxInteriorEditor({
   shelfOnly,
   topVariant, sinkTraverseWidthCm,
   bodyInput, customMaterials,
+  enabledRunnerIds = [],
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -242,6 +247,17 @@ export default function BoxInteriorEditor({
     ));
   }
 
+  function updateDrawerRunner(id: string, runnerId: string | undefined): void {
+    update(localItems.map(i => {
+      if (i.id !== id || i.type !== 'drawer') return i;
+      if (runnerId === undefined) {
+        const { runnerId: _drop, ...rest } = i;
+        return rest;
+      }
+      return { ...i, runnerId };
+    }));
+  }
+
   function onItemMove(id: string, newH: number): void {
     update(localItems.map(i => {
       if (i.id !== id) return i;
@@ -329,6 +345,17 @@ export default function BoxInteriorEditor({
     updateCell(ci, (localCellItems[ci] ?? []).map(i =>
       i.id === id && i.type === 'drawer' ? { ...i, drawerHeight: h } : i,
     ));
+  }
+
+  function updateCellDrawerRunner(ci: number, id: string, runnerId: string | undefined): void {
+    updateCell(ci, (localCellItems[ci] ?? []).map(i => {
+      if (i.id !== id || i.type !== 'drawer') return i;
+      if (runnerId === undefined) {
+        const { runnerId: _drop, ...rest } = i;
+        return rest;
+      }
+      return { ...i, runnerId };
+    }));
   }
 
   function onCellItemMove(ci: number, id: string, newH: number): void {
@@ -476,6 +503,7 @@ export default function BoxInteriorEditor({
     onUpdateDrawerH: (id: string, val: string) => void,
     getHasWarning: (item: InteriorItem) => boolean,
     getWarnings: (item: InteriorItem) => string[],
+    onUpdateDrawerRunner: (id: string, runnerId: string | undefined) => void,
   ): React.JSX.Element {
     const sorted = [...itemList].sort((a, b) => a.heightFromFloor - b.heightFromFloor);
     if (sorted.length === 0) {
@@ -514,18 +542,33 @@ export default function BoxInteriorEditor({
             </label>
 
             {item.type === 'drawer' && (
-              <label className={styles.fieldLabel}>
-                {t.interior.drawerHeight}
-                <input
-                  type="number"
-                  className={styles.numInput}
-                  value={(item as DrawerItem).drawerHeight}
-                  step={1}
-                  min={1}
-                  onChange={e => onUpdateDrawerH(item.id, e.target.value)}
-                  onFocus={e => e.target.select()}
-                />
-              </label>
+              <>
+                <label className={styles.fieldLabel}>
+                  {t.interior.drawerHeight}
+                  <input
+                    type="number"
+                    className={styles.numInput}
+                    value={(item as DrawerItem).drawerHeight}
+                    step={1}
+                    min={1}
+                    onChange={e => onUpdateDrawerH(item.id, e.target.value)}
+                    onFocus={e => e.target.select()}
+                  />
+                </label>
+                <label className={styles.fieldLabel}>
+                  מסילה
+                  <select
+                    className={styles.numInput}
+                    value={(item as DrawerItem).runnerId ?? ''}
+                    onChange={e => onUpdateDrawerRunner(item.id, e.target.value || undefined)}
+                  >
+                    <option value="">ללא</option>
+                    {enabledRunnerIds.map(rid => RUNNERS[rid] && (
+                      <option key={rid} value={rid}>{RUNNERS[rid]!.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
 
             <button
@@ -816,6 +859,7 @@ export default function BoxInteriorEditor({
                     (id, val) => updateCellDrawerH(ci, id, val),
                     item => hasCellWarning(ci, item),
                     item => cellWarningMessages(ci, item),
+                    (id, rid) => updateCellDrawerRunner(ci, id, rid),
                   )}
                 </div>
               );
@@ -883,6 +927,7 @@ export default function BoxInteriorEditor({
               updateDrawerH,
               hasWarning,
               warningMessages,
+              updateDrawerRunner,
             )}
           </div>
         </div>

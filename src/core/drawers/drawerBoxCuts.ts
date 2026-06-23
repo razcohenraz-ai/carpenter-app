@@ -4,8 +4,9 @@ import type { DrawerJoinery, DrawerPanelCut } from '../../types/runners';
 import { getRunner } from '../../catalog/runners';
 import { computeDrawerBox } from './drawerBox';
 
-/** Default drawer bottom thickness (mm) when the drawer doesn't specify one. */
-export const DEFAULT_DRAWER_BOTTOM_MM = 12;
+/** Default drawer bottom thickness (mm) when the drawer doesn't specify one.
+ *  (A per-drawer choice will be added later.) */
+export const DEFAULT_DRAWER_BOTTOM_MM = 6;
 
 const PANEL_NAME: Record<DrawerPanelCut['role'], string> = {
   side: 'דופן מגירה',

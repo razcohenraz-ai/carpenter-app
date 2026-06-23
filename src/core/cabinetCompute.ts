@@ -356,10 +356,14 @@ export function computeUnitCutsAndHardware(
         )),
       );
       // Drawer-BOX parts (sides/front/back/bottom), sized from each drawer's
-      // chosen runner. Clear inner width (LW) = body width − the two gables;
-      // depth = carcass depth. No catalog material (fixed drawer-box stock).
-      const tBodyCm = boxMaterials.get(box.id)!.bodyMaterial.thickness / 10;
-      externalDrawerCuts.push(...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD));
+      // chosen runner and cut from this body's material. Clear inner width (LW) =
+      // body width − the two gables; depth = carcass depth.
+      const boxBody = boxMaterials.get(box.id)!.bodyMaterial;
+      const tBodyCm = boxBody.thickness / 10;
+      externalDrawerCuts.push(
+        ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, carcassD)
+          .map(c => ({ ...c, materialId: boxBody.id })),
+      );
     }
   }
 
