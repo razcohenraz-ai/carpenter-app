@@ -29,6 +29,7 @@ interface AppSettingsSlice {
   bodyMaterialPriceOverrides?: Partial<Record<MaterialId, number>>;
   frontMaterialPriceOverrides?: Partial<Record<MaterialId, number>>;
   runnerPriceOverrides?: Record<string, number[]>;
+  liftMechanismPriceOverrides?: Record<string, number>;
 }
 
 interface Props {
@@ -915,7 +916,10 @@ function HardwareView({ units, settings }: { units: KitchenUnit[]; settings?: Ap
         unit.cabinet.input,
         unit.cabinet.state,
         settings?.customMaterials ?? [],
-        settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {},
+        {
+          ...(settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {}),
+          ...(settings?.liftMechanismPriceOverrides ? { liftMechanismPriceOverrides: settings.liftMechanismPriceOverrides } : {}),
+        },
       );
       for (const item of hardwareItems) {
         const existing = byId.get(item.specId);

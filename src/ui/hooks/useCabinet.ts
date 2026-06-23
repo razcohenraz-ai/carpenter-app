@@ -30,6 +30,7 @@ import type { BoxLevel } from '../../types/geometry';
 import { calcExternalDrawerFrontCuts } from '../../core/cuts/externalDrawerCuts';
 import { buildDrawerBoxCuts } from '../../core/drawers/drawerBoxCuts';
 import { buildDrawerRunnerHardware, mergeRunnerHardware } from '../../core/drawers/drawerRunnerHardware';
+import { buildLiftMechanismHardware, mergeLiftMechanismHardware } from '../../core/lift/liftMechanismHardware';
 import { buildDoorCutItems } from '../../core/cuts/doorCuts';
 import { resolveBoxMaterials, type BoxMaterialOverride } from '../../core/boards/boxMaterials';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from '../../core/product/cornerModule';
@@ -108,6 +109,8 @@ export function useCabinet(settings?: {
   /** Per-runner price overrides (₪) from Settings, keyed by runner id, each a
    *  band array aligned to the runner's `priceByNlMm`. */
   runnerPriceOverrides?: Record<string, number[]>;
+  /** Per-lift-mechanism price overrides (₪) from Settings, keyed by family id. */
+  liftMechanismPriceOverrides?: Record<string, number>;
 }): {
   result: CabinetResult | null;
   calculate: (input: CabinetInput) => void;
@@ -1336,7 +1339,20 @@ export function useCabinet(settings?: {
     );
     // Runner-equipped drawers replace the generic telescopic slide with their
     // priced runner set (NL-banded).
-    const hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
+    let hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
+    // Wall cabinet (קלפה): a chosen AVENTOS family replaces the generic lift line.
+    if (input.liftMechanism === true) {
+      const flapCount = Object.values(newDoors).filter(d => d.hasDoor).length;
+      const liftOverride = settings?.liftMechanismPriceOverrides?.[input.liftMechanismId ?? ''];
+      const { lines } = buildLiftMechanismHardware({
+        liftMechanismId: input.liftMechanismId,
+        cabinetHeightCm: H,
+        cabinetWidthCm: W,
+        flapCount,
+        ...(liftOverride !== undefined ? { priceOverride: liftOverride } : {}),
+      });
+      hardwareItems = mergeLiftMechanismHardware(hardwareItems, lines);
+    }
     const derivedBoxDims = new Map(
       rawBoxes
         .filter(b => b.level !== 'plinth')

@@ -366,3 +366,35 @@ describe('computeUnitCutsAndHardware — runner hardware', () => {
     expect(hw.some(h => h.specId.startsWith('runner-'))).toBe(false);
   });
 });
+
+// ── Lift mechanism (קלפה) replaces the generic placeholder ────────────────────
+describe('computeUnitCutsAndHardware — AVENTOS lift mechanism', () => {
+  const wallInput = {
+    ...defaultInputForType('wardrobe'),
+    W: 60, H: 50, D: 35, plinth: 0, doorsPerColumn: 1 as const, liftMechanism: true,
+  };
+
+  it('a chosen family replaces the generic lift line, priced one set per flap', () => {
+    const hw = computeUnitCutsAndHardware(
+      { ...wallInput, liftMechanismId: 'aventos-hk' }, emptyCabinetState(), [],
+    ).hardwareItems;
+    expect(hw.some(h => h.specId === 'lift-mechanism')).toBe(false); // generic gone
+    const line = hw.find(h => h.specId === 'lift-aventos-hk');
+    expect(line).toBeDefined();
+    expect([line!.qty, line!.unitPrice]).toEqual([1, 200]);
+  });
+
+  it('no family chosen → keeps the generic placeholder line', () => {
+    const hw = computeUnitCutsAndHardware(wallInput, emptyCabinetState(), []).hardwareItems;
+    expect(hw.some(h => h.specId === 'lift-mechanism')).toBe(true);
+    expect(hw.some(h => h.specId.startsWith('lift-aventos'))).toBe(false);
+  });
+
+  it('honors a Settings price override', () => {
+    const hw = computeUnitCutsAndHardware(
+      { ...wallInput, liftMechanismId: 'aventos-hl' }, emptyCabinetState(), [],
+      { liftMechanismPriceOverrides: { 'aventos-hl': 320 } },
+    ).hardwareItems;
+    expect(hw.find(h => h.specId === 'lift-aventos-hl')!.unitPrice).toBe(320);
+  });
+});

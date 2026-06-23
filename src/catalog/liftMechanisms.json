@@ -1,0 +1,22 @@
+{
+  "aventos-hk": {
+    "id": "aventos-hk",
+    "name": "בלום AVENTOS HK",
+    "family": "AVENTOS",
+    "manufacturer": "blum",
+    "cabinetHeightMm": { "min": 205, "max": 600 },
+    "maxCabinetWidthMm": 1800,
+    "maxLoadKg": 18,
+    "priceShekel": 200
+  },
+  "aventos-hl": {
+    "id": "aventos-hl",
+    "name": "בלום AVENTOS HL",
+    "family": "AVENTOS",
+    "manufacturer": "blum",
+    "cabinetHeightMm": { "min": 300, "max": 580 },
+    "maxCabinetWidthMm": 1800,
+    "maxLoadKg": 18,
+    "priceShekel": 200
+  }
+}

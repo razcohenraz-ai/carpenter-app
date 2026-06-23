@@ -83,6 +83,11 @@ export interface CabinetInput {
    *  from `mount` so other wall-row modules (e.g. עליון מזווה — pantry top)
    *  can sit in the same elevation row with normal cup hinges. Default false. */
   liftMechanism?: boolean;
+  /** Chosen lift-mechanism family (e.g. `aventos-hk`) when `liftMechanism` is on.
+   *  Drives a priced hardware line for that AVENTOS family (one set per flap),
+   *  replacing the generic placeholder line. Undefined → keep the generic line
+   *  (backward-compatible). Has no effect unless `liftMechanism` is true. */
+  liftMechanismId?: string;
   /** Single-front lock: when true, the body always emits exactly ONE front
    *  column whatever its width — `maxDoorWidth` is ignored for column counting.
    *  Used by modules where a full-width facade is structural (drawers unit,

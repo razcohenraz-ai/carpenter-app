@@ -33,6 +33,7 @@ import type { BoxLevel } from '../types/geometry';
 import { calcExternalDrawerFrontCuts } from './cuts/externalDrawerCuts';
 import { buildDrawerBoxCuts } from './drawers/drawerBoxCuts';
 import { buildDrawerRunnerHardware, mergeRunnerHardware } from './drawers/drawerRunnerHardware';
+import { buildLiftMechanismHardware, mergeLiftMechanismHardware } from './lift/liftMechanismHardware';
 import { calcHardware } from './hardware/calcHardware';
 import {
   buildBoardModel,
@@ -102,6 +103,8 @@ export function computeUnitCutsAndHardware(
     /** Carpenter's per-runner price overrides (₪) from Settings, keyed by runner
      *  id, each a band array aligned to the runner's `priceByNlMm`. */
     runnerPriceOverrides?: Record<string, number[]>;
+    /** Per-lift-mechanism price overrides (₪) from Settings, keyed by family id. */
+    liftMechanismPriceOverrides?: Record<string, number>;
   },
 ): UnitComputeResult {
   const {
@@ -496,7 +499,21 @@ export function computeUnitCutsAndHardware(
   );
   // Runner-equipped drawers replace the generic telescopic slide with their
   // priced runner set (NL-banded).
-  const hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
+  let hardwareItems = mergeRunnerHardware(baseHardware, runnerHardware);
+  // Wall cabinet (קלפה): a chosen AVENTOS family replaces the generic lift line
+  // with its priced set (one per flap door).
+  if (input.liftMechanism === true) {
+    const flapCount = Object.values(hwDoors).filter(d => d.hasDoor).length;
+    const priceOverride = options?.liftMechanismPriceOverrides?.[input.liftMechanismId ?? ''];
+    const { lines } = buildLiftMechanismHardware({
+      liftMechanismId: input.liftMechanismId,
+      cabinetHeightCm: H,
+      cabinetWidthCm: W,
+      flapCount,
+      ...(priceOverride !== undefined ? { priceOverride } : {}),
+    });
+    hardwareItems = mergeLiftMechanismHardware(hardwareItems, lines);
+  }
 
   return { cuts: allCuts, hardwareItems };
 }

@@ -20,6 +20,8 @@ import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
 import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
 import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
+import { LIFT_MECHANISMS } from '../../catalog/liftMechanisms';
+import { buildLiftMechanismHardware } from '../../core/lift/liftMechanismHardware';
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
@@ -70,6 +72,9 @@ interface FormState {
   cornerDoorSide: 'left' | 'right';
   cornerDoorWidthCm: string;
   cornerReturnCm: string;
+  /** Chosen lift-mechanism family id (AVENTOS HK/HL); '' = none. Only meaningful
+   *  when `initialInput.liftMechanism === true` (a wall-cabinet flap). */
+  liftMechanismId: string;
 }
 
 interface FormErrors {
@@ -113,6 +118,8 @@ interface CabinetFormProps {
     frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     enabledRunnerIds?: string[];
     runnerPriceOverrides?: Record<string, number[]>;
+    enabledLiftMechanismIds?: string[];
+    liftMechanismPriceOverrides?: Record<string, number>;
   };
   /** When true, hide the main W/H/D fields. Used for kitchen units where
    *  dimensions are owned exclusively by per-body overrides via the
@@ -164,6 +171,7 @@ function inputToFormState(
     cornerDoorSide: inp.cornerFiller?.doorSide ?? 'right',
     cornerDoorWidthCm: String(inp.cornerFiller?.doorWidthCm ?? 60),
     cornerReturnCm: String(inp.cornerFiller?.returnDepthCm ?? 7),
+    liftMechanismId: inp.liftMechanismId ?? '',
   };
 }
 
@@ -238,6 +246,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
       // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
       // so the door side / width / return survive every recalculation (Gotcha #2).
@@ -375,6 +384,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
       // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
       // so the door side / width / return survive every recalculation (Gotcha #2).
@@ -426,6 +436,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       maxDoorWidth: '60',
       edgingThicknessMm: '0.6', edgingFinishMaterialId: '',
       cornerDoorSide: 'right', cornerDoorWidthCm: '60', cornerReturnCm: '7',
+      liftMechanismId: '',
     }
   );
 
@@ -573,6 +584,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
       ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
       ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {}),
       ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
       // Corner unit (פינה): rebuild cornerFiller from the editable corner controls
       // so the door side / width / return survive every recalculation (Gotcha #2).
@@ -728,6 +740,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
         ? computeUnitCutsAndHardware(cabInput, getSnapshot(), customMats, {
             onlyBoxStableKey: slotId,
             ...(settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {}),
+            ...(settings?.liftMechanismPriceOverrides ? { liftMechanismPriceOverrides: settings.liftMechanismPriceOverrides } : {}),
           })
         : { cuts: [], hardwareItems: [] };
 
@@ -1213,6 +1226,58 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   if (lastInput) calculate({ ...lastInput, hasWallEnvelope: v });
                 },
               )}
+              {/* Lift-mechanism family picker (קלפה) — only for a wall-cabinet
+                  flap. Picks the AVENTOS family that prices the hardware line;
+                  re-runs calculate live (mirrors the wall-envelope checkbox). A
+                  height/width out of the family's range shows a non-blocking
+                  warning (freedom principle). */}
+              {initialInput?.liftMechanism === true && (() => {
+                const enabledLift = settings?.enabledLiftMechanismIds;
+                const liftOptions = Object.values(LIFT_MECHANISMS)
+                  .filter(m => !enabledLift || enabledLift.includes(m.id));
+                // Check each EFFECTIVE body (result.boxes — per-body overrides
+                // already applied) against the family range, not the un-overridden
+                // form W/H. Falls back to the form dims until the first calculate.
+                const liftBodies = (result?.boxes ?? []).filter(b => b.level !== 'plinth');
+                const liftDims = liftBodies.length > 0
+                  ? liftBodies.map(b => ({ h: b.H, w: b.W }))
+                  : [{ h: parseFloat(form.H) || 0, w: parseFloat(form.W) || 0 }];
+                const liftWarnings = !form.liftMechanismId ? [] : Array.from(new Set(
+                  liftDims.flatMap(d => buildLiftMechanismHardware({
+                    liftMechanismId: form.liftMechanismId,
+                    cabinetHeightCm: d.h,
+                    cabinetWidthCm: d.w,
+                    flapCount: 1,
+                  }).warnings),
+                ));
+                return (
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="lift-mechanism">מנגנון הרמה (קלפה)</label>
+                    <select
+                      id="lift-mechanism"
+                      className={styles.input}
+                      value={form.liftMechanismId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setForm(p => ({ ...p, liftMechanismId: id }));
+                        const li = getLastInput();
+                        if (li) {
+                          const { liftMechanismId: _drop, ...rest } = li;
+                          calculate(id ? { ...rest, liftMechanismId: id } : rest);
+                        }
+                      }}
+                    >
+                      <option value="">ללא</option>
+                      {liftOptions.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    {liftWarnings.map((w, i) => (
+                      <span key={i} style={{ color: '#b8860b', fontSize: '0.8rem', marginTop: 2 }}>{w}</span>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Corner unit (פינה) controls — door side / width / hinge-post depth.

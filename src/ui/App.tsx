@@ -37,6 +37,9 @@ export default function App(): React.JSX.Element {
     toggleRunner,
     setRunnerBandPrice,
     resetRunnerPrices,
+    toggleLiftMechanism,
+    setLiftMechanismPrice,
+    resetLiftMechanismPrice,
   } = useSettings();
 
   // Active kitchen unit id (third navigation level)
@@ -98,6 +101,9 @@ export default function App(): React.JSX.Element {
         onToggleRunner={toggleRunner}
         onSetRunnerBandPrice={setRunnerBandPrice}
         onResetRunnerPrices={resetRunnerPrices}
+        onToggleLiftMechanism={toggleLiftMechanism}
+        onSetLiftMechanismPrice={setLiftMechanismPrice}
+        onResetLiftMechanismPrice={resetLiftMechanismPrice}
         onBack={() => setShowSettingsPage(false)}
       />
     );

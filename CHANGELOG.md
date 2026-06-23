@@ -7,6 +7,14 @@
 
 ## [Unreleased]
 
+### נוסף — מנגנון הרמה Blum AVENTOS (קלפה) ברשימת-הפרזול
+
+- **קטלוג מנגנוני-הרמה מבוסס-נתונים** (`catalog/liftMechanisms.json` + loader, טיפוסים ב-`types/liftMechanisms.ts`): AVENTOS **HK** (גובה ארון 20.5–60 ס"מ) ו-**HL** (30–58 ס"מ), שניהם רוחב עד 180 ס"מ ועומס עד 18 ק"ג. הוספת/עדכון מערכת = עריכת JSON בלבד.
+- **בורר משפחה בעורך הגוף** (`CabinetForm`): בארון-קיר עם קלפה (`liftMechanism`) נוסף תפריט "מנגנון הרמה" (רק המסומנים בהגדרות; "ללא" = שורה גנרית). שדה חדש `liftMechanismId` ב-`CabinetInput`, מושחל בכל מסלולי בניית-הקלט של הטופס.
+- **שורת פרזול ממחירה** (`core/lift/liftMechanismHardware.ts`): המשפחה הנבחרת מחליפה את שורת ה-`lift-mechanism` הגנרית (₪200) בשורה ממחירה (סט אחד לכל קלפה). מחווט בשני מסלולי-החישוב (`cabinetCompute` + `useCabinet`) דרך `mergeLiftMechanismHardware`. **אזהרה לא-חוסמת** (עקרון החופש) כשגובה/רוחב הארון מחוץ לטווח המשפחה — מוצגת ליד הבורר.
+- **לשונית "קלפה" בהגדרות** + **מחיר נערך פר-משפחה** (`useSettings.enabledLiftMechanismIds` + `liftMechanismPriceOverrides`): צ'קבוקס לכל מנגנון + שדה מחיר (ברירת-מחדל ₪200) + איפוס. נשמר ל-localStorage, מושחל לשני מסלולי-החישוב ולסיכום-הפרזול במטבח.
+- בדיקות: `liftMechanismHardware.test.ts` (8) + 3 בדיקות אינטגרציה ב-`cabinetCompute.test.ts`.
+
 ### נוסף — מנוע מגירות Blum TANDEM (שלבים 1–4: ליבה, הגדרות, חיווט לרשימת-החיתוך)
 
 - **קטלוג מסילות מבוסס-נתונים** (`catalog/runners.json` + `catalog/runners.ts`): TANDEM 16 (560H, דופן 11–16) ו-TANDEM 19 (560F, דופן 17–19). הוספת/עדכון מערכת = עריכת JSON בלבד. טיפוסים ב-`types/runners.ts`.

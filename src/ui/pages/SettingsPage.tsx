@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
 import { RUNNERS } from '../../catalog/runners';
+import { LIFT_MECHANISMS } from '../../catalog/liftMechanisms';
 import { useTranslation } from '../hooks/useTranslation';
 import styles from './SettingsPage.module.css';
 
@@ -14,6 +15,8 @@ interface SettingsPageProps {
     frontMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
     enabledRunnerIds: string[];
     runnerPriceOverrides: Record<string, number[]>;
+    enabledLiftMechanismIds: string[];
+    liftMechanismPriceOverrides: Record<string, number>;
   };
   onToggleBodyMaterial: (id: string) => void;
   onToggleFrontMaterial: (id: string) => void;
@@ -27,6 +30,9 @@ interface SettingsPageProps {
   onToggleRunner: (id: string) => void;
   onSetRunnerBandPrice: (runnerId: string, bandIndex: number, price: number) => void;
   onResetRunnerPrices: (runnerId: string) => void;
+  onToggleLiftMechanism: (id: string) => void;
+  onSetLiftMechanismPrice: (id: string, price: number) => void;
+  onResetLiftMechanismPrice: (id: string) => void;
   onBack: () => void;
 }
 
@@ -47,7 +53,7 @@ function generateId(): string {
   return 'custom_' + Array.from(arr, x => x.toString(16).padStart(2, '0')).join('');
 }
 
-type Tab = 'body' | 'front' | 'drawers';
+type Tab = 'body' | 'front' | 'drawers' | 'lift';
 
 export function SettingsPage({
   settings,
@@ -63,6 +69,9 @@ export function SettingsPage({
   onToggleRunner,
   onSetRunnerBandPrice,
   onResetRunnerPrices,
+  onToggleLiftMechanism,
+  onSetLiftMechanismPrice,
+  onResetLiftMechanismPrice,
   onBack,
 }: SettingsPageProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -132,6 +141,13 @@ export function SettingsPage({
           className={activeTab === 'drawers' ? styles.tabActive : styles.tab}
         >
           מגירות
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('lift')}
+          className={activeTab === 'lift' ? styles.tabActive : styles.tab}
+        >
+          קלפה
         </button>
       </div>
 
@@ -206,6 +222,83 @@ export function SettingsPage({
                               <button
                                 type="button"
                                 onClick={() => onResetRunnerPrices(r.id)}
+                                className={styles.resetBtn}
+                              >
+                                איפוס
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      ) : activeTab === 'lift' ? (
+        <div className={styles.content}>
+          <section className={styles.section}>
+            <p className={styles.readOnly}>
+              סמן את מנגנוני ההרמה (קלפה) שברשותך — רק המסומנים יוצעו בארון קיר.
+              המחיר הוא לסט מנגנון; ניתן לעדכן אותו מעת לעת.
+            </p>
+            <div className={styles.tableContainer}>
+              <table className={styles.materialTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.colCheck}></th>
+                    <th>מנגנון</th>
+                    <th>גובה ארון (ס"מ)</th>
+                    <th>רוחב מרבי (ס"מ)</th>
+                    <th>עומס (ק"ג)</th>
+                    <th>מחיר לסט (₪)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(LIFT_MECHANISMS).map(m => {
+                    const isEnabled = settings.enabledLiftMechanismIds.includes(m.id);
+                    const override = settings.liftMechanismPriceOverrides[m.id];
+                    return (
+                      <tr key={m.id} className={!isEnabled ? styles.rowDisabled : undefined}>
+                        <td className={styles.colCheck}>
+                          <input
+                            type="checkbox"
+                            checked={isEnabled}
+                            onChange={() => onToggleLiftMechanism(m.id)}
+                            className={styles.checkbox}
+                          />
+                        </td>
+                        <td className={styles.colName}>
+                          <span className={styles.materialName}>{m.name}</span>
+                        </td>
+                        <td>
+                          <span className={styles.readOnly}>
+                            {m.cabinetHeightMm.min / 10}–{m.cabinetHeightMm.max / 10}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={styles.readOnly}>{m.maxCabinetWidthMm / 10}</span>
+                        </td>
+                        <td>
+                          <span className={styles.readOnly}>{m.maxLoadKg}</span>
+                        </td>
+                        <td>
+                          <div className={styles.priceCell}>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={override ?? m.priceShekel}
+                              onChange={e => onSetLiftMechanismPrice(m.id, Number(e.target.value))}
+                              className={styles.input}
+                              style={{ width: 64 }}
+                            />
+                            {override !== undefined && (
+                              <button
+                                type="button"
+                                onClick={() => onResetLiftMechanismPrice(m.id)}
                                 className={styles.resetBtn}
                               >
                                 איפוס

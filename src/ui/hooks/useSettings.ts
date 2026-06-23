@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
 import { runnerIds, getRunner } from '../../catalog/runners';
+import { liftMechanismIds } from '../../catalog/liftMechanisms';
 
 interface AppSettings {
   // Master list of custom materials (shared across body & front)
@@ -20,6 +21,10 @@ interface AppSettings {
   // array aligned to that runner's `priceByNlMm` (index 0 = first NL band, …).
   // Missing runner / band → the catalog price is used.
   runnerPriceOverrides: Record<string, number[]>;
+  // Which lift-mechanism systems (AVENTOS) the carpenter offers on a wall cabinet
+  enabledLiftMechanismIds: string[];
+  // Per-lift-mechanism price overrides (₪), keyed by family id; missing → catalog.
+  liftMechanismPriceOverrides: Record<string, number>;
 }
 
 export type { AppSettings };
@@ -38,6 +43,8 @@ function defaultSettings(): AppSettings {
     hardwarePriceOverrides: {},
     enabledRunnerIds: runnerIds(),
     runnerPriceOverrides: {},
+    enabledLiftMechanismIds: liftMechanismIds(),
+    liftMechanismPriceOverrides: {},
   };
 }
 
@@ -55,6 +62,8 @@ function loadSettings(): AppSettings {
         hardwarePriceOverrides: parsed.hardwarePriceOverrides ?? {},
         enabledRunnerIds: parsed.enabledRunnerIds ?? runnerIds(),
         runnerPriceOverrides: parsed.runnerPriceOverrides ?? {},
+        enabledLiftMechanismIds: parsed.enabledLiftMechanismIds ?? liftMechanismIds(),
+        liftMechanismPriceOverrides: parsed.liftMechanismPriceOverrides ?? {},
       };
     }
   } catch {
@@ -127,6 +136,26 @@ export function useSettings() {
       setSettingsState(prev => {
         const { [runnerId]: _, ...rest } = prev.runnerPriceOverrides;
         return { ...prev, runnerPriceOverrides: rest };
+      });
+    },
+
+    // ── Lift mechanisms (AVENTOS) — offered set + price override ───────────────
+    toggleLiftMechanism: (id: string) => {
+      setSettingsState(prev => ({
+        ...prev,
+        enabledLiftMechanismIds: toggleId(prev.enabledLiftMechanismIds, id),
+      }));
+    },
+    setLiftMechanismPrice: (id: string, price: number) => {
+      setSettingsState(prev => ({
+        ...prev,
+        liftMechanismPriceOverrides: { ...prev.liftMechanismPriceOverrides, [id]: price },
+      }));
+    },
+    resetLiftMechanismPrice: (id: string) => {
+      setSettingsState(prev => {
+        const { [id]: _, ...rest } = prev.liftMechanismPriceOverrides;
+        return { ...prev, liftMechanismPriceOverrides: rest };
       });
     },
 
