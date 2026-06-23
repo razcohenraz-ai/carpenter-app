@@ -28,6 +28,11 @@ describe('runnerPriceShekel — NL band', () => {
   it('falls back to the last band for an NL beyond the table', () => {
     expect(runnerPriceShekel(t16, 9999)).toBe(150);
   });
+  it('override bands take precedence over the catalog price (per band)', () => {
+    expect(runnerPriceShekel(t16, 300, [120, 180])).toBe(120); // band 0
+    expect(runnerPriceShekel(t16, 550, [120, 180])).toBe(180); // band 1
+    expect(runnerPriceShekel(t16, 550, [120])).toBe(150);      // band 1 missing → catalog
+  });
 });
 
 describe('buildDrawerRunnerHardware', () => {
@@ -52,6 +57,13 @@ describe('buildDrawerRunnerHardware', () => {
     const lines = buildDrawerRunnerHardware([drawer({})], 60, { defaultRunnerId: 'tandem-19' });
     expect(lines).toHaveLength(1);
     expect(lines[0]!.specId).toBe('runner-tandem-19-nl550');
+  });
+
+  it('applies the carpenter\'s per-runner price overrides', () => {
+    const lines = buildDrawerRunnerHardware([drawer({ runnerId: 'tandem-16' })], 60, {
+      priceOverrides: { 'tandem-16': [120, 180] },
+    });
+    expect([lines[0]!.unitPrice, lines[0]!.total]).toEqual([180, 180]); // 60 cm → NL 550 → band 1
   });
 });
 

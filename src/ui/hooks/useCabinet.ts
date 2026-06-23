@@ -105,6 +105,9 @@ export interface CabinetResult {
 
 export function useCabinet(settings?: {
   customMaterials?: import('../../types/materials').CustomMaterial[];
+  /** Per-runner price overrides (₪) from Settings, keyed by runner id, each a
+   *  band array aligned to the runner's `priceByNlMm`. */
+  runnerPriceOverrides?: Record<string, number[]>;
 }): {
   result: CabinetResult | null;
   calculate: (input: CabinetInput) => void;
@@ -1165,7 +1168,10 @@ export function useCabinet(settings?: {
           ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, box.D)
             .map(c => ({ ...c, materialId: boxBody.id })),
         );
-        runnerHardware.push(...buildDrawerRunnerHardware(bodyItems, box.D));
+        runnerHardware.push(...buildDrawerRunnerHardware(
+          bodyItems, box.D,
+          settings?.runnerPriceOverrides ? { priceOverrides: settings.runnerPriceOverrides } : {},
+        ));
       }
     }
 

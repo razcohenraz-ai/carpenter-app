@@ -35,6 +35,8 @@ export default function App(): React.JSX.Element {
     removeCustomMaterial,
     updateCustomMaterial,
     toggleRunner,
+    setRunnerBandPrice,
+    resetRunnerPrices,
   } = useSettings();
 
   // Active kitchen unit id (third navigation level)
@@ -94,6 +96,8 @@ export default function App(): React.JSX.Element {
         onRemoveCustomMaterial={removeCustomMaterial}
         onUpdateCustomMaterial={updateCustomMaterial}
         onToggleRunner={toggleRunner}
+        onSetRunnerBandPrice={setRunnerBandPrice}
+        onResetRunnerPrices={resetRunnerPrices}
         onBack={() => setShowSettingsPage(false)}
       />
     );

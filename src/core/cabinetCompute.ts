@@ -96,7 +96,13 @@ export function computeUnitCutsAndHardware(
    *  (matched by `boxStableKey`). The body view thus shows a faithful SLICE of
    *  the cabinet's cut list rather than a standalone re-derivation that drifts.
    *  Implies plinth is skipped (the plinth is cabinet-level). */
-  options?: { skipPlinth?: boolean; onlyBoxStableKey?: string },
+  options?: {
+    skipPlinth?: boolean;
+    onlyBoxStableKey?: string;
+    /** Carpenter's per-runner price overrides (₪) from Settings, keyed by runner
+     *  id, each a band array aligned to the runner's `priceByNlMm`. */
+    runnerPriceOverrides?: Record<string, number[]>;
+  },
 ): UnitComputeResult {
   const {
     W, H, D, backThickness, hasEnvelopeTop,
@@ -370,7 +376,10 @@ export function computeUnitCutsAndHardware(
         ...buildDrawerBoxCuts(bodyItems, box.W - 2 * tBodyCm, box.D)
           .map(c => ({ ...c, materialId: boxBody.id })),
       );
-      runnerHardware.push(...buildDrawerRunnerHardware(bodyItems, box.D));
+      runnerHardware.push(...buildDrawerRunnerHardware(
+        bodyItems, box.D,
+        options?.runnerPriceOverrides ? { priceOverrides: options.runnerPriceOverrides } : {},
+      ));
     }
   }
 

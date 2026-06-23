@@ -11,18 +11,22 @@ export const GENERIC_SLIDE_SPEC_ID = 'slide-telescopic';
 /** Unit label for a runner line — one matched left/right SET per drawer. */
 const RUNNER_UNIT = 'סט';
 
-/** Price (₪) of one runner SET for the given nominal length, from the spec's
- *  NL-banded price table (first band whose `maxNlMm ≥ NL`; NL longer than the
- *  last band falls back to it). */
-export function runnerPriceShekel(spec: RunnerSpec, nl: number): number {
-  const band = spec.priceByNlMm.find(b => nl <= b.maxNlMm)
-    ?? spec.priceByNlMm[spec.priceByNlMm.length - 1];
-  return band?.priceShekel ?? 0;
+/** Price (₪) of one runner SET for the given nominal length. The band is chosen
+ *  by NL (first band whose `maxNlMm ≥ NL`; NL beyond the last band falls back to
+ *  it). `overrideBands` (from Settings, aligned to the spec's `priceByNlMm` by
+ *  index) take precedence over the catalog price for that band. */
+export function runnerPriceShekel(spec: RunnerSpec, nl: number, overrideBands?: number[]): number {
+  let idx = spec.priceByNlMm.findIndex(b => nl <= b.maxNlMm);
+  if (idx === -1) idx = spec.priceByNlMm.length - 1;
+  return overrideBands?.[idx] ?? spec.priceByNlMm[idx]?.priceShekel ?? 0;
 }
 
 export interface DrawerRunnerHardwareOptions {
   /** Runner used for drawers that don't carry their own `runnerId`. */
   defaultRunnerId?: string;
+  /** Carpenter's per-runner price overrides (₪), keyed by runner id; each value
+   *  is a band array aligned to that runner's `priceByNlMm`. Missing → catalog. */
+  priceOverrides?: Record<string, number[]>;
 }
 
 /** ONE runner hardware line (qty 1, a left/right set) per drawer that has a
@@ -41,7 +45,7 @@ export function buildDrawerRunnerHardware(
     const spec = getRunner(d.runnerId ?? opts.defaultRunnerId ?? '');
     if (!spec) continue;
     const { nl } = selectNominalLength(spec, usableDepthCm * 10);
-    const price = runnerPriceShekel(spec, nl);
+    const price = runnerPriceShekel(spec, nl, opts.priceOverrides?.[spec.id]);
     lines.push({
       specId: `runner-${spec.id}-nl${nl}`,
       name: `${spec.name} (NL ${nl})`,

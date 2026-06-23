@@ -112,6 +112,7 @@ interface CabinetFormProps {
     bodyMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     frontMaterialPriceOverrides?: Partial<Record<import('../../types/materials').MaterialId, number>>;
     enabledRunnerIds?: string[];
+    runnerPriceOverrides?: Record<string, number[]>;
   };
   /** When true, hide the main W/H/D fields. Used for kitchen units where
    *  dimensions are owned exclusively by per-body overrides via the
@@ -724,7 +725,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // row context + real shell), never a standalone re-derivation that drifts
       // from the cabinet on a per-body width override.
       const bodyResult = cabInput
-        ? computeUnitCutsAndHardware(cabInput, getSnapshot(), customMats, { onlyBoxStableKey: slotId })
+        ? computeUnitCutsAndHardware(cabInput, getSnapshot(), customMats, {
+            onlyBoxStableKey: slotId,
+            ...(settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {}),
+          })
         : { cuts: [], hardwareItems: [] };
 
       // Where BoxBodySketch draws the body inside its 300×560 SVG (same padding

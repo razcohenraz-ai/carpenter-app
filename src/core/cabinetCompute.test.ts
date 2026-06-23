@@ -352,6 +352,13 @@ describe('computeUnitCutsAndHardware — runner hardware', () => {
     expect(hw.find(h => h.specId.startsWith('runner-tandem-16'))!.unitPrice).toBe(100); // NL 380
   });
 
+  it('runner price honors a Settings price override (per NL band)', () => {
+    const hw = computeUnitCutsAndHardware(baseInput, stateWith(runnerDrawer, 60), [], {
+      runnerPriceOverrides: { 'tandem-16': [120, 180] },
+    }).hardwareItems;
+    expect(hw.find(h => h.specId.startsWith('runner-tandem-16'))!.unitPrice).toBe(180); // NL 550 → band 1
+  });
+
   it('a drawer without a runner keeps the generic telescopic slide', () => {
     const plain: DrawerItem = { id: 'dr1', type: 'drawer', heightFromFloor: 0, drawerHeight: 31, mount: 'external' };
     const hw = computeUnitCutsAndHardware(baseInput, stateWith(plain), []).hardwareItems;

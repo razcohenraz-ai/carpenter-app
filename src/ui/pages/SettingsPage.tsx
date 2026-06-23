@@ -13,6 +13,7 @@ interface SettingsPageProps {
     bodyMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
     frontMaterialPriceOverrides: Partial<Record<MaterialId, number>>;
     enabledRunnerIds: string[];
+    runnerPriceOverrides: Record<string, number[]>;
   };
   onToggleBodyMaterial: (id: string) => void;
   onToggleFrontMaterial: (id: string) => void;
@@ -24,7 +25,20 @@ interface SettingsPageProps {
   onRemoveCustomMaterial: (id: string) => void;
   onUpdateCustomMaterial: (id: string, updates: Partial<CustomMaterial>) => void;
   onToggleRunner: (id: string) => void;
+  onSetRunnerBandPrice: (runnerId: string, bandIndex: number, price: number) => void;
+  onResetRunnerPrices: (runnerId: string) => void;
   onBack: () => void;
+}
+
+/** Hebrew label for an NL price band, e.g. "עד 50 ס״מ" / "מעל 50 ס״מ" /
+ *  "50–60 ס״מ", derived from the band's nominal-length cutoff (mm → cm). */
+function bandRangeLabel(bands: { maxNlMm: number }[], i: number): string {
+  const cm = (mm: number) => Math.round(mm / 10);
+  const upper = cm(bands[i]!.maxNlMm);
+  if (i === 0) return `עד ${cm(bands[0]!.maxNlMm) + 1} ס״מ`;
+  const lower = cm(bands[i - 1]!.maxNlMm) + 1;
+  if (i === bands.length - 1) return `מעל ${cm(bands[i - 1]!.maxNlMm)} ס״מ`;
+  return `${lower}–${upper} ס״מ`;
 }
 
 function generateId(): string {
@@ -47,6 +61,8 @@ export function SettingsPage({
   onRemoveCustomMaterial,
   onUpdateCustomMaterial,
   onToggleRunner,
+  onSetRunnerBandPrice,
+  onResetRunnerPrices,
   onBack,
 }: SettingsPageProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -124,6 +140,7 @@ export function SettingsPage({
           <section className={styles.section}>
             <p className={styles.readOnly}>
               סמן את מערכות המסילות שברשותך — רק המסומנות יוצעו בהוספת מגירה לגוף.
+              המחיר הוא לסט מסילה (זוג) לפי אורך נומינלי; ניתן לעדכן אותו מעת לעת.
             </p>
             <div className={styles.tableContainer}>
               <table className={styles.materialTable}>
@@ -134,12 +151,15 @@ export function SettingsPage({
                     <th>עובי דופן (מ"מ)</th>
                     <th>עומס (ק"ג)</th>
                     <th>אורכים נומינליים (מ"מ)</th>
+                    <th>מחיר לסט (₪)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.values(RUNNERS).map(r => {
                     const isEnabled = settings.enabledRunnerIds.includes(r.id);
                     const nls = r.nominalLengthsMm;
+                    const overrides = settings.runnerPriceOverrides[r.id];
+                    const hasOverride = overrides !== undefined;
                     return (
                       <tr key={r.id} className={!isEnabled ? styles.rowDisabled : undefined}>
                         <td className={styles.colCheck}>
@@ -163,6 +183,35 @@ export function SettingsPage({
                         </td>
                         <td className={styles.sheetDim}>
                           {nls[0]}–{nls[nls.length - 1]}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {r.priceByNlMm.map((band, i) => (
+                              <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                <span className={styles.readOnly} style={{ minWidth: 78, textAlign: 'right' }}>
+                                  {bandRangeLabel(r.priceByNlMm, i)}
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={1}
+                                  value={overrides?.[i] ?? band.priceShekel}
+                                  onChange={e => onSetRunnerBandPrice(r.id, i, Number(e.target.value))}
+                                  className={styles.input}
+                                  style={{ width: 64 }}
+                                />
+                              </label>
+                            ))}
+                            {hasOverride && (
+                              <button
+                                type="button"
+                                onClick={() => onResetRunnerPrices(r.id)}
+                                className={styles.resetBtn}
+                              >
+                                איפוס
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

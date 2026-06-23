@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { MaterialId, CustomMaterial } from '../../types/materials';
 import { MATERIALS } from '../../catalog';
-import { runnerIds } from '../../catalog/runners';
+import { runnerIds, getRunner } from '../../catalog/runners';
 
 interface AppSettings {
   // Master list of custom materials (shared across body & front)
@@ -16,6 +16,10 @@ interface AppSettings {
   hardwarePriceOverrides: Partial<Record<string, number>>;
   // Which drawer-runner systems the carpenter offers when adding a drawer
   enabledRunnerIds: string[];
+  // Per-runner price overrides (₪), keyed by runner id; each value is a band
+  // array aligned to that runner's `priceByNlMm` (index 0 = first NL band, …).
+  // Missing runner / band → the catalog price is used.
+  runnerPriceOverrides: Record<string, number[]>;
 }
 
 export type { AppSettings };
@@ -33,6 +37,7 @@ function defaultSettings(): AppSettings {
     frontMaterialPriceOverrides: {},
     hardwarePriceOverrides: {},
     enabledRunnerIds: runnerIds(),
+    runnerPriceOverrides: {},
   };
 }
 
@@ -49,6 +54,7 @@ function loadSettings(): AppSettings {
         frontMaterialPriceOverrides: parsed.frontMaterialPriceOverrides ?? {},
         hardwarePriceOverrides: parsed.hardwarePriceOverrides ?? {},
         enabledRunnerIds: parsed.enabledRunnerIds ?? runnerIds(),
+        runnerPriceOverrides: parsed.runnerPriceOverrides ?? {},
       };
     }
   } catch {
@@ -99,6 +105,29 @@ export function useSettings() {
         ...prev,
         enabledRunnerIds: toggleId(prev.enabledRunnerIds, id),
       }));
+    },
+
+    // ── Per-runner price overrides (one ₪ value per NL band) ──────────────────
+    setRunnerBandPrice: (runnerId: string, bandIndex: number, price: number) => {
+      setSettingsState(prev => {
+        const spec = getRunner(runnerId);
+        if (!spec) return prev;
+        // Rebuild a full-length band array from the current effective prices so
+        // it always stays aligned to the catalog's bands, then set this one.
+        const current = prev.runnerPriceOverrides[runnerId];
+        const bands = spec.priceByNlMm.map((b, i) => current?.[i] ?? b.priceShekel);
+        bands[bandIndex] = price;
+        return {
+          ...prev,
+          runnerPriceOverrides: { ...prev.runnerPriceOverrides, [runnerId]: bands },
+        };
+      });
+    },
+    resetRunnerPrices: (runnerId: string) => {
+      setSettingsState(prev => {
+        const { [runnerId]: _, ...rest } = prev.runnerPriceOverrides;
+        return { ...prev, runnerPriceOverrides: rest };
+      });
     },
 
     // ── Price overrides for catalog materials ─────────────────────────────────
