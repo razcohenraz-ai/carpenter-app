@@ -1,8 +1,11 @@
 import { decomposeBoxes } from '../../core';
 import { computeInnerWidth } from '../../core/boards/boardModel';
 import { applyBoxDimensionOverrides } from '../../core/geometry/boxDecomposition';
+import { getRunner } from '../../catalog/runners';
+import { computeDrawerBox } from '../../core/drawers/drawerBox';
+import { DEFAULT_DRAWER_BOTTOM_MM } from '../../core/drawers/drawerBoxCuts';
 import type { Box, BoxLevel } from '../../types';
-import type { BodyLevel } from '../../types/interior';
+import type { BodyLevel, DrawerItem } from '../../types/interior';
 
 
 const SVG_W = 600;
@@ -45,6 +48,50 @@ export interface SketchLine {
   y1: number;
   x2: number;
   y2: number;
+}
+
+/** SVG rects for a drawer drawn as its actual boards — left + right SIDE boards
+ *  and the BOTTOM board (open top), sized by {@link computeDrawerBox} from the
+ *  chosen runner — when the drawer has a resolvable runner; otherwise a single
+ *  inset tray rect. Shared by every 2D drawer renderer (BoxBodySketch body view,
+ *  CabinetSketch cabinet + kitchen views) so they never drift. `colX`/`colW`/
+ *  `yTop`/`yBottom` are SVG px (the inner band the drawer sits in + its vertical
+ *  slot); `innerWcm`/`bodyDcm` are cm; `scale` is px per cm. */
+export function drawerBoxBoardRects(
+  d: DrawerItem,
+  innerWcm: number,
+  bodyDcm: number,
+  colX: number,
+  colW: number,
+  yTop: number,
+  yBottom: number,
+  scale: number,
+): BoxSvgRect[] {
+  const hPx = Math.max(yBottom - yTop, 0);
+  const spec = d.runnerId ? getRunner(d.runnerId) : undefined;
+  if (!spec || innerWcm <= 0) {
+    const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * scale;
+    return [{ x: colX + sideGapPx, y: yTop, w: Math.max(colW - 2 * sideGapPx, 0), h: hPx }];
+  }
+  const box = computeDrawerBox(spec, {
+    internalWidthMm: innerWcm * 10,
+    internalDepthMm: bodyDcm * 10,
+    sidePanelThicknessMm: d.drawerSideThicknessMm ?? spec.sidePanelThicknessMm.max,
+    bottomThicknessMm: d.drawerBottomThicknessMm ?? DEFAULT_DRAWER_BOTTOM_MM,
+    kind: d.mount === 'external' ? 'external' : 'inner',
+    heightMm: d.drawerHeight * 10,
+  });
+  const side = box.panels.find(p => p.role === 'side')!;
+  const bottom = box.panels.find(p => p.role === 'bottom')!;
+  const boxWpx = (box.outerWidthMm / 10) * scale;
+  const boxX = colX + (colW - boxWpx) / 2;
+  const tPx = Math.max((side.thicknessMm / 10) * scale, 1);
+  const botPx = Math.max((bottom.thicknessMm / 10) * scale, 1);
+  return [
+    { x: boxX, y: yTop, w: tPx, h: hPx },                  // left side board
+    { x: boxX + boxWpx - tPx, y: yTop, w: tPx, h: hPx },   // right side board
+    { x: boxX, y: yBottom - botPx, w: boxWpx, h: botPx },  // bottom board
+  ];
 }
 
 export interface BoxSvgRect {

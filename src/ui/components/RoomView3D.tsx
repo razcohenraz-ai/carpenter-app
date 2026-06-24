@@ -16,7 +16,7 @@ import styles from './RoomView.module.css';
 const PALETTE = ['#6b8cae', '#b08968', '#7a9e7e', '#a87ca0', '#c0a062', '#8a8a8a'];
 
 /** Interior pieces hidden behind closed doors — dropped in the fronts view. */
-const INTERIOR_ROLES = new Set<BoardBox3D['role']>(['rod', 'drawer-box', 'shelf', 'fixed-shelf', 'internal-shelf']);
+const INTERIOR_ROLES = new Set<BoardBox3D['role']>(['rod', 'drawer-box', 'runner', 'shelf', 'fixed-shelf', 'internal-shelf']);
 
 type Vec3 = [number, number, number];
 interface Aabb { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; }

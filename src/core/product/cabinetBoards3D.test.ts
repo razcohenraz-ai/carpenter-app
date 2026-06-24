@@ -178,6 +178,56 @@ describe('cabinetBoardBoxes', () => {
     expect(tray.y0).toBeCloseTo(input.plinth + 40 + 2, 1);  // bottom gap
     expect(tray.y1).toBeCloseTo(input.plinth + 40 + 20 - 3, 1); // top gap
   });
+
+  it('an external drawer with a runner emits side rails on TOP of the bottom panel, length ≈ NL', () => {
+    const drawer: DrawerItem = { id: 'd1', type: 'drawer', mount: 'external', heightFromFloor: 0, drawerHeight: 20, runnerId: 'tandem-16' };
+    const st = { ...emptyCabinetState(), interior: { 'single:single': [drawer] } } as unknown as SavedCabinetState;
+    const input = singleBodyInput();
+    const rails = cabinetBoardBoxes(input, st, []).filter(b => b.role === 'runner');
+    expect(rails.length).toBeGreaterThanOrEqual(4);       // C-channel pieces per gable
+    for (const r of rails) {
+      expect(r.z1).toBeLessThanOrEqual(input.D + 0.001);  // front-aligned, inside the carcass
+    }
+    // The lowest piece (foot/web) rests ON TOP of the bottom panel (≈ plinth +
+    // tBody), not buried at the carcass outer bottom (= plinth).
+    const minY0 = Math.min(...rails.map(r => r.y0));
+    expect(minY0).toBeGreaterThan(input.plinth + 1);
+    expect(minY0).toBeLessThan(input.plinth + 3);
+    expect(rails.some(r => r.z1 - r.z0 > 10)).toBe(true);     // channel runs the NL depth
+    expect(rails.some(r => r.x0 < input.W * 0.1)).toBe(true);  // pieces at the left gable
+    expect(rails.some(r => r.x1 > input.W * 0.9)).toBe(true);  // pieces at the right gable
+  });
+
+  it('a drawer without a runner emits no runner rails', () => {
+    const drawer: DrawerItem = { id: 'd1', type: 'drawer', mount: 'external', heightFromFloor: 0, drawerHeight: 20 };
+    const st = { ...emptyCabinetState(), interior: { 'single:single': [drawer] } } as unknown as SavedCabinetState;
+    expect(cabinetBoardBoxes(singleBodyInput(), st, []).some(b => b.role === 'runner')).toBe(false);
+  });
+
+  it('a runner drawer renders its real box boards (2 sides + front + back + bottom)', () => {
+    const drawer: DrawerItem = { id: 'd1', type: 'drawer', mount: 'external', heightFromFloor: 0, drawerHeight: 20, runnerId: 'tandem-16' };
+    const st = { ...emptyCabinetState(), interior: { 'single:single': [drawer] } } as unknown as SavedCabinetState;
+    const input = singleBodyInput();
+    const panels = cabinetBoardBoxes(input, st, []).filter(b => b.role === 'drawer-box');
+    expect(panels.length).toBeGreaterThanOrEqual(5);             // 2 sides + front + back + bottom
+    // Two thin, tall side panels (one per side of the box).
+    const sides = panels.filter(p => p.x1 - p.x0 < 2 && p.y1 - p.y0 > 5 && p.z1 - p.z0 > 10);
+    expect(sides.length).toBeGreaterThanOrEqual(2);
+    // A thin flat bottom panel (≈ the 6 mm default).
+    expect(panels.some(p => p.y1 - p.y0 < 1)).toBe(true);
+    // The box stays inside the body's inner width.
+    for (const p of panels) {
+      expect(p.x0).toBeGreaterThan(0);
+      expect(p.x1).toBeLessThan(input.W);
+    }
+  });
+
+  it('a drawer without a runner falls back to a single tray box', () => {
+    const drawer: DrawerItem = { id: 'd1', type: 'drawer', mount: 'external', heightFromFloor: 0, drawerHeight: 20 };
+    const st = { ...emptyCabinetState(), interior: { 'single:single': [drawer] } } as unknown as SavedCabinetState;
+    const panels = cabinetBoardBoxes(singleBodyInput(), st, []).filter(b => b.role === 'drawer-box');
+    expect(panels).toHaveLength(1);                              // the simple tray
+  });
 });
 
 describe('productBoardBoxes — kitchen', () => {

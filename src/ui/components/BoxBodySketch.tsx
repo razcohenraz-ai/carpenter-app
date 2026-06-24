@@ -6,7 +6,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { getEffectiveMaterial } from '../../catalog';
 import { buildBoardModel } from '../../core/boards/boardModel';
 import CabinetCutSketch from './CabinetCutSketch';
-import { internalDrawerBoxBoundsCm, DRAWER_BOX_SIDE_GAP_CM } from './CabinetSketch.utils';
+import { internalDrawerBoxBoundsCm, drawerBoxBoardRects } from './CabinetSketch.utils';
 import styles from './BoxBodySketch.module.css';
 
 interface Props {
@@ -129,6 +129,22 @@ export default function BoxBodySketch({
   const innerW  = bW - 2 * tBodyCm * scale;
 
   const toY = (h: number) => bY + bH - h * scale;
+
+  // A drawer is drawn as its actual boards (side + bottom cutaway) when a runner
+  // is chosen, else a generic inset tray — via the shared geometry helper so the
+  // body view, cabinet view and kitchen view never drift. `colX`/`colW` are the
+  // inner band (full body or a cell).
+  /** SVG nodes for a drawer drawn via the shared {@link drawerBoxBoardRects}. */
+  function drawerBoxNodes(d: DrawerItem, colX: number, colW: number, yTop: number, yBottom: number, opacity = 1): React.ReactNode {
+    const rects = drawerBoxBoardRects(d, colW / scale, bodyD ?? 60, colX, colW, yTop, yBottom, scale);
+    return (
+      <g opacity={opacity}>
+        {rects.map((r, i) => (
+          <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} className={styles.drawerRect} />
+        ))}
+      </g>
+    );
+  }
 
   // ── Board-model background layer ─────────────────────────────────────────
   // Build the physical carcass boards (sides, top, bottom, shelves, envelope)
@@ -318,23 +334,15 @@ export default function BoxBodySketch({
         }
 
         if (item.type === 'drawer') {
-          // Render as the inner drawer BOX (inset), matching the kitchen bodies
-          // view, so the carcass top/bottom boards stay visible behind it. `h`
-          // is the drag-aware floor; the label still reports heightFromFloor.
+          // Render as the inner drawer BOX. With a chosen runner it shows the
+          // actual boards (side + bottom cutaway, real width); otherwise a generic
+          // inset tray. `h` is the drag-aware floor; the label reports heightFromFloor.
           const { bottomCm, topCm } = internalDrawerBoxBoundsCm(h, item.drawerHeight);
           const yBottom = toY(bottomCm);
           const yTop    = toY(topCm);
-          const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * scale;
           return (
             <g key={item.id} {...dragProps}>
-              <rect
-                x={innerX + sideGapPx}
-                y={yTop}
-                width={Math.max(innerW - 2 * sideGapPx, 0)}
-                height={Math.max(yBottom - yTop, 0)}
-                className={styles.drawerRect}
-                opacity={isDragging ? 0.4 : 1}
-              />
+              {drawerBoxNodes(item, innerX, innerW, yTop, yBottom, isDragging ? 0.4 : 1)}
               {showLabels && !isDragging && (
                 <text x={bX + bW + 3} y={(yTop + yBottom) / 2 + 4} className={styles.label}>
                   {Math.round(item.heightFromFloor)}
@@ -347,14 +355,17 @@ export default function BoxBodySketch({
         return null;
       })}
 
-      {/* External drawers — stacked from bottom-of-body upward */}
+      {/* External drawers — stacked from bottom-of-body upward. In the BODY view
+          they render as the inner drawer box (same `drawerBoxNodes` as internal
+          drawers), not the front facade — the facade belongs to the fronts view. */}
       {(() => {
         if (externalDrawers.length === 0) return null;
         const gapCm = gapMm / 10;
         let cumulative = 0; // cm from box bottom
         return externalDrawers.map(drawer => {
-          const yBottom = toY(cumulative);
-          const yTop    = toY(cumulative + drawer.drawerHeight);
+          const { bottomCm, topCm } = internalDrawerBoxBoundsCm(cumulative, drawer.drawerHeight);
+          const yBottom = toY(bottomCm);
+          const yTop    = toY(topCm);
           const rectH   = yBottom - yTop;
           const interactive = onExternalDrawerClick !== undefined;
           const onClick = interactive ? () => onExternalDrawerClick!(drawer.id) : undefined;
@@ -363,17 +374,7 @@ export default function BoxBodySketch({
               key={drawer.id}
               {...(onClick ? { onClick, style: { cursor: 'pointer' } } : {})}
             >
-              <rect
-                x={innerX} y={yTop}
-                width={innerW} height={rectH}
-                className={styles.externalDrawerRect}
-              />
-              {/* Subtle double-line near the top of the front to hint a panel face */}
-              <line
-                x1={innerX + 2} y1={yTop + 2}
-                x2={innerX + innerW - 2} y2={yTop + 2}
-                className={styles.externalDrawerFaceHint}
-              />
+              {drawerBoxNodes(drawer, innerX, innerW, yTop, yBottom)}
               {showLabels && rectH >= 12 && (
                 <text
                   x={innerX + innerW / 2} y={(yTop + yBottom) / 2 + 3}
@@ -414,30 +415,23 @@ export default function BoxBodySketch({
                   className={styles.rodLine} />
               );
             }
-            // Internal drawer → inner box (inset), like the full-body case.
+            // Internal drawer → real boards (or inset tray), like the full body.
             const d = item as DrawerItem;
             const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
             const yBottom = toY(bottomCm);
             const yTop    = toY(topCm);
-            const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * scale;
-            return (
-              <rect key={item.id} x={cellInnerX + sideGapPx} y={yTop}
-                width={Math.max(cellInnerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
-                className={styles.drawerRect} />
-            );
+            return <g key={item.id}>{drawerBoxNodes(d, cellInnerX, cellInnerW, yTop, yBottom)}</g>;
           });
 
           let cumulative = 0; // cm from cell bottom — externals stack upward
           const externalNodes = externals.map(drawer => {
-            const yBottom = toY(cumulative);
-            const yTop    = toY(cumulative + drawer.drawerHeight);
+            const { bottomCm, topCm } = internalDrawerBoxBoundsCm(cumulative, drawer.drawerHeight);
+            const yBottom = toY(bottomCm);
+            const yTop    = toY(topCm);
             cumulative += drawer.drawerHeight + gapCm;
             return (
               <g key={`ext-${drawer.id}`}>
-                <rect x={cellInnerX} y={yTop} width={cellInnerW} height={Math.max(yBottom - yTop, 0)}
-                  className={styles.externalDrawerRect} />
-                <line x1={cellInnerX + 2} y1={yTop + 2} x2={cellInnerX + cellInnerW - 2} y2={yTop + 2}
-                  className={styles.externalDrawerFaceHint} />
+                {drawerBoxNodes(drawer, cellInnerX, cellInnerW, yTop, yBottom)}
                 {showLabels && (yBottom - yTop) >= 12 && (
                   <text x={cellInnerX + cellInnerW / 2} y={(yTop + yBottom) / 2 + 3}
                     textAnchor="middle" className={styles.externalDrawerLabel}>

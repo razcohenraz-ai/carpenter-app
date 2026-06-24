@@ -10,6 +10,10 @@ import {
   getMaterial, HINGE_GAP_CM, LEVELER_GAP_CM, type Board, type BoardRole, type BoardOverrides,
 } from '../boards/boardModel';
 import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
+import { getRunner } from '../../catalog/runners';
+import { selectNominalLength, computeDrawerBox } from '../drawers/drawerBox';
+import { DEFAULT_DRAWER_BOTTOM_MM } from '../drawers/drawerBoxCuts';
+import { RUNNER_OVER_GAP_MM } from '../drawers/drawerDrilling';
 import { resolveBoxMaterials } from '../boards/boxMaterials';
 import { boxStableKey } from '../interior/interiorUtils';
 import { getShellSides } from '../../types/cabinet';
@@ -28,7 +32,7 @@ import { isCorner, cornerReturnBox } from './cornerModule';
 /** Tag for the non-board pieces the 3D view also draws. A drawer is rendered as
  *  its inner tray box; a rod as a slender horizontal bar; a front as a flat
  *  door / drawer-front panel at the cabinet face (fronts view). */
-export type FixtureRole = 'drawer-box' | 'rod' | 'front';
+export type FixtureRole = 'drawer-box' | 'rod' | 'front' | 'runner';
 
 export interface BoardBox3D extends ProductSubBox {
   role: BoardRole | FixtureRole;
@@ -47,6 +51,18 @@ const EXT_DRAWER_GAP_CM = 0.2;     // gap between stacked external drawer faces
 const DRAWER_DEPTH_BACK_INSET_CM = 1;   // tray set back from the carcass rear
 const DRAWER_DEPTH_FRONT_INSET_CM = 2;  // tray set back from the carcass front
 const ROD_RADIUS_CM = 1.5;         // hanging-rod half-thickness
+// Drawer-runner rail — LENGTH (= nominal length NL), DEPTH placement and the
+// floor-anchored DATUM are exact (runner spec + drilling model). The cross-
+// section is built as a low C-CHANNEL read off the TANDEM cross-section diagram:
+// a vertical web screwed to the gable, a foot under the drawer and a top return
+// lip, its height ≈ the screw line; plus a front coupling block (the latch
+// housing). The closest a box renderer gets to the real undermount runner.
+const RUNNER_WEB_T_CM = 0.4;    // web thickness (flush to the gable)
+const RUNNER_FOOT_W_CM = 2.2;   // channel depth inward, under the drawer
+const RUNNER_FOOT_H_CM = 0.5;   // foot thickness
+const RUNNER_LIP_W_CM = 1.4;    // top return lip reach
+const RUNNER_LIP_H_CM = 0.4;    // lip thickness
+const RUNNER_COUPLING_L_CM = 4; // front coupling-block length (along depth)
 
 /** Carcass-board families and their depth (Z) placement. The 2D board model's
  *  front-view rect encodes X (width) and Y (height) only; the depth axis lives
@@ -224,6 +240,84 @@ export function cabinetBoardBoxes(
     const trayZ1 = Math.max(trayZ0 + 1, backT + box.D - DRAWER_DEPTH_FRONT_INSET_CM);
     const rodZc = backT + box.D / 2;
 
+    /** A C-channel runner on each gable inner face (colL/colR) for a drawer with a
+     *  chosen runner: web (against the gable) + foot (under the drawer) + top lip,
+     *  plus a front coupling block. `runnerBottomCm` is the rail-bottom height
+     *  above the box outer bottom (boxBottom). Length = NL front-aligned to the
+     *  carcass front; length, depth and the floor datum are EXACT, the section
+     *  is read off the TANDEM cross-section. */
+    const emitRunner = (d: DrawerItem, runnerBottomCm: number, colL: number, colR: number) => {
+      const spec = getRunner(d.runnerId ?? '');
+      if (!spec) return;
+      const { nl } = selectNominalLength(spec, box.D * 10);
+      const z1 = backT + box.D;                       // carcass front
+      const z0 = Math.max(backT, z1 - nl / 10);       // front-aligned, length NL
+      const profH = spec.screwHeightMm / 10;          // channel height ≈ screw line
+      const couplingZ0 = Math.max(z0, z1 - RUNNER_COUPLING_L_CM);
+      const floorY = boxBottom + runnerBottomCm;
+      const rail = (x0: number, x1: number, yLo: number, yHi: number, za: number) =>
+        out.push({ x0, x1, y0: yLo, y1: yHi, z0: za, z1, role: 'runner', materialId: bodyMat.id });
+      // dir = +1 → channel extends inward from the left gable; −1 → from the right.
+      const emitChannel = (xGable: number, dir: 1 | -1) => {
+        const span = (w: number): [number, number] => dir === 1 ? [xGable, xGable + w] : [xGable - w, xGable];
+        const [wx0, wx1] = span(RUNNER_WEB_T_CM);
+        const [fx0, fx1] = span(RUNNER_FOOT_W_CM);
+        const [lx0, lx1] = span(RUNNER_LIP_W_CM);
+        rail(wx0, wx1, floorY, floorY + profH, z0);                              // web
+        rail(fx0, fx1, floorY, floorY + RUNNER_FOOT_H_CM, z0);                   // foot
+        rail(lx0, lx1, floorY + profH - RUNNER_LIP_H_CM, floorY + profH, z0);    // top lip
+        rail(fx0, fx1, floorY, floorY + profH, couplingZ0);                      // front coupling
+      };
+      emitChannel(colL, 1);
+      emitChannel(colR, -1);
+    };
+
+    /** The drawer body built from its ACTUAL box boards (2 sides + front + back +
+     *  bottom), sized by {@link computeDrawerBox} from the chosen runner — the
+     *  same dimensions as the cut list. The box is centred between the gables
+     *  (colL/colR), sits on the runner datum (runnerBottomCm above boxBottom),
+     *  runs SKL deep front-aligned, with the bottom in its groove (M up) and the
+     *  front/back shorter than the sides by (M+T). Returns false when the drawer
+     *  has no resolvable runner → the caller falls back to a simple tray. */
+    const emitDrawerBox = (d: DrawerItem, runnerBottomCm: number, colL: number, colR: number): boolean => {
+      const spec = getRunner(d.runnerId ?? '');
+      if (!spec) return false;
+      const dbox = computeDrawerBox(spec, {
+        internalWidthMm: (colR - colL) * 10,
+        internalDepthMm: box.D * 10,
+        sidePanelThicknessMm: d.drawerSideThicknessMm ?? spec.sidePanelThicknessMm.max,
+        bottomThicknessMm: d.drawerBottomThicknessMm ?? DEFAULT_DRAWER_BOTTOM_MM,
+        kind: d.mount === 'external' ? 'external' : 'inner',
+        heightMm: d.drawerHeight * 10,
+      });
+      const side = dbox.panels.find(p => p.role === 'side')!;
+      const front = dbox.panels.find(p => p.role === 'front')!;
+      const bottom = dbox.panels.find(p => p.role === 'bottom')!;
+      const t = side.thicknessMm / 10;
+      const T = bottom.thicknessMm / 10;
+      const sideH = side.heightMm / 10;
+      const skl = side.lengthMm / 10;
+      const fbW = front.lengthMm / 10;
+      const bottomW = bottom.lengthMm / 10;
+      const outerW = dbox.outerWidthMm / 10;
+      const M = spec.mountOverRunnerMm / 10;
+      const centerX = (colL + colR) / 2;
+      const boxLeft = centerX - outerW / 2;
+      const boxRight = centerX + outerW / 2;
+      const zFront = backT + box.D;                 // carcass front
+      const zBack = Math.max(backT, zFront - skl);  // SKL deep, front-aligned
+      const floorY = boxBottom + runnerBottomCm;    // side-panel bottom = runner bottom
+      const panel = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) =>
+        out.push({ x0, x1, y0, y1, z0, z1, role: 'drawer-box', materialId: bodyMat.id });
+      panel(boxLeft, boxLeft + t, floorY, floorY + sideH, zBack, zFront);   // left side
+      panel(boxRight - t, boxRight, floorY, floorY + sideH, zBack, zFront); // right side
+      const fbY0 = floorY + M + T;                   // front/back sit on top of the bottom
+      panel(centerX - fbW / 2, centerX + fbW / 2, fbY0, floorY + sideH, zFront - t, zFront); // front
+      panel(centerX - fbW / 2, centerX + fbW / 2, fbY0, floorY + sideH, zBack, zBack + t);   // back
+      panel(centerX - bottomW / 2, centerX + bottomW / 2, floorY + M, floorY + M + T, zBack, zFront); // bottom
+      return true;
+    };
+
     /** Rods + internal drawers within an x-range (full inner band, or a cell). */
     const emitInCol = (colItems: InteriorItem[], colL: number, colR: number) => {
       for (const it of colItems) {
@@ -238,6 +332,10 @@ export function cabinetBoardBoxes(
           });
         } else if (it.type === 'drawer' && (it as DrawerItem).mount === 'internal') {
           const d = it as DrawerItem;
+          // Internal drawer's runner sits at its own mounting height.
+          if (d.runnerId) emitRunner(d, d.heightFromFloor, colL, colR);
+          // Real box from its boards when a runner is chosen; else a simple tray.
+          if (emitDrawerBox(d, d.heightFromFloor, colL, colR)) continue;
           const bottomCm = d.heightFromFloor + DRAWER_BOTTOM_GAP_CM;
           const topCm = d.heightFromFloor + d.drawerHeight - DRAWER_TOP_GAP_CM;
           if (topCm <= bottomCm) continue;
@@ -264,18 +362,27 @@ export function cabinetBoardBoxes(
       .filter((i): i is DrawerItem => i.type === 'drawer' && i.mount === 'external')
       .sort((a, b) => a.heightFromFloor - b.heightFromFloor);
     let cumulative = 0;
-    for (const d of externals) {
+    externals.forEach((d, i) => {
+      const faceBottomCm = cumulative;            // front bottom edge above floor
       cumulative += d.drawerHeight + EXT_DRAWER_GAP_CM;
+      // Runner: the bottom drawer's rail rests ON TOP of the body's bottom panel
+      // (boxBottom + tBody = the interior floor), not at the carcass outer bottom;
+      // each drawer above is 5 mm over the reveal-gap top to the drawer below
+      // (floor-anchored, drawerDrilling model).
+      const runnerBottomCm = i === 0 ? tBody : faceBottomCm + RUNNER_OVER_GAP_MM / 10;
+      if (d.runnerId) emitRunner(d, runnerBottomCm, innerL, innerR);
+      // Real box from its boards when a runner is chosen; else a simple tray.
+      if (emitDrawerBox(d, runnerBottomCm, innerL, innerR)) return;
       const bottomCm = (cumulative - d.drawerHeight) + DRAWER_BOTTOM_GAP_CM;
       const topCm = cumulative - EXT_DRAWER_GAP_CM - DRAWER_TOP_GAP_CM;
-      if (topCm <= bottomCm) continue;
+      if (topCm <= bottomCm) return;
       out.push({
         x0: innerL + DRAWER_SIDE_GAP_CM, x1: innerR - DRAWER_SIDE_GAP_CM,
         y0: boxBottom + bottomCm, y1: boxBottom + topCm,
         z0: trayZ0, z1: trayZ1,
         role: 'drawer-box', materialId: bodyMat.id,
       });
-    }
+    });
   }
 
   // ── Outer shell + wall envelope — emitted at cabinet level so the side panels

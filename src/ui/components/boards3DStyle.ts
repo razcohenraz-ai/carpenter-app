@@ -20,6 +20,7 @@ export function mixHex(a: string, b: string, t: number): string {
 export function colorForRole(role: BoardBox3D['role']): string {
   if (role === 'front') return '#e8934a';      // door / drawer face
   if (role === 'rod') return '#9aa0a6';        // brushed metal
+  if (role === 'runner') return '#8a9099';     // brushed metal (drawer runner rail)
   if (role === 'drawer-box') return '#b59f82'; // greyer tray
   if (role === 'back') return '#9c7f55';
   if (role === 'shelf' || role === 'fixed-shelf' || role === 'internal-shelf') return '#d8bb8a';

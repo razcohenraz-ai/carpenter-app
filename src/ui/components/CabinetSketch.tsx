@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { isValidSketchInput, computeSketchGeometry, internalDrawerBoxBoundsCm, DRAWER_BOX_SIDE_GAP_CM } from './CabinetSketch.utils';
+import { isValidSketchInput, computeSketchGeometry, internalDrawerBoxBoundsCm, drawerBoxBoardRects } from './CabinetSketch.utils';
 import {
   type RowFrontLayout,
   computeFrontGeometry,
@@ -432,18 +432,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
               );
             }
             if (item.type === 'drawer') {
-              // Internal drawer: render as the inner drawer BOX (inset), like the
-              // external drawer box, so the carcass top/bottom boards stay visible
-              // behind it instead of being covered by a full-bleed band.
+              // Internal drawer: render as its actual boards (side + bottom cutaway
+              // when a runner is chosen, else an inset tray) via the shared helper.
               const d = item as DrawerItem;
               const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
               const yBottom = toSvgY(bottomCm);
               const yTop    = toSvgY(topCm);
-              const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * geo.scale;
               return (
-                <rect key={item.id} x={innerX + sideGapPx} y={yTop}
-                  width={Math.max(innerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
-                  className={styles.drawerRect} />
+                <g key={item.id}>
+                  {drawerBoxBoardRects(d, innerW / geo.scale, parseFloat(D) || 60,innerX, innerW, yTop, yBottom, geo.scale)
+                    .map((r, ri) => <rect key={ri} x={r.x} y={r.y} width={r.w} height={r.h} className={styles.drawerRect} />)}
+                </g>
               );
             }
             return null;
@@ -472,13 +471,12 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                 gapCm: layout.gapCm,
               })
             : null;
-          // External drawer in CABINET view: render as the DRAWER BOX (the
-          // wooden tray inside), not the visible front panel. Carpenter rule:
-          //   • box inner width  = inner cabinet width − 2.5 cm (1.25 cm gap each side)
+          // External drawer in CABINET view: render as the DRAWER BOX (its actual
+          // boards — side + bottom cutaway when a runner is chosen, else an inset
+          // tray), not the visible front panel. Same shared helper as the body and
+          // kitchen views. The visible drawer front is shown in the fronts overlay.
           //   • box inner height = drawer face height − 5 cm (2 cm bottom, 3 cm top)
-          // The visible drawer front itself is shown in the fronts overlay.
           void drawerSpan;
-          const DRAWER_SIDE_GAP_CM = 1.25;   // each side
           const DRAWER_BOTTOM_GAP_CM = 2;
           const DRAWER_TOP_GAP_CM = 3;
           const externalNodes = externals.map(drawer => {
@@ -488,16 +486,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             const drawerBoxTopCm = cumulative - gapCm - DRAWER_TOP_GAP_CM;
             const yBottom = toSvgY(drawerBoxBottomCm);
             const yTop = toSvgY(drawerBoxTopCm);
-            const sideGapPx = DRAWER_SIDE_GAP_CM * geo.scale;
-            const fX = innerX + sideGapPx;
-            const fW = innerW - 2 * sideGapPx;
             const interactive = onDrawerFrontClick !== undefined;
             return (
-              <rect
+              <g
                 key={`ext-${drawer.id}`}
-                x={fX} y={yTop}
-                width={Math.max(fW, 0)} height={Math.max(yBottom - yTop, 0)}
-                className={styles.drawerRect}
                 {...(interactive ? {
                   onClick: (e: React.MouseEvent) => {
                     e.stopPropagation();
@@ -505,7 +497,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                   },
                   style: { cursor: 'pointer' as const },
                 } : {})}
-              />
+              >
+                {drawerBoxBoardRects(drawer, innerW / geo.scale, parseFloat(D) || 60,innerX, innerW, yTop, yBottom, geo.scale)
+                  .map((r, ri) => <rect key={ri} x={r.x} y={r.y} width={r.w} height={r.h} className={styles.drawerRect} />)}
+              </g>
             );
           });
 
@@ -556,17 +551,17 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                     return <line key={item.id} x1={cellInnerX} y1={y} x2={cellInnerX + cellInnerW} y2={y} className={styles.rodLine} />;
                   }
                   if (item.type === 'drawer') {
-                    // Internal drawer (partitioned cell): inner box, inset — same
-                    // as the full-body case so the carcass boards stay visible.
+                    // Internal drawer (partitioned cell): its actual boards (or an
+                    // inset tray) via the shared helper, like the full-body case.
                     const d = item as DrawerItem;
                     const { bottomCm, topCm } = internalDrawerBoxBoundsCm(d.heightFromFloor, d.drawerHeight);
                     const yBottom = toSvgY(bottomCm);
                     const yTop    = toSvgY(topCm);
-                    const sideGapPx = DRAWER_BOX_SIDE_GAP_CM * geo.scale;
                     return (
-                      <rect key={item.id} x={cellInnerX + sideGapPx} y={yTop}
-                        width={Math.max(cellInnerW - 2 * sideGapPx, 0)} height={Math.max(yBottom - yTop, 0)}
-                        className={styles.drawerRect} />
+                      <g key={item.id}>
+                        {drawerBoxBoardRects(d, cellInnerW / geo.scale, parseFloat(D) || 60,cellInnerX, cellInnerW, yTop, yBottom, geo.scale)
+                          .map((r, ri) => <rect key={ri} x={r.x} y={r.y} width={r.w} height={r.h} className={styles.drawerRect} />)}
+                      </g>
                     );
                   }
                   return null;
@@ -594,7 +589,6 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                 // Cell external drawer: same drawer-box rule as full-body
                 // externals — render as the inner box, not the front panel.
                 void layout; void frontGeo;
-                const DRAWER_SIDE_GAP_CM_CELL = 1.25;
                 const DRAWER_BOTTOM_GAP_CM_CELL = 2;
                 const DRAWER_TOP_GAP_CM_CELL = 3;
                 const externalNodes = externals.map(drawer => {
@@ -603,16 +597,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                   const drawerBoxTopCm = cumulative - gapCm - DRAWER_TOP_GAP_CM_CELL;
                   const yBottom = toSvgY(drawerBoxBottomCm);
                   const yTop = toSvgY(drawerBoxTopCm);
-                  const sideGapPx = DRAWER_SIDE_GAP_CM_CELL * geo.scale;
-                  const fX = cellInnerX + sideGapPx;
-                  const fW = cellInnerW - 2 * sideGapPx;
                   const interactive = onDrawerFrontClick !== undefined;
                   return (
-                    <rect
+                    <g
                       key={`ext-${drawer.id}`}
-                      x={fX} y={yTop}
-                      width={Math.max(fW, 0)} height={Math.max(yBottom - yTop, 0)}
-                      className={styles.drawerRect}
                       {...(interactive ? {
                         onClick: (e: React.MouseEvent) => {
                           e.stopPropagation();
@@ -620,7 +608,10 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                         },
                         style: { cursor: 'pointer' as const },
                       } : {})}
-                    />
+                    >
+                      {drawerBoxBoardRects(drawer, cellInnerW / geo.scale, parseFloat(D) || 60,cellInnerX, cellInnerW, yTop, yBottom, geo.scale)
+                        .map((r, ri) => <rect key={ri} x={r.x} y={r.y} width={r.w} height={r.h} className={styles.drawerRect} />)}
+                    </g>
                   );
                 });
 
