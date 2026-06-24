@@ -61,6 +61,7 @@ function SingleCabinetElevation({
         frontMaterialThickness={m.tFront}
         {...(input.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
         {...(input.hasWallEnvelope && input.mount === 'wall' ? { wallEnvelopeCm: m.tFront } : {})}
+        {...(input.liftMechanism && input.liftMechanismId ? { liftMechanismId: input.liftMechanismId } : {})}
         frontLayoutByRow={m.frontLayoutByRow}
         numFrontsPerBox={m.numFrontsPerBox}
         bodyMaterialId={input.bodyMaterialId}
@@ -142,6 +143,7 @@ function KitchenElevation({
               frontMaterialThickness={m.tFront}
               {...(inp.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
               {...(inp.hasWallEnvelope && inp.mount === 'wall' ? { wallEnvelopeCm: m.tFront } : {})}
+              {...(inp.liftMechanism && inp.liftMechanismId ? { liftMechanismId: inp.liftMechanismId } : {})}
               frontLayoutByRow={m.frontLayoutByRow}
               numFrontsPerBox={m.numFrontsPerBox}
               bodyMaterialId={inp.bodyMaterialId}

@@ -11,6 +11,7 @@ import {
 } from '../boards/boardModel';
 import { decomposeBoxes, applyBoxDimensionOverrides } from '../geometry/boxDecomposition';
 import { getRunner } from '../../catalog/runners';
+import { getLiftMechanism } from '../../catalog/liftMechanisms';
 import { selectNominalLength, computeDrawerBox } from '../drawers/drawerBox';
 import { DEFAULT_DRAWER_BOTTOM_MM } from '../drawers/drawerBoxCuts';
 import { RUNNER_OVER_GAP_MM } from '../drawers/drawerDrilling';
@@ -32,7 +33,7 @@ import { isCorner, cornerReturnBox } from './cornerModule';
 /** Tag for the non-board pieces the 3D view also draws. A drawer is rendered as
  *  its inner tray box; a rod as a slender horizontal bar; a front as a flat
  *  door / drawer-front panel at the cabinet face (fronts view). */
-export type FixtureRole = 'drawer-box' | 'rod' | 'front' | 'runner';
+export type FixtureRole = 'drawer-box' | 'rod' | 'front' | 'runner' | 'lift-mechanism';
 
 export interface BoardBox3D extends ProductSubBox {
   role: BoardRole | FixtureRole;
@@ -63,6 +64,13 @@ const RUNNER_FOOT_H_CM = 0.5;   // foot thickness
 const RUNNER_LIP_W_CM = 1.4;    // top return lip reach
 const RUNNER_LIP_H_CM = 0.4;    // lip thickness
 const RUNNER_COUPLING_L_CM = 4; // front coupling-block length (along depth)
+// Lift mechanism (AVENTOS) — a power-unit plate on each gable inner face at the
+// top-front + a short folded lever arm. Schematic (the exact AVENTOS profile
+// isn't specced); position (top-front, both gables) matches the planning diagram.
+const LIFT_PLATE_T_CM = 2;      // plate stand-off from the gable inner face
+const LIFT_PLATE_H_CM = 18;     // plate height (capped to the body)
+const LIFT_PLATE_D_CM = 15;     // plate depth along Z (capped to the body)
+const LIFT_TOP_GAP_CM = 2;      // gap below the body top
 
 /** Carcass-board families and their depth (Z) placement. The 2D board model's
  *  front-view rect encodes X (width) and Y (height) only; the depth axis lives
@@ -383,6 +391,30 @@ export function cabinetBoardBoxes(
         role: 'drawer-box', materialId: bodyMat.id,
       });
     });
+
+    // ── Lift mechanism (קלפה / AVENTOS) — a power-unit plate on each gable inner
+    //    face at the top-front, on the topmost body of a wall cabinet with a
+    //    chosen family. Mirrors the hardware gate (liftMechanism + resolvable
+    //    family). Schematic; the top-front, both-gables placement matches the
+    //    AVENTOS planning diagram. ─────────────────────────────────────────────
+    if (input.liftMechanism === true
+        && getLiftMechanism(input.liftMechanismId ?? '')
+        && (box.level === 'top' || box.level === 'single')) {
+      const plateH = Math.min(LIFT_PLATE_H_CM, Math.max(2, box.H - LIFT_TOP_GAP_CM - 2));
+      const plateD = Math.min(LIFT_PLATE_D_CM, Math.max(2, box.D - 1));
+      const yTop = boxTop - LIFT_TOP_GAP_CM;
+      const yBot = yTop - plateH;
+      const zF = backT + box.D - 1;        // near the carcass front
+      const zB = zF - plateD;
+      // dir = +1 → plate stands inward from the left gable; −1 → from the right.
+      const emitUnit = (xGable: number, dir: 1 | -1) => {
+        const px0 = dir === 1 ? xGable : xGable - LIFT_PLATE_T_CM;
+        const px1 = dir === 1 ? xGable + LIFT_PLATE_T_CM : xGable;
+        out.push({ x0: px0, x1: px1, y0: yBot, y1: yTop, z0: zB, z1: zF, role: 'lift-mechanism', materialId: bodyMat.id });
+      };
+      emitUnit(innerL, 1);
+      emitUnit(innerR, -1);
+    }
   }
 
   // ── Outer shell + wall envelope — emitted at cabinet level so the side panels

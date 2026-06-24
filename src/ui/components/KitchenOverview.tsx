@@ -821,6 +821,7 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
                 {...(inp.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
                 {...(inp.hasWallEnvelope && inp.mount === 'wall'
                   ? { wallEnvelopeCm: tFront } : {})}
+                {...(inp.liftMechanism && inp.liftMechanismId ? { liftMechanismId: inp.liftMechanismId } : {})}
                 frontLayoutByRow={layoutByRow}
                 numFrontsPerBox={numFrontsPerBox}
                 bodyMaterialId={inp.bodyMaterialId}

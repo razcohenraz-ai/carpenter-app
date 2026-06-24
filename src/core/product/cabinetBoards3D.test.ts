@@ -228,6 +228,27 @@ describe('cabinetBoardBoxes', () => {
     const panels = cabinetBoardBoxes(singleBodyInput(), st, []).filter(b => b.role === 'drawer-box');
     expect(panels).toHaveLength(1);                              // the simple tray
   });
+
+  it('a wall cabinet with a chosen lift mechanism emits a power-unit plate on each gable at the top-front', () => {
+    const input = { ...singleBodyInput(), liftMechanism: true, liftMechanismId: 'aventos-hk' } as CabinetInput;
+    const lifts = cabinetBoardBoxes(input, state(), []).filter(b => b.role === 'lift-mechanism');
+    expect(lifts).toHaveLength(2);                       // one per gable
+    for (const l of lifts) {
+      expect(l.x1 - l.x0).toBeLessThan(3);             // thin stand-off plate
+      expect(l.y1).toBeLessThanOrEqual(input.H + 0.001);
+      expect(l.y1).toBeGreaterThan(input.H * 0.5);     // upper region
+      expect(l.z1).toBeLessThanOrEqual(input.D + 0.001); // toward the front, inside
+    }
+    const sorted = [...lifts].sort((a, b) => a.x0 - b.x0);
+    expect(sorted[0]!.x0).toBeLessThan(input.W * 0.2);  // left gable
+    expect(sorted[1]!.x1).toBeGreaterThan(input.W * 0.8); // right gable
+  });
+
+  it('no lift mechanism when none is chosen (or the flag is off)', () => {
+    const noFamily = { ...singleBodyInput(), liftMechanism: true } as CabinetInput; // no liftMechanismId
+    expect(cabinetBoardBoxes(noFamily, state(), []).some(b => b.role === 'lift-mechanism')).toBe(false);
+    expect(cabinetBoardBoxes(singleBodyInput(), state(), []).some(b => b.role === 'lift-mechanism')).toBe(false);
+  });
 });
 
 describe('productBoardBoxes — kitchen', () => {

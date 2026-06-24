@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { isValidSketchInput, computeSketchGeometry, internalDrawerBoxBoundsCm, drawerBoxBoardRects } from './CabinetSketch.utils';
+import { isValidSketchInput, computeSketchGeometry, internalDrawerBoxBoundsCm, drawerBoxBoardRects, liftMechanismRects } from './CabinetSketch.utils';
 import {
   type RowFrontLayout,
   computeFrontGeometry,
@@ -70,6 +70,9 @@ interface Props {
    *  full-width caps are rendered (and the body shrinks accordingly). 0 / omit
    *  for base cabinets. */
   wallEnvelopeCm?: number;
+  /** Chosen AVENTOS lift-mechanism family id (wall cabinet). When set, a power-
+   *  unit indicator is drawn at each top side panel. Undefined → none. */
+  liftMechanismId?: string;
   /** Optional: 'sink-open' triggers sink basin overlay (rect + drain circle).
    *  Passed through to buildBoardModel for sink-traverse boards (top boards
    *  become two narrow traverses at front/back). */
@@ -104,7 +107,7 @@ interface Props {
   cornerSingleWidth?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, boxMaterialOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, cornerSingleWidth }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, boxMaterialOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, liftMechanismId, cornerSingleWidth }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -339,6 +342,14 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             className={styles.envelopePanel}
           />
         )}
+
+        {/* Lift mechanism (קלפה / AVENTOS) — a power-unit indicator just inside
+            each side panel at the top (front elevation, edge-on). Shown when a
+            family is chosen on a wall cabinet. */}
+        {liftMechanismId && liftMechanismRects(geo.cabinet, bodyMat ? bodyMat.thickness / 10 : 1.8, geo.scale).map((r, i) => (
+          <rect key={`lift-${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+            fill="#b9bdc4" stroke="#7e858d" strokeWidth={0.5} />
+        ))}
 
         {/* Per-body cut sketch — sides, top, bottom, shelves, partition,
             envelope. Drawn BEFORE interior items (rods, drawers) so those

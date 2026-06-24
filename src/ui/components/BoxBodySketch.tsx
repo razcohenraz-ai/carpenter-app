@@ -6,7 +6,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { getEffectiveMaterial } from '../../catalog';
 import { buildBoardModel } from '../../core/boards/boardModel';
 import CabinetCutSketch from './CabinetCutSketch';
-import { internalDrawerBoxBoundsCm, drawerBoxBoardRects } from './CabinetSketch.utils';
+import { internalDrawerBoxBoundsCm, drawerBoxBoardRects, liftMechanismRects } from './CabinetSketch.utils';
 import styles from './BoxBodySketch.module.css';
 
 interface Props {
@@ -24,6 +24,9 @@ interface Props {
   gapMm?: number;
   /** Click handler for an external drawer; opens the editor modal in the parent. */
   onExternalDrawerClick?: (drawerId: string) => void;
+  /** Chosen AVENTOS lift-mechanism family id (wall-cabinet flap). When set, a
+   *  power-unit indicator is drawn at each top side panel. Undefined → none. */
+  liftMechanismId?: string;
   // ── Board-model props ─────────────────────────────────────────────────────
   // When `bodyMaterialId` is provided, the sketch renders the physical carcass
   // boards (sides, top, bottom, shelves, envelope) as a background layer
@@ -90,7 +93,7 @@ export default function BoxBodySketch({
   showLabels = false, showDimensions = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
   bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
-  topVariant, sinkTraverseWidthCm, cellItems,
+  topVariant, sinkTraverseWidthCm, cellItems, liftMechanismId,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -249,6 +252,13 @@ export default function BoxBodySketch({
     >
       {/* Body outline */}
       <rect x={bX} y={bY} width={bW} height={bH} className={styles.bodyRect} />
+
+      {/* Lift mechanism (קלפה / AVENTOS) — power-unit indicator at each top side
+          panel (edge-on, front elevation) when a family is chosen. */}
+      {liftMechanismId && liftMechanismRects({ x: bX, y: bY, w: bW, h: bH }, tBodyCm, scale).map((r, i) => (
+        <rect key={`lift-${i}`} x={r.x} y={r.y} width={r.w} height={r.h}
+          fill="#b9bdc4" stroke="#7e858d" strokeWidth={0.5} />
+      ))}
 
       {/* Carcass boards — drawn above the body outline but below interior
           items (shelves, drawers, rods). Same renderer used by CabinetSketch

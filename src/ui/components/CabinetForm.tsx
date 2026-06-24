@@ -776,6 +776,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
           {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
           {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
           {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
+          {...(initialInput?.liftMechanism === true && form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {})}
         />
       );
 
@@ -1430,6 +1431,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               plinth={form.plinth}
               {...(form.hasWallEnvelope && initialInput?.mount === 'wall'
                 ? { wallEnvelopeCm: frontThicknessCm } : {})}
+              {...(initialInput?.liftMechanism === true && form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {})}
               doorsPerColumn={form.doorsPerColumn}
               {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
               {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}

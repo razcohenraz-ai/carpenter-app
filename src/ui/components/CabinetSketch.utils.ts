@@ -50,6 +50,23 @@ export interface SketchLine {
   y2: number;
 }
 
+/** Two indicator rects (SVG px) for an AVENTOS lift mechanism — a power-unit
+ *  plate just inside each side panel at the TOP of a wall cabinet (seen edge-on
+ *  in the front elevation). Shared by CabinetSketch (cabinet/kitchen/elevation)
+ *  and BoxBodySketch (body view). `cab` is the cabinet/body outline (px),
+ *  `tBodyCm` the side-panel thickness (cm), `scale` px/cm. */
+export function liftMechanismRects(cab: BoxSvgRect, tBodyCm: number, scale: number): BoxSvgRect[] {
+  const plateW = 2 * scale;                                   // ~2 cm stand-off, edge-on
+  const plateH = Math.min(18, (cab.h / scale) * 0.5) * scale; // ~18 cm or half the height
+  const y = cab.y + 2 * scale;                                // small gap below the top
+  const innerL = cab.x + tBodyCm * scale;
+  const innerR = cab.x + cab.w - tBodyCm * scale;
+  return [
+    { x: innerL, y, w: plateW, h: plateH },
+    { x: innerR - plateW, y, w: plateW, h: plateH },
+  ];
+}
+
 /** SVG rects for a drawer drawn as its actual boards — left + right SIDE boards
  *  and the BOTTOM board (open top), sized by {@link computeDrawerBox} from the
  *  chosen runner — when the drawer has a resolvable runner; otherwise a single
