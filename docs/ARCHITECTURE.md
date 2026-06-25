@@ -110,8 +110,7 @@ src/
         ├── CabinetFrontsSketch.tsx סקיצת חזיתות (בעורך unit יחיד)
         ├── BoxBodySketch.tsx     סקיצת SVG לפנים גוף
         ├── BoxesList.tsx         רשימת קופסאות
-        ├── BodyView.tsx          מסך גוף — עקיפת חומר גוף/חזית + עובי-גב פר-body; כפתור "עריכת פנים" → BoxInteriorEditor (ארון → גוף → פנים)
-        ├── BoxInteriorEditor.tsx עורך פנים גוף (overrides W/H/D פר-body, edging, פריטים); hideRodOption ב-kitchen
+        ├── BoxInteriorEditor.tsx עורך הגוף (לחיצה על גוף → ישירות לכאן). 4 לשוניות גופים/חזיתות/חיתוכים/פרזולים (2D+3D); overrides W/H/D + חומר גוף/חזית + עובי-גב פר-body + edging; עריכת פנים; hideRodOption ב-kitchen. `unitControls` — סקציית "הגדרות יחידה" (מטבח kitchenDirectEdit: מעטפת-צד/מרווח/קלפה/פינה, מחשבות-חי)
         ├── DoorEditor.tsx        עורך חזית (צירים, hasDoor, thickness override)
         ├── DoorsList.tsx         רשימת חזיתות
         ├── ExternalDrawerEditor.tsx מודאל מגירה חיצונית

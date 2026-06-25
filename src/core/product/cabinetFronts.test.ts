@@ -58,6 +58,39 @@ describe('cabinetFrontPanels', () => {
     expect(doors[0]!.hingeSide).toBe('right');
   });
 
+  it('honors a user-saved hinge side over the geometric default', () => {
+    // The 2D elevation reads the live doorsById; the overlay + 3D fronts must
+    // match — so a saved hinge side wins over the default (single body → right).
+    const st = state();
+    st.doors['single:single:0'] = { hingeSide: 'left', hingeCount: 'auto', hinges: [], hasDoor: true };
+    const panels = cabinetFrontPanels(singleBodyInput(), st, []);
+    const doors = panels.filter(p => p.hingeSide !== undefined);
+    expect(doors[0]!.hingeSide).toBe('left');
+  });
+
+  it('2 fronts, no partition: a saved invalid hinge side is clamped to the outer gable', () => {
+    // 90 cm / maxDoorWidth 50 → 2 fronts in one carcass. The doors meet in the
+    // open middle (no panel) → each is forced onto its outer gable. A saved
+    // 'left' on the RIGHTMOST door (fi=0) is physically impossible and ignored.
+    const input = { ...singleBodyInput(), W: 90, maxDoorWidth: 50 };
+    const st = state();
+    st.doors['single:single:0'] = { hingeSide: 'left', hingeCount: 'auto', hinges: [], hasDoor: true };
+    const doors = cabinetFrontPanels(input, st, []).filter(p => p.hingeSide !== undefined);
+    expect(doors).toHaveLength(2);
+    const rightmost = doors.reduce((a, b) => (b.x0 > a.x0 ? b : a));
+    expect(rightmost.hingeSide).toBe('right'); // forced gable, not the saved 'left'
+  });
+
+  it('2 fronts WITH a partition: the saved hinge side is honored (inner edge is the divider)', () => {
+    const input = { ...singleBodyInput(), W: 90, maxDoorWidth: 50 };
+    const st = state();
+    st.partitions['single:single'] = true; // a divider panel on the inner edge
+    st.doors['single:single:0'] = { hingeSide: 'left', hingeCount: 'auto', hinges: [], hasDoor: true };
+    const doors = cabinetFrontPanels(input, st, []).filter(p => p.hingeSide !== undefined);
+    const rightmost = doors.reduce((a, b) => (b.x0 > a.x0 ? b : a));
+    expect(rightmost.hingeSide).toBe('left'); // now both edges have a panel → honored
+  });
+
   it('corner (פינה): the door panel is hinged on the filler side, the filler has none', () => {
     const input = kitchenModuleInput('corner'); // door on the right → hinge left
     const panels = cabinetFrontPanels(input, kitchenModuleState('corner') as SavedCabinetState, []);

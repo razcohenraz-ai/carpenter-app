@@ -157,6 +157,8 @@ export default function App(): React.JSX.Element {
             hideEnvelopeTop
             splitShellSides
             hidePlinthEditor
+            kitchenDirectEdit
+            onExit={() => setActiveKitchenUnitId(null)}
           />
         )}
 

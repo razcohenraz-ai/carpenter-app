@@ -24,6 +24,11 @@ interface Props {
   /** When true, hinge controls (side, count, manual positions) are hidden and
    *  replaced with a "מנגנון קלפה" note. Used by wall cabinets. */
   noHinges?: boolean;
+  /** When true, hide the hinge-SIDE chooser: the door is in a multi-front body
+   *  with no partition, so its only panel is the outer gable — the side is
+   *  physically forced and not the carpenter's to change. Count + positions
+   *  stay editable. */
+  lockHingeSide?: boolean;
 }
 
 // Larger door sketch — gives a clearer view of the panel + hinge positions.
@@ -35,7 +40,7 @@ const materialsArray = Object.values(MATERIALS);
 export default function DoorEditor({
   door, interiorItems, displayNumber, globalMaterialId, plinthHeight,
   onHingeSide, onHingeCount, onHingeManual, onResetAuto, onHasDoor, onThickness, onBack,
-  noHinges,
+  noHinges, lockHingeSide,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const interiorWarnings  = computeHingeWarnings(door, interiorItems, door.gapMm ?? 0);
@@ -123,31 +128,37 @@ export default function DoorEditor({
                 <p className={styles.warning}>מנגנון קלפה (דלת נפתחת למעלה)</p>
               ) : (
                 <>
-                  <div className={styles.field}>
-                    <span className={styles.fieldLabel}>{t.doors.hingeSide}</span>
-                    <div className={styles.radioGroup}>
-                      <label>
-                        <input
-                          type="radio"
-                          name={`hingeSide-${door.id}`}
-                          value="right"
-                          checked={door.hingeSide === 'right'}
-                          onChange={() => onHingeSide('right')}
-                        />
-                        {t.doors.hingeRight}
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          name={`hingeSide-${door.id}`}
-                          value="left"
-                          checked={door.hingeSide === 'left'}
-                          onChange={() => onHingeSide('left')}
-                        />
-                        {t.doors.hingeLeft}
-                      </label>
+                  {/* Hinge SIDE is shown only when both edges of the door have a
+                      panel to hinge to (single front, or a partitioned body).
+                      In a multi-front body with no partition the side is forced
+                      onto the outer gable, so the chooser is hidden. */}
+                  {!lockHingeSide && (
+                    <div className={styles.field}>
+                      <span className={styles.fieldLabel}>{t.doors.hingeSide}</span>
+                      <div className={styles.radioGroup}>
+                        <label>
+                          <input
+                            type="radio"
+                            name={`hingeSide-${door.id}`}
+                            value="right"
+                            checked={door.hingeSide === 'right'}
+                            onChange={() => onHingeSide('right')}
+                          />
+                          {t.doors.hingeRight}
+                        </label>
+                        <label>
+                          <input
+                            type="radio"
+                            name={`hingeSide-${door.id}`}
+                            value="left"
+                            checked={door.hingeSide === 'left'}
+                            onChange={() => onHingeSide('left')}
+                          />
+                          {t.doors.hingeLeft}
+                        </label>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className={styles.field}>
                     <label className={styles.fieldLabel} htmlFor={`hinge-count-${door.id}`}>

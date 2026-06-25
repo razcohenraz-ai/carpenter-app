@@ -177,6 +177,8 @@ export interface Translations {
     fixedShelfLabel: string;
     fixedShelfTooltip: string;
     dimOverrideTitle: string;
+    materialOverrideTitle: string;
+    unitSettings: string;
     dimOverrideW: string;
     dimOverrideH: string;
     dimOverrideD: string;
@@ -515,6 +517,8 @@ const he: Translations = {
     fixedShelfLabel: 'קבוע',
     fixedShelfTooltip: 'מדף קבוע מעל מגירה חיצונית — נוצר אוטומטית',
     dimOverrideTitle: 'עקיפת מידות גוף',
+    materialOverrideTitle: 'עקיפת חומרי גוף',
+    unitSettings: 'הגדרות יחידה',
     dimOverrideW: 'רוחב (ס"מ)',
     dimOverrideH: 'גובה (ס"מ)',
     dimOverrideD: 'עומק (ס"מ)',
@@ -830,6 +834,8 @@ const en: Translations = {
     fixedShelfLabel: 'Fixed',
     fixedShelfTooltip: 'Fixed shelf above external drawer — auto-generated',
     dimOverrideTitle: 'Body dimension override',
+    materialOverrideTitle: 'Body material override',
+    unitSettings: 'Unit settings',
     dimOverrideW: 'Width (cm)',
     dimOverrideH: 'Height (cm)',
     dimOverrideD: 'Depth (cm)',

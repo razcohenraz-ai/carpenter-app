@@ -534,8 +534,10 @@ export function productFrontBoxes(
   return kitchenLayoutBoxes(product, b => cabinetFrontBoxes(b.input, b.state, customMaterials));
 }
 
-/** A single cabinet's front faces as thin boxes at its front plane. */
-function cabinetFrontBoxes(
+/** A single cabinet's front faces as thin boxes at its front plane. Exported
+ *  so the per-body editor can overlay THIS body's fronts on its 3D model using
+ *  the same pipeline (no drift from the room view / cut list). */
+export function cabinetFrontBoxes(
   input: CabinetInput,
   state: SavedCabinetState,
   customMaterials: CustomMaterial[],

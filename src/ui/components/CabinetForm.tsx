@@ -4,21 +4,17 @@ import { useCabinet } from '../hooks/useCabinet';
 import { MATERIALS, getMaterialWithCustom } from '../../catalog';
 import { computeInnerWidth } from '../../core/boards/boardModel';
 import { boxStableKey } from '../../core/interior/interiorUtils';
+import { isHingeSideFree } from '../../core/doors/doorUtils';
 import type { MaterialId } from '../../types';
-import type { SavedCabinetState } from '../../types/project';
-import type { InteriorItem } from '../../types/interior';
 import type { Edging } from '../../types/edging';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
-import BoxInteriorEditor from './BoxInteriorEditor';
-import BodyView from './BodyView';
-import BoxBodySketch from './BoxBodySketch';
+import BoxInteriorEditor, { type EditorTab } from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
-import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
 import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import { LIFT_MECHANISMS } from '../../catalog/liftMechanisms';
 import { buildLiftMechanismHardware } from '../../core/lift/liftMechanismHardware';
@@ -141,6 +137,14 @@ interface CabinetFormProps {
    *  Used for kitchen units — plinth is edited at the kitchen level
    *  (KitchenOverview), not per-unit. */
   hidePlinthEditor?: boolean;
+  /** When true, the cabinet is a single-body kitchen unit: skip the form and
+   *  open straight into the per-body editor, with the unit-level controls
+   *  (shell sides, door gap, lift-mechanism family, corner) folded into the
+   *  editor's "unit settings" section. The unit form is retired entirely. */
+  kitchenDirectEdit?: boolean;
+  /** Back-out handler used by the body editor in `kitchenDirectEdit` mode —
+   *  returns to the kitchen (there is no form to fall back to). */
+  onExit?: () => void;
 }
 
 function inputToFormState(
@@ -175,7 +179,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides, hidePlinthEditor }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides, hidePlinthEditor, kitchenDirectEdit, onExit }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -299,17 +303,20 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   // above it.
   type Editing =
     | { type: 'none' }
-    | { type: 'bodyView'; boxId: string }
     | { type: 'box'; boxId: string }
     | { type: 'door'; doorId: string }
     | { type: 'drawer'; drawerId: string }
     | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>({ type: 'none' });
   const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
+  // Kitchen direct-edit: the body editor's active tab is owned here so it
+  // survives the editor remounting when a door/drawer edit opens (and closes).
+  const [kitchenEditorTab, setKitchenEditorTab] = useState<EditorTab>('bodies');
 
-  // Clicking a body opens the per-body VIEW (materials); from there the carpenter
-  // drills into the interior editor. main view → body view → interior editor.
-  function handleBoxClick(boxId: string): void { setEditing({ type: 'bodyView', boxId }); }
+  // Clicking a body opens the per-body editor directly (materials + dimension
+  // overrides + interior + the bodies/fronts/cuts/hardware tabs). main view →
+  // body editor.
+  function handleBoxClick(boxId: string): void { setEditing({ type: 'box', boxId }); }
   function handleDoorClick(doorId: string): void { setEditing({ type: 'door', doorId }); }
   function handleDrawerFrontClick(drawerId: string): void { setEditing({ type: 'drawer', drawerId }); }
   function handlePlinthClick(): void { setEditing({ type: 'plinth' }); }
@@ -698,138 +705,23 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   }
 
   // ── editor views ───────────────────────────────────────────────────────────
-  // The body view, interior editor and door editor each fully replace the main
-  // view; the drawer editor renders as a modal overlay (see below).
+  // The body editor and door editor each fully replace the main view; the
+  // drawer editor renders as a modal overlay (see below).
 
-  if (editing.type === 'bodyView') {
-    const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
-    if (editingBox) {
-      const slotId = boxStableKey(editingBox);
-      const ovr = boxMaterialOverrides.get(slotId);
-      const effBodyMat = ovr?.bodyMaterialId ?? form.bodyMaterialId;
-      const effFrontMat = ovr?.frontMaterialId ?? form.frontMaterialId;
-      const customMats = settings?.customMaterials ?? [];
-      const cabInput = getLastInput();
-
-      // This body's own bodies/fronts/cuts/hardware = the body treated as a
-      // STANDALONE single-body unit (no cabinet plinth or shell — those are
-      // cabinet-level). Reuses the pure compute + fronts, so the per-body tabs
-      // track the cut-list source of truth and the effective per-body material.
-      const bodyInput = cabInput ? {
-        ...cabInput,
-        W: editingBox.W, H: editingBox.H, D: editingBox.D,
-        plinth: 0,
-        hasShell: false, hasShellLeft: false, hasShellRight: false,
-        hasEnvelopeTop: false,
-        doorsPerColumn: 1 as const,
-        bodyMaterialId: effBodyMat,
-        frontMaterialId: effFrontMat,
-        backThickness: ovr?.backThicknessCm ?? cabInput.backThickness,
-      } : null;
-      const bodyState: SavedCabinetState = {
-        interior: { 'single:single': interiorById[editingBox.id] ?? [] },
-        cellInterior: { 'single:single': cellInteriorById[editingBox.id] ?? [[], []] },
-        partitions: { 'single:single': partitionsById.get(editingBox.id) ?? false },
-        doors: {}, plinthGableOverrides: {}, boardOverrides: {},
-      };
-      // Body-view cuts/hardware = the cabinet's cuts SCOPED to this body
-      // (onlyBoxStableKey) — a faithful slice of the cabinet's cut list (full
-      // row context + real shell), never a standalone re-derivation that drifts
-      // from the cabinet on a per-body width override.
-      const bodyResult = cabInput
-        ? computeUnitCutsAndHardware(cabInput, getSnapshot(), customMats, {
-            onlyBoxStableKey: slotId,
-            ...(settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {}),
-            ...(settings?.liftMechanismPriceOverrides ? { liftMechanismPriceOverrides: settings.liftMechanismPriceOverrides } : {}),
-          })
-        : { cuts: [], hardwareItems: [] };
-
-      // Where BoxBodySketch draws the body inside its 300×560 SVG (same padding
-      // + aspect-fit formula). The fronts overlay is positioned over this exact
-      // rect so the Bodies and Fronts tabs show the body at an identical size.
-      const SKW = 300, SKH = 560, BPAD = 8, BDIM_TOP = 30, BDIM_RIGHT = 44;
-      const bDrawW = SKW - BPAD - BDIM_RIGHT;
-      const bDrawH = SKH - BDIM_TOP - BPAD;
-      const bFit = Math.min(bDrawW / Math.max(editingBox.W, 1), bDrawH / Math.max(editingBox.H, 1));
-      const bRectW = editingBox.W * bFit, bRectH = editingBox.H * bFit;
-      const bRectX = BPAD + (bDrawW - bRectW) / 2, bRectY = BDIM_TOP + (bDrawH - bRectH) / 2;
-
-      // One body sketch element, reused as the Bodies tab and as the carcass
-      // behind the Fronts overlay.
-      const bodySketch = (
-        <BoxBodySketch
-          bodyH={editingBox.H}
-          bodyW={editingBox.W}
-          bodyD={editingBox.D}
-          items={interiorById[editingBox.id] ?? []}
-          svgWidth={SKW}
-          svgHeight={SKH}
-          showLabels
-          showDimensions
-          numPartitions={partitionsById.get(editingBox.id) ? 1 : 0}
-          {...(partitionsById.get(editingBox.id)
-            ? { cellItems: (cellInteriorById[editingBox.id] ?? [[], []]) as [InteriorItem[], InteriorItem[]] }
-            : {})}
-          bodyMaterialId={effBodyMat}
-          frontMaterialId={effFrontMat}
-          hasOuterShell={form.hasShell}
-          {...(form.hasEnvelopeTop && form.hasShell ? { hasEnvelopeTop: true } : {})}
-          {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
-          {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
-          {...(initialInput?.liftMechanism === true && form.liftMechanismId ? { liftMechanismId: form.liftMechanismId } : {})}
-        />
-      );
-
-      return (
-        <BodyView
-          box={editingBox}
-          label=""
-          bodyMaterials={availableBodyMaterials}
-          frontMaterials={availableFrontMaterials}
-          cabinetBodyMaterialId={form.bodyMaterialId}
-          cabinetFrontMaterialId={form.frontMaterialId}
-          cabinetBackThicknessMm={parseFloat(form.backThicknessMm) || 0}
-          override={ovr}
-          onSetBodyMaterial={id => setBoxMaterial(slotId, { bodyMaterialId: id })}
-          onSetFrontMaterial={id => setBoxMaterial(slotId, { frontMaterialId: id })}
-          onSetBackThickness={mm => setBoxMaterial(slotId, { backThicknessCm: mm === undefined ? undefined : mm / 10 })}
-          onReset={() => resetBoxMaterials(slotId)}
-          onEditInterior={() => setEditing({ type: 'box', boxId: editing.boxId })}
-          onBack={closeEditor}
-          tabs={{
-            // Single-body sketch, coloured by the EFFECTIVE materials so a per-body
-            // override recolours it live.
-            bodies: bodySketch,
-            // Same body sketch + the door/drawer faces overlaid on the exact body
-            // rect → identical size to the Bodies tab (no resize on tab switch).
-            fronts: bodyInput ? (
-              <div style={{ position: 'relative', width: SKW, height: SKH }}>
-                {bodySketch}
-                <div style={{ position: 'absolute', left: bRectX, top: bRectY, width: bRectW, height: bRectH, pointerEvents: 'none' }}>
-                  <CabinetFrontsOverlay input={bodyInput} state={bodyState} customMaterials={customMats} viewBoxW={editingBox.W} viewBoxH={editingBox.H} />
-                </div>
-              </div>
-            ) : null,
-            cuts: (
-              <CutsList
-                cuts={bodyResult.cuts}
-                settings={{
-                  bodyMaterialPriceOverrides: settings?.bodyMaterialPriceOverrides,
-                  bodyCustomMaterials: settings?.customMaterials,
-                  frontMaterialPriceOverrides: settings?.frontMaterialPriceOverrides,
-                  frontCustomMaterials: settings?.customMaterials,
-                }}
-              />
-            ),
-            hardware: <HardwareList items={bodyResult.hardwareItems} />,
-          }}
-        />
-      );
+  // Kitchen units skip the form and open straight into the per-body editor
+  // (kitchenDirectEdit). The box id can change across recalcs, so fall back to
+  // the unit's single (first non-plinth) body. Door/plinth editing yields to
+  // their own branches below (so clicking a front in the editor's Fronts tab
+  // opens the DoorEditor); the drawer modal renders as an overlay here.
+  if ((editing.type === 'box' || kitchenDirectEdit) && editing.type !== 'door' && editing.type !== 'plinth') {
+    const editingBox =
+      (editing.type === 'box' ? result?.boxes.find(b => b.id === editing.boxId) : null)
+      ?? (kitchenDirectEdit ? result?.boxes.find(b => b.level !== 'plinth') : null)
+      ?? null;
+    if (!editingBox && kitchenDirectEdit) {
+      // Pre-calculate first render — avoid flashing the (retired) form.
+      return <div className={styles.form} />;
     }
-  }
-
-  if (editing.type === 'box') {
-    const editingBox = result?.boxes.find(b => b.id === editing.boxId) ?? null;
     if (editingBox) {
       // `boxStableKey` is the current `BoxSlotId` placeholder used by the
       // per-body edging map (DECISIONS_LOG 2026-05-29 — BoxSlotId refactor
@@ -854,6 +746,147 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
         frontMaterialId: ovr3d?.frontMaterialId ?? form.frontMaterialId,
         backThickness: ovr3d?.backThicknessCm ?? cabInput3d.backThickness,
       } : null;
+      // This body's cut list + hardware, SCOPED to the body (onlyBoxStableKey)
+      // so the Cuts/Hardware tabs are a faithful slice of the cabinet's cut list
+      // (full row context + real shell), never a standalone re-derivation that
+      // would drift on a per-body width override.
+      const customMats3d = settings?.customMaterials ?? [];
+      const snapshot3d = getSnapshot();
+      const bodyResult3d = cabInput3d
+        ? computeUnitCutsAndHardware(cabInput3d, snapshot3d, customMats3d, {
+            onlyBoxStableKey: editingBoxSlotId,
+            ...(settings?.runnerPriceOverrides ? { runnerPriceOverrides: settings.runnerPriceOverrides } : {}),
+            ...(settings?.liftMechanismPriceOverrides ? { liftMechanismPriceOverrides: settings.liftMechanismPriceOverrides } : {}),
+          })
+        : { cuts: [], hardwareItems: [] };
+      // Re-key this body's saved doors to the isolated body's slot
+      // ('single:single:<fi>') so the editor's 3D fronts honor the live hinge
+      // side (the 2D sketch already reads the live doorsById).
+      const slotDoorPrefix = editingBoxSlotId + ':';
+      const bodyDoors: import('../../types/project').SavedCabinetState['doors'] = {};
+      for (const [dk, dv] of Object.entries(snapshot3d.doors)) {
+        if (dk.startsWith(slotDoorPrefix)) bodyDoors[`single:single:${dk.slice(slotDoorPrefix.length)}`] = dv;
+      }
+      // Unit-level controls folded into the editor for kitchen units (the unit
+      // form is retired). All live-calculate on change (there is no "חשב"
+      // button). Material / back / edging / dimensions are covered by the
+      // editor's own per-body override sections, so only shell sides, door gap,
+      // max door width, the wall-envelope + lift-mechanism family (קלפה) and the
+      // corner controls live here.
+      const unitControls = kitchenDirectEdit ? (
+        <>
+          {splitShellSides && (
+            <div className={styles.checkboxRow}>
+              {checkbox('k-shell-left', form.hasShellLeft, t.form.hasShellLeft, v => {
+                setForm(p => ({ ...p, hasShellLeft: v, hasShell: v && p.hasShellRight, ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}) }));
+                const li = getLastInput();
+                if (li) calculate({ ...li, hasShellLeft: v, hasShell: v && form.hasShellRight, ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}) });
+              })}
+              {checkbox('k-shell-right', form.hasShellRight, t.form.hasShellRight, v => {
+                setForm(p => ({ ...p, hasShellRight: v, hasShell: p.hasShellLeft && v, ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}) }));
+                const li = getLastInput();
+                if (li) calculate({ ...li, hasShellRight: v, hasShell: form.hasShellLeft && v, ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}) });
+              })}
+              {initialInput?.mount === 'wall' && checkbox('k-wall-env', form.hasWallEnvelope, t.form.hasWallEnvelope, v => {
+                setForm(p => ({ ...p, hasWallEnvelope: v }));
+                const li = getLastInput();
+                if (li) calculate({ ...li, hasWallEnvelope: v });
+              })}
+            </div>
+          )}
+
+          {initialInput?.liftMechanism === true && (() => {
+            const enabledLift = settings?.enabledLiftMechanismIds;
+            const liftOptions = Object.values(LIFT_MECHANISMS).filter(m => !enabledLift || enabledLift.includes(m.id));
+            const liftBodies = (result?.boxes ?? []).filter(b => b.level !== 'plinth');
+            const liftDims = liftBodies.length > 0 ? liftBodies.map(b => ({ h: b.H, w: b.W })) : [{ h: parseFloat(form.H) || 0, w: parseFloat(form.W) || 0 }];
+            const liftWarnings = !form.liftMechanismId ? [] : Array.from(new Set(
+              liftDims.flatMap(d => buildLiftMechanismHardware({ liftMechanismId: form.liftMechanismId, cabinetHeightCm: d.h, cabinetWidthCm: d.w, flapCount: 1 }).warnings),
+            ));
+            return (
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="k-lift-mechanism">מנגנון הרמה (קלפה)</label>
+                <select id="k-lift-mechanism" className={styles.input} value={form.liftMechanismId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setForm(p => ({ ...p, liftMechanismId: id }));
+                    const li = getLastInput();
+                    if (li) { const { liftMechanismId: _drop, ...rest } = li; calculate(id ? { ...rest, liftMechanismId: id } : rest); }
+                  }}>
+                  <option value="">ללא</option>
+                  {liftOptions.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                {liftWarnings.map((w, i) => <span key={i} style={{ color: '#b8860b', fontSize: '0.8rem', marginTop: 2 }}>{w}</span>)}
+              </div>
+            );
+          })()}
+
+          {initialInput?.cornerFiller && (
+            <>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="k-corner-door-side">{t.form.cornerDoorSide}</label>
+                <select id="k-corner-door-side" className={styles.input} value={form.cornerDoorSide}
+                  onChange={e => { const side = e.target.value as 'left' | 'right'; setForm(p => ({ ...p, cornerDoorSide: side })); const li = getLastInput(); if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorSide: side } }); }}>
+                  <option value="right">{t.form.cornerSideRight}</option>
+                  <option value="left">{t.form.cornerSideLeft}</option>
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="k-corner-door-w">{t.form.cornerDoorWidth}</label>
+                <input id="k-corner-door-w" className={styles.input} type="number" min={1} step={1} value={form.cornerDoorWidthCm}
+                  onChange={e => { const val = e.target.value; setForm(p => ({ ...p, cornerDoorWidthCm: val })); const li = getLastInput(); if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorWidthCm: Math.max(parseFloat(val) || 60, 1) } }); }} />
+              </div>
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="k-corner-return">{t.form.cornerReturn}</label>
+                <input id="k-corner-return" className={styles.input} type="number" min={0} step={1} value={form.cornerReturnCm}
+                  onChange={e => { const val = e.target.value; setForm(p => ({ ...p, cornerReturnCm: val })); const li = getLastInput(); if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, returnDepthCm: Math.max(parseFloat(val) || 7, 0) } }); }} />
+              </div>
+            </>
+          )}
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="k-door-gap">{t.form.doorGap}</label>
+            <input id="k-door-gap" className={styles.input} type="number" value={form.doorGap} step={0.5} min={0}
+              onChange={e => { const val = e.target.value; setForm(p => ({ ...p, doorGap: val, doorGapManuallySet: true })); const li = getLastInput(); if (li) calculate({ ...li, doorGapMm: parseFloat(val) || 0 }); }}
+              onFocus={e => e.target.select()} />
+            {(parseFloat(form.doorGap) || 0) > 4 && <span className={styles.warnMsg}>{t.form.doorGapWarn}</span>}
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="k-max-door-width">{t.form.maxDoorWidth}</label>
+            <input id="k-max-door-width" className={styles.input} type="number" value={form.maxDoorWidth} step={5} min={10}
+              onChange={e => { const val = e.target.value; setForm(p => ({ ...p, maxDoorWidth: val })); const li = getLastInput(); if (li) calculate({ ...li, maxDoorWidth: Math.max(parseFloat(val) || 60, 10) }); }}
+              onFocus={e => e.target.select()} />
+          </div>
+        </>
+      ) : undefined;
+      // Interactive fronts sketch for the editor's Fronts tab (kitchen only):
+      // the SAME elevation the cabinet uses — clickable doors (→ DoorEditor) and
+      // visible hinge marks. A kitchen unit is one body, so the unit's fronts =
+      // this body's fronts.
+      const frontsSketch = kitchenDirectEdit ? (
+        <CabinetFrontsSketch
+          W={form.W}
+          H={form.H}
+          D={form.D}
+          plinth={form.plinth}
+          doorsPerColumn={form.doorsPerColumn}
+          {...(form.hasWallEnvelope && initialInput?.mount === 'wall' ? { wallEnvelopeCm: frontThicknessCm } : {})}
+          {...(needsLower ? { lowerDoorH: form.lowerDoorH } : {})}
+          {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
+          doorsById={doorsById}
+          displayNumbers={displayNumbers}
+          drawerFrontsById={drawerFrontsById}
+          partitionsById={partitionsById}
+          frontLayoutByRow={frontLayoutByRow}
+          numFrontsPerBox={numFrontsPerBox}
+          onDrawerFrontClick={handleDrawerFrontClick}
+          onDoorClick={handleDoorClick}
+          {...(boxDimensionOverrides.size > 0 ? { boxDimensionOverrides } : {})}
+          {...(initialInput?.cornerFiller ? { cornerFiller: initialInput.cornerFiller } : {})}
+          {...(initialInput?.liftMechanism ? { liftUp: true } : {})}
+        />
+      ) : undefined;
       return (
         <div className={styles.form}>
           <BoxInteriorEditor
@@ -862,7 +895,29 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             customMaterials={settings?.customMaterials ?? []}
             items={interiorById[editingBox.id] ?? []}
             onChange={items => setBoxInterior(editingBox.id, items)}
-            onBack={() => setEditing({ type: 'bodyView', boxId: editingBox.id })}
+            onBack={kitchenDirectEdit && onExit ? onExit : closeEditor}
+            {...(unitControls ? { unitControls } : {})}
+            {...(frontsSketch ? { frontsSketch } : {})}
+            {...(kitchenDirectEdit ? { tab: kitchenEditorTab, onTabChange: setKitchenEditorTab } : {})}
+            bodyDoors={bodyDoors}
+            bodyMaterialOverride={ovr3d}
+            availableBodyMaterials={availableBodyMaterials}
+            availableFrontMaterials={availableFrontMaterials}
+            cabinetBodyMaterialId={form.bodyMaterialId}
+            cabinetFrontMaterialId={form.frontMaterialId}
+            cabinetBackThicknessMm={parseFloat(form.backThicknessMm) || 0}
+            onSetBodyMaterial={id => setBoxMaterial(editingBoxSlotId, { bodyMaterialId: id })}
+            onSetFrontMaterial={id => setBoxMaterial(editingBoxSlotId, { frontMaterialId: id })}
+            onSetBackThickness={mm => setBoxMaterial(editingBoxSlotId, { backThicknessCm: mm === undefined ? undefined : mm / 10 })}
+            onResetBoxMaterials={() => resetBoxMaterials(editingBoxSlotId)}
+            cuts={bodyResult3d.cuts}
+            hardwareItems={bodyResult3d.hardwareItems}
+            cutsSettings={{
+              bodyMaterialPriceOverrides: settings?.bodyMaterialPriceOverrides,
+              bodyCustomMaterials: settings?.customMaterials,
+              frontMaterialPriceOverrides: settings?.frontMaterialPriceOverrides,
+              frontCustomMaterials: settings?.customMaterials,
+            }}
             numFronts={numFrontsPerBox.get(editingBox.id) ?? 1}
             hasPartitions={partitionsById.get(editingBox.id) ?? false}
             onAddPartition={() => addPartition(editingBox.id)}
@@ -891,6 +946,18 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
             {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
           />
+          {/* Kitchen direct-edit: clicking an external-drawer front in the
+              Fronts tab opens its editor as an overlay (the main form — which
+              normally hosts this modal — is retired for kitchen units). */}
+          {kitchenDirectEdit && editing.type === 'drawer' && drawerById[editing.drawerId] && (
+            <ExternalDrawerEditor
+              drawer={drawerById[editing.drawerId]!}
+              onSetHeight={h => setDrawerHeight(editing.drawerId, h)}
+              onSetThicknessOverride={mid => setDrawerFrontThickness(editing.drawerId, mid)}
+              onDelete={() => { deleteDrawer(editing.drawerId); closeEditor(); }}
+              onClose={closeEditor}
+            />
+          )}
         </div>
       );
     }
@@ -934,6 +1001,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   if (editing.type === 'door') {
     const door = doorsById[editing.doorId];
     if (door) {
+      // The hinge SIDE is the carpenter's to choose only when both door edges
+      // have a panel — a single front, or a partitioned body. Otherwise it's
+      // forced onto the outer gable, so the chooser is hidden.
+      const lockHingeSide = !isHingeSideFree(
+        numFrontsPerBox.get(door.boxId) ?? 1,
+        partitionsById.get(door.boxId) ?? false,
+      );
       return (
         <div className={styles.form}>
           <DoorEditor
@@ -950,6 +1024,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onThickness={matId => setDoorThickness(editing.doorId, matId)}
             onBack={closeEditor}
             {...(initialInput?.liftMechanism === true ? { noHinges: true } : {})}
+            {...(lockHingeSide ? { lockHingeSide: true } : {})}
           />
         </div>
       );

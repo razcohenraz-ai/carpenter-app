@@ -243,6 +243,15 @@ export function salonHingeSide(frontIndex: number, numFronts: number): 'right' |
   return frontIndex < Math.ceil(numFronts / 2) ? 'right' : 'left';
 }
 
+/** A cup hinge must screw into a vertical panel, so a door's hinge side is the
+ *  carpenter's to choose only when BOTH of its edges have a panel: a single
+ *  front (both edges are gables), or a partitioned body (the inner edge is the
+ *  divider). A multi-front body with NO partition forces each door onto its
+ *  outer gable ("salon") — the shared middle edge has no panel to hinge to. */
+export function isHingeSideFree(numFronts: number, hasPartition: boolean): boolean {
+  return numFronts <= 1 || hasPartition;
+}
+
 // ── Door panel dimensions ────────────────────────────────────────────────────
 // Door WIDTH is no longer computed here — it's a function of the whole cabinet
 // (see `core/geometry/frontGeometry.ts`). This module owns only door HEIGHT

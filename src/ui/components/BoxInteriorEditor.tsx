@@ -1,7 +1,10 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
-import { cabinetBoardBoxes } from '../../core/product/cabinetBoards3D';
+import CutsList from './CutsList';
+import { HardwareList } from './HardwareList';
+import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
+import { cabinetBoardBoxes, cabinetFrontBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import {
   addShelfRedistributed,
@@ -21,6 +24,9 @@ import type { MaterialId, CustomMaterial } from '../../types/materials';
 import type { CabinetInput } from '../../types/cabinet';
 import type { SavedCabinetState } from '../../types/project';
 import type { Translations } from '../../i18n/translations';
+import type { CutItem } from '../../types/cuts';
+import type { HardwareLineItem } from '../../types/hardware';
+import type { BoxMaterialOverride } from '../../core/boards/boxMaterials';
 
 /** Lazy — pulls in react-three-fiber / three only when the 3D toggle is used. */
 const Body3DView = lazy(() => import('./Body3DView'));
@@ -101,6 +107,51 @@ interface Props {
    *  — the 3D toggle is then hidden. */
   bodyInput: CabinetInput | null;
   customMaterials: CustomMaterial[];
+  // ── Per-body MATERIAL override (relocated from the old body-view screen) ──
+  /** This body's material override, if any (`undefined` ↔ inheriting cabinet). */
+  bodyMaterialOverride: BoxMaterialOverride | undefined;
+  /** Enabled body / front material options (id + name) for the dropdowns. */
+  availableBodyMaterials: { id: string; name: string }[];
+  availableFrontMaterials: { id: string; name: string }[];
+  /** Cabinet-wide defaults — shown as the "inherit" target in each dropdown. */
+  cabinetBodyMaterialId: MaterialId;
+  cabinetFrontMaterialId: MaterialId;
+  /** Cabinet-wide back-panel thickness (mm) — the back-thickness placeholder. */
+  cabinetBackThicknessMm: number;
+  onSetBodyMaterial: (id: MaterialId | undefined) => void;
+  onSetFrontMaterial: (id: MaterialId | undefined) => void;
+  onSetBackThickness: (mm: number | undefined) => void;
+  onResetBoxMaterials: () => void;
+  // ── Per-body scoped lists for the Cuts / Hardware tabs ──
+  /** This body's cut list (computed by the parent with full cabinet context). */
+  cuts: CutItem[];
+  /** This body's hardware list. */
+  hardwareItems: HardwareLineItem[];
+  /** Price-override slice passed straight to CutsList (per-sheet costing). */
+  cutsSettings?: {
+    bodyMaterialPriceOverrides?: Partial<Record<MaterialId, number>> | undefined;
+    bodyCustomMaterials?: CustomMaterial[] | undefined;
+    frontMaterialPriceOverrides?: Partial<Record<MaterialId, number>> | undefined;
+    frontCustomMaterials?: CustomMaterial[] | undefined;
+  };
+  /** Folded-in unit-level controls (kitchen direct-edit): shell sides, door
+   *  gap, lift-mechanism family, corner controls. Rendered as a "unit settings"
+   *  section so the kitchen unit form can be retired. Omitted elsewhere. */
+  unitControls?: React.ReactNode;
+  /** Interactive fronts elevation for the Fronts tab (kitchen direct-edit) —
+   *  the real CabinetFrontsSketch with clickable doors (→ door editor) and
+   *  hinge marks. When present it replaces the body + overlay on the 2D Fronts
+   *  tab. Omitted elsewhere (the synthetic overlay is used instead). */
+  frontsSketch?: React.ReactNode;
+  /** Controlled active tab. When provided (with `onTabChange`) the parent owns
+   *  the tab so it survives the editor remounting on door/drawer edits (kitchen
+   *  direct-edit). Omit for internal, uncontrolled tab state. */
+  tab?: EditorTab;
+  onTabChange?: (tab: EditorTab) => void;
+  /** This body's saved doors (hinge side etc.), re-keyed to the isolated body's
+   *  slot (`single:single:<fi>`), so the 3D fronts reflect the live hinge side
+   *  edited in the door editor — not the geometric default. */
+  bodyDoors?: SavedCabinetState['doors'];
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -109,6 +160,20 @@ const SKETCH_W      = 270;
 const SKETCH_H      = 570;
 const CELL_SKETCH_W = 195;
 const CELL_SKETCH_H = 390;
+
+// BoxBodySketch's internal layout (showDimensions=true) — mirrored here so the
+// 2D fronts overlay lands exactly on the body rectangle inside the SVG.
+const SK_PAD = 8, SK_DIM_TOP = 30, SK_DIM_RIGHT = 44;
+
+/** Roles hidden behind closed doors — dropped in the editor's 'fronts' tab 3D,
+ *  mirroring RoomView3D so the two never diverge. */
+const INTERIOR_ROLES_3D = new Set<BoardBox3D['role']>([
+  'rod', 'drawer-box', 'runner', 'lift-mechanism', 'shelf', 'fixed-shelf', 'internal-shelf',
+]);
+
+/** The 'bodies'/'fronts' tabs are one editable screen; 'cuts'/'hardware' are
+ *  read-only lists scoped to this body. */
+export type EditorTab = 'bodies' | 'fronts' | 'cuts' | 'hardware';
 
 export default function BoxInteriorEditor({
   box, items, onChange, onBack, numFronts, hasPartitions,
@@ -123,6 +188,12 @@ export default function BoxInteriorEditor({
   shelfOnly,
   topVariant, sinkTraverseWidthCm,
   bodyInput, customMaterials,
+  bodyMaterialOverride, availableBodyMaterials, availableFrontMaterials,
+  cabinetBodyMaterialId, cabinetFrontMaterialId, cabinetBackThicknessMm,
+  onSetBodyMaterial, onSetFrontMaterial, onSetBackThickness, onResetBoxMaterials,
+  cuts, hardwareItems, cutsSettings,
+  unitControls, frontsSketch,
+  tab: controlledTab, onTabChange, bodyDoors,
   enabledRunnerIds = [],
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -132,6 +203,10 @@ export default function BoxInteriorEditor({
   );
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
   const [view, setView] = useState<'2d' | '3d'>('3d');
+  const [tabInternal, setTabInternal] = useState<EditorTab>('bodies');
+  const tab: EditorTab = controlledTab ?? tabInternal;
+  const setTab = (next: EditorTab): void => { if (onTabChange) onTabChange(next); else setTabInternal(next); };
+  const showFronts = tab === 'fronts';
 
   // Live 3D boxes for THIS body, built from the editor's local items via the
   // same cabinetBoardBoxes pipeline as the room view (single source — no drift).
@@ -143,6 +218,35 @@ export default function BoxInteriorEditor({
   };
   const boxes3D = bodyInput ? cabinetBoardBoxes(bodyInput, bodyState3d, customMaterials) : [];
   const show3d = view === '3d' && bodyInput !== null && boxes3D.length > 0;
+  // 'fronts' tab 3D: closed doors over an empty carcass (drop the interior
+  // pieces, add this body's front faces) — mirrors RoomView3D's fronts view.
+  const frontBoxes3D = showFronts && bodyInput
+    ? cabinetFrontBoxes(bodyInput, { ...bodyState3d, doors: bodyDoors ?? {} }, customMaterials) : [];
+  const displayBoxes3D: BoardBox3D[] = showFronts
+    ? [...boxes3D.filter(b => !INTERIOR_ROLES_3D.has(b.role)), ...frontBoxes3D]
+    : boxes3D;
+
+  // Per-body material-override helpers (the relocated body-view controls).
+  const hasMaterialOverride = bodyMaterialOverride !== undefined
+    && Object.keys(bodyMaterialOverride).length > 0;
+  const matName = (opts: { id: string; name: string }[], id: string): string =>
+    opts.find(m => m.id === id)?.name ?? id;
+  // EFFECTIVE materials for THIS body — the 2D sketch must colour by the
+  // override (falling back to the cabinet default), not the cabinet material,
+  // so a per-body override recolours the body live (matches the cut list / 3D).
+  const effBodyMatId = bodyMaterialOverride?.bodyMaterialId ?? bodyMaterialId;
+  const effFrontMatId = bodyMaterialOverride?.frontMaterialId ?? frontMaterialId;
+
+  // 2D fronts overlay rectangle inside the body SVG (same fit math as
+  // BoxBodySketch with showDimensions). Used to lay CabinetFrontsOverlay over
+  // the editable single-body sketch on the 'fronts' tab.
+  const frontsOverlayRect = (() => {
+    const drawW = SKETCH_W - SK_PAD - SK_DIM_RIGHT;
+    const drawH = SKETCH_H - SK_DIM_TOP - SK_PAD;
+    const scale = Math.min(drawH / Math.max(box.H, 1), drawW / Math.max(box.W, 1));
+    const bW = box.W * scale, bH = box.H * scale;
+    return { left: SK_PAD + (drawW - bW) / 2, top: SK_DIM_TOP + (drawH - bH) / 2, width: bW, height: bH };
+  })();
   const [boxShelfWarnings,  setBoxShelfWarnings]  = useState<ShelfWarning[]>([]);
   const [cellShelfWarnings, setCellShelfWarnings] = useState<ShelfWarning[][]>([[], []]);
   // Where to drop the new drawer once the user picks internal/external.
@@ -649,6 +753,41 @@ export default function BoxInteriorEditor({
         </h2>
       </div>
 
+      {/* Tab bar — גופים/חזיתות share the editable screen (fronts just adds the
+          door overlay); חיתוכים/פרזולים are read-only lists for this body.
+          Sits above the unit-settings section. */}
+      <div className={styles.viewToggle}>
+        {(['bodies', 'fronts', 'cuts', 'hardware'] as const).map(id => (
+          <button
+            key={id}
+            type="button"
+            className={`${styles.viewBtn} ${tab === id ? styles.viewBtnActive : ''}`}
+            onClick={() => setTab(id)}
+          >
+            {id === 'bodies' ? t.doors.bodies
+              : id === 'fronts' ? t.doors.fronts
+              : id === 'cuts' ? t.cutsList.tab
+              : t.hardwareList.tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Folded-in unit-level controls (kitchen direct-edit) — shell sides,
+          door gap, lift-mechanism family, corner controls. Sits under the tabs
+          so the kitchen unit form is fully retired. */}
+      {unitControls && (
+        <div className={styles.dimOverrideSection}>
+          <span className={styles.dimOverrideTitle}>{t.interior.unitSettings}</span>
+          {unitControls}
+        </div>
+      )}
+
+      {tab === 'cuts' ? (
+        <CutsList cuts={cuts} {...(cutsSettings ? { settings: cutsSettings } : {})} />
+      ) : tab === 'hardware' ? (
+        <HardwareList items={hardwareItems} />
+      ) : (
+      <>
       {/* Per-body edging override.
           - "כמו ארון" (default) → no override entry; cabinet edging applies.
           - "מותאם" → an entry seeded from `cabinetEdging`, then edited
@@ -759,6 +898,57 @@ export default function BoxInteriorEditor({
         )}
       </div>
 
+      {/* ── Per-body material override (relocated from the body view) ─────────
+          Body material / front material / back-panel thickness. Sits directly
+          under the dimension override; visible in both 2D and 3D. */}
+      <div className={styles.dimOverrideSection}>
+        <span className={styles.dimOverrideTitle}>{t.interior.materialOverrideTitle}</span>
+        <label className={styles.dimOverrideField}>
+          <span className={styles.dimOverrideLabel}>{t.form.bodyMaterial}</span>
+          <select
+            className={styles.edgingSelect}
+            value={bodyMaterialOverride?.bodyMaterialId ?? ''}
+            onChange={e => onSetBodyMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
+          >
+            <option value="">{t.bodyView.inherit}: {matName(availableBodyMaterials, cabinetBodyMaterialId)}</option>
+            {availableBodyMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label className={styles.dimOverrideField}>
+          <span className={styles.dimOverrideLabel}>{t.form.frontMaterial}</span>
+          <select
+            className={styles.edgingSelect}
+            value={bodyMaterialOverride?.frontMaterialId ?? ''}
+            onChange={e => onSetFrontMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
+          >
+            <option value="">{t.bodyView.inherit}: {matName(availableFrontMaterials, cabinetFrontMaterialId)}</option>
+            {availableFrontMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label className={styles.dimOverrideField}>
+          <span className={styles.dimOverrideLabel}>{t.form.backThickness}</span>
+          <input
+            type="number"
+            className={styles.dimOverrideInput}
+            step={0.5}
+            min={0}
+            value={bodyMaterialOverride?.backThicknessCm !== undefined ? bodyMaterialOverride.backThicknessCm * 10 : ''}
+            placeholder={String(cabinetBackThicknessMm)}
+            onChange={e => onSetBackThickness(e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0))}
+            onFocus={e => e.target.select()}
+          />
+        </label>
+        {hasMaterialOverride && (
+          <button
+            type="button"
+            className={styles.dimOverrideResetBtn}
+            onClick={onResetBoxMaterials}
+          >
+            {t.bodyView.reset}
+          </button>
+        )}
+      </div>
+
       {/* ── 2D / 3D preview toggle ──────────────────────────────────────── */}
       {bodyInput && (
         <div className={styles.viewToggle}>
@@ -783,11 +973,17 @@ export default function BoxInteriorEditor({
           on the controls below; switch to 2D for drag-to-move. */}
       {show3d && (
         <Suspense fallback={<div className={styles.view3dFallback} />}>
-          <Body3DView boxes={boxes3D} />
+          <Body3DView boxes={displayBoxes3D} />
         </Suspense>
       )}
 
-      {hasPartitions ? (
+      {!show3d && showFronts && frontsSketch ? (
+        /* ── Fronts tab (kitchen): interactive elevation — clickable doors
+            (→ door editor) + hinge marks, in place of the body + overlay. ── */
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          {frontsSketch}
+        </div>
+      ) : hasPartitions ? (
         /* ── Cell editor (partition mode) ── */
         <div className={styles.partitionBody}>
           <div className={styles.partitionToolbar}>
@@ -821,8 +1017,8 @@ export default function BoxInteriorEditor({
                         showLabels={false}
                         onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
                         numPartitions={0}
-                        bodyMaterialId={bodyMaterialId}
-                        frontMaterialId={frontMaterialId}
+                        bodyMaterialId={effBodyMatId}
+                        frontMaterialId={effFrontMatId}
                         hasOuterShell={false}
                         hasEnvelopeTop={false}
                       />
@@ -872,24 +1068,39 @@ export default function BoxInteriorEditor({
           {/* Sketch (2D) — hidden while the 3D model is showing */}
           {!show3d && (
             <div className={styles.sketchCol}>
-              <BoxBodySketch
-                bodyH={bodyH}
-                bodyW={box.W}
-                bodyD={box.D}
-                items={localItems}
-                svgWidth={SKETCH_W}
-                svgHeight={SKETCH_H}
-                showLabels
-                showDimensions
-                onItemMove={onItemMove}
-                numPartitions={0}
-                bodyMaterialId={bodyMaterialId}
-                frontMaterialId={frontMaterialId}
-                hasOuterShell={hasOuterShell}
-                hasEnvelopeTop={hasEnvelopeTop}
-                {...(topVariant ? { topVariant } : {})}
-                {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
-              />
+              <div style={{ position: 'relative', width: SKETCH_W, height: SKETCH_H }}>
+                <BoxBodySketch
+                  bodyH={bodyH}
+                  bodyW={box.W}
+                  bodyD={box.D}
+                  items={localItems}
+                  svgWidth={SKETCH_W}
+                  svgHeight={SKETCH_H}
+                  showLabels
+                  showDimensions
+                  onItemMove={onItemMove}
+                  numPartitions={0}
+                  bodyMaterialId={effBodyMatId}
+                  frontMaterialId={effFrontMatId}
+                  hasOuterShell={hasOuterShell}
+                  hasEnvelopeTop={hasEnvelopeTop}
+                  {...(topVariant ? { topVariant } : {})}
+                  {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
+                />
+                {/* 'fronts' tab — overlay this body's door/drawer faces on the
+                    editable sketch (translucent, interior still visible). */}
+                {showFronts && bodyInput && (
+                  <div style={{ position: 'absolute', ...frontsOverlayRect, pointerEvents: 'none' }}>
+                    <CabinetFrontsOverlay
+                      input={bodyInput}
+                      state={bodyState3d}
+                      customMaterials={customMaterials}
+                      viewBoxW={box.W}
+                      viewBoxH={box.H}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -931,6 +1142,8 @@ export default function BoxInteriorEditor({
             )}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Line } from '@react-three/drei';
 import type { BoardBox3D } from '../../core/product/cabinetBoards3D';
 import { colorForRole } from './boards3DStyle';
 import { ViewButtons, CameraRig, type CamCmd, type ViewPreset } from './cameraViews';
@@ -11,6 +11,23 @@ interface Props {
    *  `cabinetBoardBoxes` (the SAME pipeline RoomView3D uses), so the geometry
    *  can never drift from the cut list / 2D sketch / room view. */
   boxes: BoardBox3D[];
+}
+
+/** Hinge-marking triangle on a door's outward face (product-local coords, no
+ *  room rotation). Apex points to the OPENING (free) side — opposite the hinge.
+ *  'top' = lift-up door (קלפה) → apex points down. Mirrors RoomView3D's marking
+ *  so 2D, room-3D and the editor-3D all read the same. */
+function hingeTriangleLocal(b: BoardBox3D): [number, number, number][] {
+  const z = b.z1 + 0.3; // lift just off the face so it never z-fights
+  const yTop = b.y1, yBot = b.y0, yMid = (b.y0 + b.y1) / 2;
+  if (b.hingeSide === 'top') {
+    const midX = (b.x0 + b.x1) / 2;
+    return [[b.x0, yTop, z], [midX, yBot, z], [b.x1, yTop, z]];
+  }
+  // left hinge → apex points right; right hinge → apex points left.
+  const apexX = b.hingeSide === 'left' ? b.x1 : b.x0;
+  const openX = b.hingeSide === 'left' ? b.x0 : b.x1;
+  return [[openX, yTop, z], [apexX, yMid, z], [openX, yBot, z]];
 }
 
 /** View-only 3D model of a SINGLE body: every carcass / shelf / drawer / rod
@@ -63,8 +80,8 @@ export default function Body3DView({ boxes }: Props): React.JSX.Element {
             );
           }
 
-          return (
-            <mesh key={i} position={c}>
+          const meshEl = (
+            <mesh position={c}>
               <boxGeometry args={[
                 Math.max(b.x1 - b.x0, 0.1),
                 Math.max(b.y1 - b.y0, 0.1),
@@ -73,6 +90,17 @@ export default function Body3DView({ boxes }: Props): React.JSX.Element {
               <meshStandardMaterial color={colorForRole(b.role)} />
             </mesh>
           );
+
+          // Door faces (fronts view) get the hinge/opening triangle on top.
+          if (b.role === 'front' && b.hingeSide) {
+            return (
+              <group key={i}>
+                {meshEl}
+                <Line points={hingeTriangleLocal(b)} color="#5a5a5a" lineWidth={1.5} transparent opacity={0.75} />
+              </group>
+            );
+          }
+          return <group key={i}>{meshEl}</group>;
         })}
 
         <OrbitControls target={center} makeDefault zoomToCursor />

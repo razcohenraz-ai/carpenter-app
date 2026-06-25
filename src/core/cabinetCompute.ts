@@ -19,7 +19,7 @@ import { buildDoorCutItems } from './cuts/doorCuts';
 import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/cornerModule';
 import { computePartitionCuts } from './cuts/partitionCuts';
 import { boxStableKey } from './interior/interiorUtils';
-import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
+import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, isHingeSideFree, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
 import {
   computeRowFrontLayout,
   getTotalFrontsInRow,
@@ -275,7 +275,13 @@ export function computeUnitCutsAndHardware(
         newDoors[doorId] = {
           id: doorId, boxId: box.id, frontIndex: fi,
           height: panelH, width: frontW,
-          hingeSide: cornerCf ? cornerHingeSide(cornerCf) : savedDoor.hingeSide,
+          // A saved hinge side is honored only when the side is physically
+          // free to choose; otherwise it's clamped to the forced gable
+          // (salon), so an old/invalid value can never render an impossible
+          // hinge (a door hinged into an open middle with no panel).
+          hingeSide: cornerCf
+            ? cornerHingeSide(cornerCf)
+            : isHingeSideFree(numFronts, hasPartition) ? savedDoor.hingeSide : salonHingeSide(fi, numFronts),
           hingeCount: isWall ? 0 : savedDoor.hingeCount,
           hinges,
           hasDoor: savedDoor.hasDoor,

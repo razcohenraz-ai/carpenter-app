@@ -14,7 +14,7 @@ import {
 import { boxStableKey } from '../interior/interiorUtils';
 import {
   calcMainDoorHeight, getItemsForFront, salonHingeSide, defaultHingeSide, shouldCoverSkirt,
-  getDrawerFrontVisualHeight, getSkirtCoveringDrawer,
+  getDrawerFrontVisualHeight, getSkirtCoveringDrawer, isHingeSideFree,
 } from '../doors/doorUtils';
 import { deriveDrawerFronts } from '../doors/drawerFrontsCalc';
 import { getShellSides } from '../../types/cabinet';
@@ -245,12 +245,20 @@ export function cabinetFrontPanels(
       if (panelH <= MIN_DOOR_PANEL_H_CM) continue;
       // Door.frontIndex 0 is the body's RIGHTMOST column → leftmost = nf-1-fi.
       const doorX = bodyFrontX(bodyLayout, numFronts - 1 - fi);
+      // Honor a user-saved hinge side so the elevation overlay + 3D fronts match
+      // the live door state (edited in the door editor) — but only when the side
+      // is physically free to choose; otherwise clamp to the forced gable
+      // (salon). Lift-up doors (קלפה) always hinge at the top.
+      const savedDoorHinge = state.doors[`${boxStableKey(box)}:${fi}`];
+      const hingeFree = isHingeSideFree(numFronts, hasPartition);
       const hingeSide: 'left' | 'right' | 'top' =
         inp.liftMechanism === true
           ? 'top'
-          : numFronts > 1
-            ? salonHingeSide(fi, numFronts)
-            : defaultHingeSide(box.position, allPositions);
+          : savedDoorHinge && hingeFree
+            ? savedDoorHinge.hingeSide
+            : numFronts > 1
+              ? salonHingeSide(fi, numFronts)
+              : defaultHingeSide(box.position, allPositions);
       // When this door (not an external drawer) carries the skirt, it extends
       // DOWN over the plinth — its bottom drops, the top stays. Mirrors
       // getDoorVisualHeight; the structural panelH is unchanged.
