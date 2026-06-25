@@ -216,12 +216,19 @@ export default function BoxInteriorEditor({
     partitions: { 'single:single': hasPartitions },
     doors: {}, plinthGableOverrides: {}, boardOverrides: {},
   };
+  // Fronts view shares ONE state between the 2D overlay and the 3D so the hinge
+  // side can never diverge: both read this body's live per-front door choices
+  // (re-keyed to the isolated 'single:single' slot). Without the doors here the
+  // 2D overlay fell back to the geometric default and ignored a saved hinge side
+  // while the 3D moved — the cabinet-only 2D/3D split (the kitchen avoids it by
+  // using the interactive CabinetFrontsSketch for its 2D fronts).
+  const bodyFrontsState: SavedCabinetState = { ...bodyState3d, doors: bodyDoors ?? {} };
   const boxes3D = bodyInput ? cabinetBoardBoxes(bodyInput, bodyState3d, customMaterials) : [];
   const show3d = view === '3d' && bodyInput !== null && boxes3D.length > 0;
   // 'fronts' tab 3D: closed doors over an empty carcass (drop the interior
   // pieces, add this body's front faces) — mirrors RoomView3D's fronts view.
   const frontBoxes3D = showFronts && bodyInput
-    ? cabinetFrontBoxes(bodyInput, { ...bodyState3d, doors: bodyDoors ?? {} }, customMaterials) : [];
+    ? cabinetFrontBoxes(bodyInput, bodyFrontsState, customMaterials) : [];
   const displayBoxes3D: BoardBox3D[] = showFronts
     ? [...boxes3D.filter(b => !INTERIOR_ROLES_3D.has(b.role)), ...frontBoxes3D]
     : boxes3D;
@@ -1093,7 +1100,7 @@ export default function BoxInteriorEditor({
                   <div style={{ position: 'absolute', ...frontsOverlayRect, pointerEvents: 'none' }}>
                     <CabinetFrontsOverlay
                       input={bodyInput}
-                      state={bodyState3d}
+                      state={bodyFrontsState}
                       customMaterials={customMaterials}
                       viewBoxW={box.W}
                       viewBoxH={box.H}

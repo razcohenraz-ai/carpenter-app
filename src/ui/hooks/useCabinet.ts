@@ -476,7 +476,21 @@ export function useCabinet(settings?: {
   function _mutateDoor(boxId: string, updated: Door): void {
     const newDoors = { ...doorsRef.current, [boxId]: updated };
     doorsRef.current = newDoors;
-    setDoorsById(newDoors);
+    // Re-run the calculation so the change reaches `result` — this is what
+    // triggers the auto-save effect (keyed on `result`) in the consumers
+    // (CabinetForm). Without it a door edit (hinge side/count/positions,
+    // hasDoor, thickness) lives only in `doorsRef` and is never persisted:
+    // a single cabinet keeps it in memory across "back" (hook stays mounted),
+    // but a kitchen unit unmounts on "back" and reloads from the saved state,
+    // silently dropping the change. calculate() reads `doorsRef.current` first
+    // and preserves the saved hinge side (door loop spreads `...oldDoor`), so
+    // recalculating does not overwrite the edit. Mirrors how every other soft
+    // override (plinth gables, board overrides) refreshes via calculate().
+    if (lastInputRef.current) {
+      calculate(lastInputRef.current);
+    } else {
+      setDoorsById(newDoors);
+    }
   }
 
   // ── Drawer (external) mutations ───────────────────────────────────────────
