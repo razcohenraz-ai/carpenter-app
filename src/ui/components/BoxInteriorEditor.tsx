@@ -5,6 +5,7 @@ import CutsList from './CutsList';
 import { HardwareList } from './HardwareList';
 import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
 import { cabinetBoardBoxes, cabinetFrontBoxes, type BoardBox3D } from '../../core/product/cabinetBoards3D';
+import { makeDoorId } from '../../core/doors/doorUtils';
 import { syncFixedShelf } from '../../core/interior/fixedShelfUtils';
 import {
   addShelfRedistributed,
@@ -152,6 +153,16 @@ interface Props {
    *  slot (`single:single:<fi>`), so the 3D fronts reflect the live hinge side
    *  edited in the door editor — not the geometric default. */
   bodyDoors?: SavedCabinetState['doors'];
+  /** When set, the 2D fronts overlay's door faces become clickable (the cabinet
+   *  body editor's "click a front → open its editor", matching the main view and
+   *  the kitchen). The overlay reports the ISOLATED single-body door id; this
+   *  handler receives the door id already re-mapped to the real cabinet
+   *  (`makeDoorId(box.id, fi)`, matching `doorsById`). Omitted (kitchen, which
+   *  uses the interactive `frontsSketch` instead) keeps the overlay static. */
+  onFrontDoorClick?: (doorId: string) => void;
+  /** Same, for external-drawer fronts. The drawer id is the stable interior-item
+   *  id, so no re-mapping is needed. */
+  onFrontDrawerClick?: (drawerId: string) => void;
 }
 
 // Larger sketches give the carpenter a more readable cross-section in the
@@ -170,6 +181,18 @@ const SK_PAD = 8, SK_DIM_TOP = 30, SK_DIM_RIGHT = 44;
 const INTERIOR_ROLES_3D = new Set<BoardBox3D['role']>([
   'rod', 'drawer-box', 'runner', 'lift-mechanism', 'shelf', 'fixed-shelf', 'internal-shelf',
 ]);
+
+/** The 2D fronts overlay computes its panels from the ISOLATED single-body input,
+ *  so its door ids are keyed to that body's lone carcass (`box_0`), not the real
+ *  cabinet box. Recover just the front index so the click can be re-mapped onto
+ *  the real box id (`makeDoorId(box.id, fi)`). Decompose box ids never contain
+ *  ':', so the only ':' present is `makeDoorId`'s front-index separator. */
+function frontIndexFromIsolatedDoorId(doorId: string): number {
+  const i = doorId.lastIndexOf(':');
+  if (i === -1) return 0;
+  const fi = parseInt(doorId.slice(i + 1), 10);
+  return Number.isFinite(fi) ? fi : 0;
+}
 
 /** The 'bodies'/'fronts' tabs are one editable screen; 'cuts'/'hardware' are
  *  read-only lists scoped to this body. */
@@ -194,6 +217,7 @@ export default function BoxInteriorEditor({
   cuts, hardwareItems, cutsSettings,
   unitControls, frontsSketch,
   tab: controlledTab, onTabChange, bodyDoors,
+  onFrontDoorClick, onFrontDrawerClick,
   enabledRunnerIds = [],
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -990,6 +1014,48 @@ export default function BoxInteriorEditor({
         <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
           {frontsSketch}
         </div>
+      ) : !show3d && showFronts && hasPartitions && bodyInput ? (
+        /* ── Fronts tab (closet, partitioned) ── The two-cell editor below is
+            for the Bodies tab; on Fronts the carpenter sees and clicks the
+            body's door faces as one elevation (one door per cell), exactly like
+            a non-partitioned body. Without this branch a partitioned body fell
+            into the cell editor and showed no fronts at all. */
+        <div className={styles.body}>
+          <div className={styles.sketchCol}>
+            <div style={{ position: 'relative', width: SKETCH_W, height: SKETCH_H }}>
+              <BoxBodySketch
+                bodyH={bodyH}
+                bodyW={box.W}
+                bodyD={box.D}
+                items={localItems}
+                svgWidth={SKETCH_W}
+                svgHeight={SKETCH_H}
+                showLabels
+                showDimensions
+                onItemMove={onItemMove}
+                numPartitions={1}
+                cellItems={[localCellItems[0] ?? [], localCellItems[1] ?? []]}
+                bodyMaterialId={effBodyMatId}
+                frontMaterialId={effFrontMatId}
+                hasOuterShell={hasOuterShell}
+                hasEnvelopeTop={hasEnvelopeTop}
+                {...(topVariant ? { topVariant } : {})}
+                {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
+              />
+              <div style={{ position: 'absolute', ...frontsOverlayRect, pointerEvents: 'none' }}>
+                <CabinetFrontsOverlay
+                  input={bodyInput}
+                  state={bodyFrontsState}
+                  customMaterials={customMaterials}
+                  viewBoxW={box.W}
+                  viewBoxH={box.H}
+                  {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => onFrontDoorClick(makeDoorId(box.id, frontIndexFromIsolatedDoorId(isoId))) } : {})}
+                  {...(onFrontDrawerClick ? { onDrawerFrontClick: onFrontDrawerClick } : {})}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       ) : hasPartitions ? (
         /* ── Cell editor (partition mode) ── */
         <div className={styles.partitionBody}>
@@ -1097,6 +1163,9 @@ export default function BoxInteriorEditor({
                 {/* 'fronts' tab — overlay this body's door/drawer faces on the
                     editable sketch (translucent, interior still visible). */}
                 {showFronts && bodyInput && (
+                  /* Wrapper stays click-through so gaps between fronts fall to
+                     the body sketch below (drag-to-move shelves); the overlay's
+                     clickable rects re-enable pointer events on themselves. */
                   <div style={{ position: 'absolute', ...frontsOverlayRect, pointerEvents: 'none' }}>
                     <CabinetFrontsOverlay
                       input={bodyInput}
@@ -1104,6 +1173,8 @@ export default function BoxInteriorEditor({
                       customMaterials={customMaterials}
                       viewBoxW={box.W}
                       viewBoxH={box.H}
+                      {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => onFrontDoorClick(makeDoorId(box.id, frontIndexFromIsolatedDoorId(isoId))) } : {})}
+                      {...(onFrontDrawerClick ? { onDrawerFrontClick: onFrontDrawerClick } : {})}
                     />
                   </div>
                 )}

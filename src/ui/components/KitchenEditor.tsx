@@ -15,6 +15,10 @@ interface Props {
   onAddUnit: (moduleType: KitchenModuleType, name: string, W?: number, materials?: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId }) => void;
   onRemoveUnit: (unitId: string) => void;
   onOpenUnit: (unitId: string) => void;
+  /** Open a unit AND land directly on the clicked front's editor (the "cabinet
+   *  way" — clicking a front in the overview jumps straight to its door/drawer
+   *  editor). */
+  onOpenUnitToFront?: (unitId: string, editing: { type: 'door'; doorId: string } | { type: 'drawer'; drawerId: string }) => void;
   onReorderUnit: (unitId: string, direction: 'left' | 'right') => void;
   /** Called when KitchenOverview's kitchen-level editors (plinth, etc.)
    *  commit a change that must propagate to a unit's cabinet. */
@@ -30,7 +34,7 @@ interface Props {
 
 export function KitchenEditor({
   units,
-  onAddUnit, onRemoveUnit, onOpenUnit, onReorderUnit,
+  onAddUnit, onRemoveUnit, onOpenUnit, onOpenUnitToFront, onReorderUnit,
   onUpdateUnit,
   settings,
 }: Props) {
@@ -143,6 +147,7 @@ export function KitchenEditor({
         selectedUnitId={selectedUnitId}
         onSelect={id => { setSelectedUnitId(id); setShowAddForm(false); }}
         onOpenUnit={onOpenUnit}
+        {...(onOpenUnitToFront ? { onOpenUnitToFront } : {})}
         {...(onUpdateUnit ? { onUpdateUnit } : {})}
         settings={settings}
       />

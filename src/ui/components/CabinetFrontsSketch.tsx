@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import { isValidSketchInput, computeSketchGeometry } from './CabinetSketch.utils';
-import { computeHingeSpacingWarnings, getDoorVisualHeight, getDrawerFrontVisualHeight } from '../../core/doors/doorUtils';
+import { computeHingeSpacingWarnings, getDoorVisualHeight, getDrawerFrontVisualHeight, isHingeSideFree, salonHingeSide } from '../../core/doors/doorUtils';
 import {
   type RowFrontLayout,
   groupBoxesByRow,
@@ -65,7 +65,7 @@ interface Props {
 
 export default function CabinetFrontsSketch({
   W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH, doorsById, displayNumbers,
-  drawerFrontsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
+  drawerFrontsById, partitionsById, frontLayoutByRow, numFrontsPerBox, onDrawerFrontClick, onDoorClick, onBoxClick,
   boxDimensionOverrides, wallEnvelopeCm, cornerFiller, liftUp,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
@@ -259,6 +259,16 @@ export default function CabinetFrontsSketch({
             const doorNodes = sortedDoors.map(door => {
               const panelW   = door.width * geo.scale;
               const fi       = door.frontIndex;
+              // Display-clamp the hinge side, mirroring `cabinetFrontPanels`: the
+              // side is the carpenter's to choose only when both door edges have a
+              // panel (a single front, or a partitioned body). Otherwise it's
+              // forced onto the outer gable — so a hinge saved while a partition
+              // existed (inner edge) doesn't linger after the partition is removed.
+              // The saved value is kept (restored if the partition returns); only
+              // the rendering is clamped, exactly as every other fronts view does.
+              const effHingeSide = isHingeSideFree(numFronts, partitionsById?.get(boxId) ?? false)
+                ? door.hingeSide
+                : salonHingeSide(fi, numFronts);
               // frontIndex 0 is the box's RIGHTMOST column → leftmost = nf-1-fi.
               const panelX = innerLeftSvg + bodyFrontX(bodyLayout, numFronts - 1 - fi) * geo.scale;
               const panelH   = door.height * geo.scale;
@@ -302,7 +312,7 @@ export default function CabinetFrontsSketch({
               }
 
               const spacingWarns = computeHingeSpacingWarnings(door);
-              const iconAnchor   = door.hingeSide === 'right' ? 'start' : 'end';
+              const iconAnchor   = effHingeSide === 'right' ? 'start' : 'end';
               const skirtExt     = (getDoorVisualHeight(door, plinthH) - door.height) * geo.scale;
 
               return (
@@ -310,7 +320,7 @@ export default function CabinetFrontsSketch({
                   <rect x={panelX} y={panelY} width={panelW} height={panelH + skirtExt}
                     className={styles.doorRect} />
                   <polyline
-                    points={hingeMarkPoints(panelX, panelX + panelW, panelY, panelY + panelH, liftUp ? 'top' : door.hingeSide)}
+                    points={hingeMarkPoints(panelX, panelX + panelW, panelY, panelY + panelH, liftUp ? 'top' : effHingeSide)}
                     className={styles.hingeMark}
                   />
                   {skirtExt > 0 && (
@@ -330,8 +340,8 @@ export default function CabinetFrontsSketch({
                     }
                     const cy = toSvgY(hinge.positionFromBottom);
                     const hasSpacingWarn = spacingWarns.has(hinge.id);
-                    const hingeXPanel = door.hingeSide === 'right' ? panelX + panelW : panelX;
-                    const iconXPanel  = door.hingeSide === 'right' ? hingeXPanel + 6 : hingeXPanel - 6;
+                    const hingeXPanel = effHingeSide === 'right' ? panelX + panelW : panelX;
+                    const iconXPanel  = effHingeSide === 'right' ? hingeXPanel + 6 : hingeXPanel - 6;
                     return (
                       <g key={hinge.id}>
                         <circle

@@ -10,6 +10,8 @@ import type { Edging } from '../../types/edging';
 import BoxesList from './BoxesList';
 import CabinetSketch from './CabinetSketch';
 import CabinetFrontsSketch from './CabinetFrontsSketch';
+import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
+import { buildCabinetSketchModel } from '../../core/product/cabinetSketchModel';
 import BoxInteriorEditor, { type EditorTab } from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
@@ -145,6 +147,10 @@ interface CabinetFormProps {
   /** Back-out handler used by the body editor in `kitchenDirectEdit` mode —
    *  returns to the kitchen (there is no form to fall back to). */
   onExit?: () => void;
+  /** Opens the editor straight onto a specific door/drawer's editor at mount.
+   *  Used by the kitchen overview's clickable fronts (the "cabinet way" — one
+   *  click in the overview jumps into that door's editor). Consumed once. */
+  initialEditing?: { type: 'door'; doorId: string } | { type: 'drawer'; drawerId: string };
 }
 
 function inputToFormState(
@@ -179,7 +185,7 @@ function inputToFormState(
   };
 }
 
-export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides, hidePlinthEditor, kitchenDirectEdit, onExit }: CabinetFormProps = {}): React.JSX.Element {
+export default function CabinetForm({ initialInput, initialState, onCabinetChange, settings, hideMainDimensions, hideDoorsPerColumn, hideEnvelopeTop, splitShellSides, hidePlinthEditor, kitchenDirectEdit, onExit, initialEditing }: CabinetFormProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const {
     result, calculate,
@@ -307,7 +313,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     | { type: 'door'; doorId: string }
     | { type: 'drawer'; drawerId: string }
     | { type: 'plinth' };
-  const [editing, setEditing] = useState<Editing>({ type: 'none' });
+  const [editing, setEditing] = useState<Editing>(initialEditing ?? { type: 'none' });
   const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
   // Kitchen direct-edit: the body editor's active tab is owned here so it
   // survives the editor remounting when a door/drawer edit opens (and closes).
@@ -900,6 +906,12 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             {...(frontsSketch ? { frontsSketch } : {})}
             {...(kitchenDirectEdit ? { tab: kitchenEditorTab, onTabChange: setKitchenEditorTab } : {})}
             bodyDoors={bodyDoors}
+            // Cabinet body editor: make the 2D fronts overlay clickable (door →
+            // DoorEditor, drawer → drawer modal), matching the main view. For
+            // kitchen units the interactive frontsSketch is used instead, so
+            // these are dead there — harmless.
+            onFrontDoorClick={handleDoorClick}
+            onFrontDrawerClick={handleDrawerFrontClick}
             bodyMaterialOverride={ovr3d}
             availableBodyMaterials={availableBodyMaterials}
             availableFrontMaterials={availableFrontMaterials}
@@ -1533,31 +1545,68 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {})}
               {...(initialInput?.cornerFiller ? { cornerSingleWidth: true } : {})}
             />
-          ) : (
-            <CabinetFrontsSketch
-              W={form.W}
-              H={form.H}
-              D={form.D}
-              plinth={form.plinth}
-              doorsPerColumn={form.doorsPerColumn}
-              {...(form.hasWallEnvelope && initialInput?.mount === 'wall'
-                ? { wallEnvelopeCm: frontThicknessCm } : {})}
-              {...(needsLower  ? { lowerDoorH:  form.lowerDoorH  } : {})}
-              {...(needsMiddle ? { middleDoorH: form.middleDoorH } : {})}
-              doorsById={doorsById}
-              displayNumbers={displayNumbers}
-              drawerFrontsById={drawerFrontsById}
-              partitionsById={partitionsById}
-              frontLayoutByRow={frontLayoutByRow}
-              numFrontsPerBox={numFrontsPerBox}
-              onDrawerFrontClick={handleDrawerFrontClick}
-              onDoorClick={handleDoorClick}
-              onBoxClick={handleBoxClick}
-              {...(boxDimensionOverrides.size > 0 ? { boxDimensionOverrides } : {})}
-              {...(initialInput?.cornerFiller ? { cornerFiller: initialInput.cornerFiller } : {})}
-              {...(initialInput?.liftMechanism ? { liftUp: true } : {})}
-            />
-          )}
+          ) : (() => {
+            // Fronts view — mirror the kitchen's main fronts look: the body
+            // sketch (embedded → cropped to the cabinet box) with the translucent
+            // orange front panels (CabinetFrontsOverlay) layered on top in the
+            // SAME coordinate space (outerCabW × effH), so the panels land exactly
+            // over the bodies. Built from the shared cabinetSketchModel — single
+            // source with the kitchen's UnitsView. Per-door click-to-edit lives in
+            // the body editor's Fronts tab (open a body from the גופים view).
+            const inp = getLastInput();
+            const st = getSnapshot();
+            if (!inp) return null;
+            const customMats = settings?.customMaterials ?? [];
+            const m = buildCabinetSketchModel(inp, st, customMats);
+            const MAX_H_PX = 480;
+            const holderW = `min(100%, ${Math.round(MAX_H_PX * (m.outerCabW / m.effH))}px)`;
+            return (
+              <div style={{ position: 'relative', width: holderW, aspectRatio: `${m.outerCabW} / ${m.effH}`, margin: '0 auto' }}>
+                <CabinetSketch
+                  embedded
+                  W={String(inp.W)}
+                  H={String(inp.H)}
+                  D={String(inp.D)}
+                  backThicknessCm={inp.backThickness}
+                  plinth={String(inp.plinth)}
+                  doorsPerColumn={String(inp.doorsPerColumn)}
+                  {...(inp.lowerDoorH !== undefined ? { lowerDoorH: String(inp.lowerDoorH) } : {})}
+                  {...(inp.middleDoorH !== undefined ? { middleDoorH: String(inp.middleDoorH) } : {})}
+                  interiorById={m.interiorById}
+                  cellInteriorById={m.cellInteriorById}
+                  partitionsById={m.partitionsById}
+                  hasShell={m.hasAnyShell}
+                  hasShellLeft={m.sides.left}
+                  hasShellRight={m.sides.right}
+                  frontMaterialThickness={m.tFront}
+                  {...(inp.hasEnvelopeTop ? { hasEnvelopeTop: true } : {})}
+                  {...(inp.hasWallEnvelope && inp.mount === 'wall' ? { wallEnvelopeCm: m.tFront } : {})}
+                  {...(inp.liftMechanism && inp.liftMechanismId ? { liftMechanismId: inp.liftMechanismId } : {})}
+                  frontLayoutByRow={m.frontLayoutByRow}
+                  numFrontsPerBox={m.numFrontsPerBox}
+                  bodyMaterialId={inp.bodyMaterialId}
+                  frontMaterialId={inp.frontMaterialId}
+                  boardOverrides={m.boardOverrides}
+                  boxDimensionOverrides={m.boxDimensionOverrides}
+                  {...(inp.topVariant ? { topVariant: inp.topVariant } : {})}
+                  {...(inp.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: inp.sinkTraverseWidthCm } : {})}
+                  {...(inp.hasBack !== undefined ? { hasBack: inp.hasBack } : {})}
+                  {...(inp.hasBottom !== undefined ? { hasBottom: inp.hasBottom } : {})}
+                  {...(inp.cornerFiller ? { cornerSingleWidth: true } : {})}
+                  customMaterials={customMats}
+                />
+                <CabinetFrontsOverlay
+                  input={inp}
+                  state={st}
+                  customMaterials={customMats}
+                  viewBoxW={m.outerCabW}
+                  viewBoxH={m.effH}
+                  onDoorClick={handleDoorClick}
+                  onDrawerFrontClick={handleDrawerFrontClick}
+                />
+              </div>
+            );
+          })()}
         </div>
       </div>
 

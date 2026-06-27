@@ -14,7 +14,7 @@ import {
 import { boxStableKey } from '../interior/interiorUtils';
 import {
   calcMainDoorHeight, getItemsForFront, salonHingeSide, defaultHingeSide, shouldCoverSkirt,
-  getDrawerFrontVisualHeight, getSkirtCoveringDrawer, isHingeSideFree,
+  getDrawerFrontVisualHeight, getSkirtCoveringDrawer, isHingeSideFree, makeDoorId,
 } from '../doors/doorUtils';
 import { deriveDrawerFronts } from '../doors/drawerFrontsCalc';
 import { getShellSides } from '../../types/cabinet';
@@ -33,6 +33,13 @@ export interface FrontPanel {
    *  points to the OPENING (free) side — the opposite edge. `'top'` = a lift-up
    *  door (קלפה) hinged along the top and opening upward → apex points down. */
   hingeSide?: 'left' | 'right' | 'top';
+  /** Door panel identity (`makeDoorId(box.id, frontIndex)`) — matches the live
+   *  `doorsById` key, so an interactive overlay can open the door editor for the
+   *  clicked face. Absent on drawer fronts and the corner filler. */
+  doorId?: string;
+  /** External-drawer-front identity (the DrawerItem id) — lets an interactive
+   *  overlay open the drawer editor. Absent on doors and the corner filler. */
+  drawerId?: string;
 }
 
 /** Render threshold (cm): a main door shorter than this above an external-drawer
@@ -155,7 +162,7 @@ export function cabinetFrontPanels(
     const y0 = boxBottom;
     const y1 = boxBottom + panelH;
     return [
-      { x0: xl.door.x0, x1: xl.door.x1, y0, y1, hingeSide: cornerHingeSide(cf) },
+      { x0: xl.door.x0, x1: xl.door.x1, y0, y1, hingeSide: cornerHingeSide(cf), doorId: makeDoorId(box.id, 0) },
       { x0: xl.fillerFace.x0, x1: xl.fillerFace.x1, y0, y1 },
     ];
   }
@@ -216,7 +223,7 @@ export function cabinetFrontPanels(
     const pushDrawerFront = (x0: number, f: DrawerFront) => {
       const base = boxBottom + f.positionFromBoxBottom;
       const ext = getDrawerFrontVisualHeight(f, inp.plinth) - f.height; // 0 unless coversSkirt
-      panels.push({ x0, x1: x0 + Math.max(f.width, 0), y0: base - ext, y1: base + Math.max(f.height, 0) });
+      panels.push({ x0, x1: x0 + Math.max(f.width, 0), y0: base - ext, y1: base + Math.max(f.height, 0), drawerId: f.drawerId });
     };
 
     // ── External-drawer faces of this body ────────────────────────────────────
@@ -271,6 +278,7 @@ export function cabinetFrontPanels(
         y0: bottom - skirtExt,
         y1: bottom + panelH,
         hingeSide,
+        doorId: makeDoorId(box.id, fi),
       });
     }
   }

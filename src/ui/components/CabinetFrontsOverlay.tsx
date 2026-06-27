@@ -12,6 +12,13 @@ interface Props {
   viewBoxW: number;
   /** Effective cabinet height (after any single-body override), cm. */
   viewBoxH: number;
+  /** When set, door panels become clickable and call this with the door id
+   *  (`makeDoorId(box.id, frontIndex)`, matching `doorsById`) — used by the
+   *  cabinet's main fronts view to open the door editor. Omit (KitchenOverview /
+   *  ProductElevation) to keep the overlay a non-interactive picture. */
+  onDoorClick?: (doorId: string) => void;
+  /** Same, for external-drawer fronts → opens the drawer editor. */
+  onDrawerFrontClick?: (drawerId: string) => void;
 }
 
 /** Schematic front-panels overlay: colored rectangles for door rows and
@@ -19,9 +26,10 @@ interface Props {
  *  (viewBox in cm, position-absolute filling its parent). Panel geometry comes
  *  from the shared core `cabinetFrontPanels` (single source with the 3D fronts
  *  view); this component only flips the floor-up y into the top-down SVG and
- *  draws the rects. Used by KitchenOverview and ProductElevation. */
+ *  draws the rects. Used by KitchenOverview, ProductElevation, and the cabinet
+ *  main fronts view (the last passes click handlers → interactive). */
 export function CabinetFrontsOverlay({
-  input, state, customMaterials = [], viewBoxW, viewBoxH,
+  input, state, customMaterials = [], viewBoxW, viewBoxH, onDoorClick, onDrawerFrontClick,
 }: Props): React.JSX.Element | null {
   const panels = cabinetFrontPanels(input, state, customMaterials);
   if (panels.length === 0) return null;
@@ -35,6 +43,8 @@ export function CabinetFrontsOverlay({
         inset: 0,
         width: '100%',
         height: '100%',
+        // Root stays click-through so gaps fall to the cabinet sketch below;
+        // individual clickable panels re-enable pointer events on themselves.
         pointerEvents: 'none',
       }}
     >
@@ -50,6 +60,10 @@ export function CabinetFrontsOverlay({
           p.hingeSide === 'top'  ? `${p.x0},${top} ${midX},${bot} ${p.x1},${top}` :
           p.hingeSide === 'left' ? `${p.x0},${top} ${p.x1},${mid} ${p.x0},${bot}` :
           p.hingeSide === 'right' ? `${p.x1},${top} ${p.x0},${mid} ${p.x1},${bot}` : '';
+        const onClick =
+          p.doorId && onDoorClick ? () => onDoorClick(p.doorId!) :
+          p.drawerId && onDrawerFrontClick ? () => onDrawerFrontClick(p.drawerId!) :
+          undefined;
         return (
           <React.Fragment key={i}>
             <rect
@@ -61,15 +75,16 @@ export function CabinetFrontsOverlay({
               stroke="var(--color-border, #ccc)"
               strokeWidth={0.1}
               opacity={0.9}
+              {...(onClick ? { onClick, style: { cursor: 'pointer', pointerEvents: 'auto' } } : {})}
             />
             {points && (
               <polyline
                 points={points}
                 fill="none"
-                stroke="var(--color-border-strong, #555)"
+                stroke="var(--color-text-secondary, #6b5f55)"
                 strokeWidth={0.3}
                 strokeLinejoin="round"
-                opacity={0.7}
+                opacity={0.9}
               />
             )}
           </React.Fragment>

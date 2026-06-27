@@ -37,6 +37,9 @@ interface Props {
   selectedUnitId: string | null;
   onSelect: (id: string) => void;
   onOpenUnit: (id: string) => void;
+  /** Clicking a front in the fronts view opens that unit AND jumps straight to
+   *  the clicked door/drawer's editor (the "cabinet way"). */
+  onOpenUnitToFront?: (unitId: string, editing: { type: 'door'; doorId: string } | { type: 'drawer'; drawerId: string }) => void;
   /** When provided, the kitchen plinth becomes editable: clicking the plinth
    *  bar opens PlinthEditor for the corresponding plinth group, and changes
    *  propagate to every unit in that group through this callback. */
@@ -73,10 +76,12 @@ function computeScale(units: KitchenUnit[], availableW: number): number {
  *  (embedded) viewBox of the same unit, so overlaying the two SVGs on the
  *  same wrapper div renders the fronts exactly on top of the cabinet body.
  *  Used by UnitsView when viewMode === 'fronts'. */
-function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
+function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH, onDoorClick, onDrawerFrontClick }: {
   unit: KitchenUnit;
   viewBoxW: number;  // cm — outerCabW (effW + envelopes)
   viewBoxH: number;  // cm — effH
+  onDoorClick?: (doorId: string) => void;
+  onDrawerFrontClick?: (drawerId: string) => void;
 }): React.JSX.Element | null {
   return (
     <CabinetFrontsOverlay
@@ -84,6 +89,8 @@ function UnitFrontPanelsStandalone({ unit, viewBoxW, viewBoxH }: {
       state={unit.cabinet.state}
       viewBoxW={viewBoxW}
       viewBoxH={viewBoxH}
+      {...(onDoorClick ? { onDoorClick } : {})}
+      {...(onDrawerFrontClick ? { onDrawerFrontClick } : {})}
     />
   );
 }
@@ -210,7 +217,7 @@ function FrontPanels({ unit, layout, scale }: {
   );
 }
 
-export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, onUpdateUnit, settings }: Props) {
+export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, onOpenUnitToFront, onUpdateUnit, settings }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableW, setAvailableW] = useState(800);
@@ -403,6 +410,7 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, o
         <UnitsView units={units} selectedUnitId={selectedUnitId}
           onSelect={onSelect} onOpenUnit={onOpenUnit} settings={settings}
           viewMode={viewMode}
+          {...(onOpenUnitToFront ? { onOpenUnitToFront } : {})}
           {...(onUpdateUnit ? { onPlinthClickForUnit: openPlinthEditorForUnit } : {})} />
       )}
 
@@ -662,11 +670,13 @@ interface UnitsViewProps {
    *  by the parent (KitchenOverview) to open the kitchen-level PlinthEditor
    *  for the plinth group containing that unit. */
   onPlinthClickForUnit?: (unitId: string) => void;
+  /** Front clicked in the fronts overlay → open that unit on the door/drawer editor. */
+  onOpenUnitToFront?: (unitId: string, editing: { type: 'door'; doorId: string } | { type: 'drawer'; drawerId: string }) => void;
   settings?: AppSettingsSlice | undefined;
   viewMode: 'bodies' | 'fronts';
 }
 
-function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickForUnit, settings, viewMode }: UnitsViewProps) {
+function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickForUnit, onOpenUnitToFront, settings, viewMode }: UnitsViewProps) {
   // Compute totalW and maxH to fit all units into the available canvas width.
   // PX_PER_CM is chosen so the union of all unit widths + label area fits.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -848,6 +858,10 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
                   unit={unit}
                   viewBoxW={outerCabW}
                   viewBoxH={effH}
+                  {...(onOpenUnitToFront ? {
+                    onDoorClick: (doorId: string) => onOpenUnitToFront(unit.id, { type: 'door', doorId }),
+                    onDrawerFrontClick: (drawerId: string) => onOpenUnitToFront(unit.id, { type: 'drawer', drawerId }),
+                  } : {})}
                 />
               )}
             </div>

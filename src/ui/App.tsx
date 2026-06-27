@@ -44,6 +44,12 @@ export default function App(): React.JSX.Element {
 
   // Active kitchen unit id (third navigation level)
   const [activeKitchenUnitId, setActiveKitchenUnitId] = useState<string | null>(null);
+  // When a front is clicked in the kitchen overview, open that unit AND land
+  // directly on the clicked door/drawer's editor (the "cabinet way"). Consumed
+  // once by the unit's CabinetForm at mount.
+  const [pendingFrontTarget, setPendingFrontTarget] = useState<
+    { unitId: string; editing: { type: 'door'; doorId: string } | { type: 'drawer'; drawerId: string } } | null
+  >(null);
   // Active room id (floor-plan navigation level, parallel to activeProductId)
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [showSettingsPage, setShowSettingsPage] = useState(false);
@@ -158,7 +164,9 @@ export default function App(): React.JSX.Element {
             splitShellSides
             hidePlinthEditor
             kitchenDirectEdit
-            onExit={() => setActiveKitchenUnitId(null)}
+            onExit={() => { setActiveKitchenUnitId(null); setPendingFrontTarget(null); }}
+            {...(pendingFrontTarget && pendingFrontTarget.unitId === activeKitchenUnit.id
+              ? { initialEditing: pendingFrontTarget.editing } : {})}
           />
         )}
 
@@ -168,7 +176,8 @@ export default function App(): React.JSX.Element {
             units={activeProduct.kitchenUnits ?? []}
             onAddUnit={(moduleType, name, W, materials) => addKitchenUnit(activeProduct.id, moduleType, name, W, materials)}
             onRemoveUnit={unitId => removeKitchenUnit(activeProduct.id, unitId)}
-            onOpenUnit={unitId => setActiveKitchenUnitId(unitId)}
+            onOpenUnit={unitId => { setPendingFrontTarget(null); setActiveKitchenUnitId(unitId); }}
+            onOpenUnitToFront={(unitId, editing) => { setPendingFrontTarget({ unitId, editing }); setActiveKitchenUnitId(unitId); }}
             onReorderUnit={(unitId, dir) => reorderKitchenUnit(activeProduct.id, unitId, dir)}
             onUpdateUnit={(unitId, cabinet) => updateKitchenUnit(activeProduct.id, unitId, cabinet)}
             settings={settings}
