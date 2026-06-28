@@ -10,13 +10,13 @@ import {
 } from '../../core/geometry/frontGeometry';
 import { resolveCabinetJointMethod, computeCarcassDepth, HINGE_GAP_CM, type Board } from '../../core/boards/boardModel';
 import { buildSketchBoards } from '../../core/product/cabinetSketchBoards';
-import { boxStableKey } from '../../core/interior/interiorUtils';
+import { boxStableKey, computeInteriorGaps } from '../../core/interior/interiorUtils';
 import { getEffectiveMaterial, getMaterialWithCustom } from '../../catalog';
 import CabinetCutSketch from './CabinetCutSketch';
 import type { BoxLevel } from '../../types/geometry';
 import type { MaterialId } from '../../types/materials';
 import styles from './CabinetSketch.module.css';
-import type { InteriorById, CellInteriorById, DrawerItem } from '../../types/interior';
+import type { InteriorById, CellInteriorById, DrawerItem, InteriorItem } from '../../types/interior';
 
 interface Props {
   W: string;
@@ -105,9 +105,14 @@ interface Props {
   /** Corner unit (פינה): keep the body as ONE wide box (no MAX_BOX_W column
    *  split), so the sketch matches the single-box cut list / 3D. */
   cornerSingleWidth?: boolean;
+  /** When true, the clear vertical opening (cm) of every empty space inside each
+   *  body — floor→first object, between each pair, last object→ceiling — is drawn
+   *  as an inside dimension chain (same helper as the body editor). Default off;
+   *  enabled by the main cabinet "bodies" view. */
+  showGaps?: boolean;
 }
 
-export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, boxMaterialOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, liftMechanismId, cornerSingleWidth }: Props): React.JSX.Element {
+export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerDoorH, doorsPerColumn, middleDoorH, interiorById, cellInteriorById, partitionsById, hasShell, hasShellLeft, hasShellRight, frontMaterialThickness, hasEnvelopeTop, frontLayoutByRow, numFrontsPerBox, bodyMaterialId, frontMaterialId, onBoxClick, onDrawerFrontClick, onPlinthClick, boardOverrides, boxDimensionOverrides, boxMaterialOverrides, embedded, topVariant, sinkTraverseWidthCm, customMaterials, extraPlinthSplits, unifiedPlinth, hasBack, hasBottom, wallEnvelopeCm, liftMechanismId, cornerSingleWidth, showGaps }: Props): React.JSX.Element {
   const { t } = useTranslation();
 
   if (!isValidSketchInput(W, H, D, plinth, lowerDoorH, doorsPerColumn, middleDoorH)) {
@@ -223,6 +228,39 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
         b => b.role !== 'envelope-left' && b.role !== 'envelope-right',
       ));
     }
+  }
+
+  // Inside dimension chain for the clear openings between objects in a body/cell.
+  // Drawn in the empty regions only (computeInteriorGaps excludes object zones),
+  // so it never crosses a shelf/drawer/rod. Shares the core helper with the body
+  // editor so the two views agree. `toSvgY` maps cm-from-this-body-floor to SVG y.
+  function gapChainNodes(
+    gapItems: InteriorItem[],
+    bodyHcm: number,
+    tBodyCm: number,
+    toSvgY: (h: number) => number,
+    leftX: number,
+    bandW: number,
+    keyPrefix: string,
+  ): React.ReactNode {
+    if (!showGaps || gapItems.length === 0) return null;
+    const gaps = computeInteriorGaps(gapItems, bodyHcm, tBodyCm);
+    const xDim = leftX + Math.min(10, bandW / 4);
+    return gaps.map((g, i) => {
+      const yTop    = toSvgY(g.hi);
+      const yBottom = toSvgY(g.lo);
+      const mid     = (yTop + yBottom) / 2;
+      return (
+        <g key={`${keyPrefix}-gap-${i}`} pointerEvents="none">
+          <line x1={xDim} y1={yTop} x2={xDim} y2={yBottom} className={styles.gapDimLine} />
+          <line x1={xDim - 3} y1={yTop}    x2={xDim + 3} y2={yTop}    className={styles.gapDimLine} />
+          <line x1={xDim - 3} y1={yBottom} x2={xDim + 3} y2={yBottom} className={styles.gapDimLine} />
+          {(yBottom - yTop) >= 14 && (
+            <text x={xDim + 5} y={mid + 3} className={styles.gapLabel}>{g.clear}</text>
+          )}
+        </g>
+      );
+    });
   }
 
   // In embedded mode (KitchenOverview), crop the viewBox to the cabinet area
@@ -515,7 +553,18 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
             );
           });
 
-          return [...nonExternalNodes, ...externalNodes];
+          // Inside gap chain — clear opening of every empty space in this body.
+          // Fold in the box's structural section shelves (body-local heights);
+          // overlapping zones merge so a shelf in both lists is counted once.
+          const bodyHcm = rect.h / geo.scale;
+          const intShelves = geo.boxes.find(b => b.id === boxId)?.internalShelves ?? [];
+          const gapItemsForBox: InteriorItem[] = [
+            ...items,
+            ...intShelves.map((h, si) => ({ type: 'shelf' as const, id: `__intshelf_${boxId}_${si}`, heightFromFloor: h })),
+          ];
+
+          return [...nonExternalNodes, ...externalNodes,
+            gapChainNodes(gapItemsForBox, bodyHcm, tBodyCm, toSvgY, innerX, innerW, `body-${boxId}`)];
         })}
 
         {/* Cell interior items for partitioned boxes */}
@@ -626,7 +675,9 @@ export default function CabinetSketch({ W, H, D, backThicknessCm, plinth, lowerD
                   );
                 });
 
-                return [...internalNodes, ...externalNodes];
+                const bodyHcmCell = rect.h / geo.scale;
+                return [...internalNodes, ...externalNodes,
+                  gapChainNodes(cellItems, bodyHcmCell, tBodyCmCell, toSvgY, cellInnerX, cellInnerW, `cell-${boxId}-${ci}`)];
               })}
             </g>
           );

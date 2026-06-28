@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeBodyFloors,
+  computeInteriorGaps,
   initInteriorFromBoxes,
   boxStableKey,
   defaultShelfPlacement,
@@ -36,6 +37,71 @@ describe('computeBodyFloors', () => {
     expect(floors.get('bottom')).toBe(0);
     expect(floors.get('middle')).toBe(75);
     expect(floors.get('top')).toBe(155);
+  });
+});
+
+// ── computeInteriorGaps ───────────────────────────────────────────────────────
+
+describe('computeInteriorGaps', () => {
+  it('empty body: one full-height opening', () => {
+    const gaps = computeInteriorGaps([], 200);
+    expect(gaps).toEqual([{ lo: 0, hi: 200, clear: 200 }]);
+  });
+
+  it('single shelf: floor→shelf and shelf→ceiling (thickness aware)', () => {
+    const items: InteriorItem[] = [
+      { type: 'shelf', id: 's1', heightFromFloor: 100 },
+    ];
+    const gaps = computeInteriorGaps(items, 200, 2);
+    // shelf zone [100, 102] → bottom opening 0..100, top opening 102..200
+    expect(gaps).toEqual([
+      { lo: 0, hi: 100, clear: 100 },
+      { lo: 102, hi: 200, clear: 98 },
+    ]);
+  });
+
+  it('drawer occupies its height; openings above and below', () => {
+    const items: InteriorItem[] = [
+      { type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 20, mount: 'internal' },
+    ];
+    const gaps = computeInteriorGaps(items, 200);
+    // drawer zone [0, 20] → no bottom opening, one opening 20..200
+    expect(gaps).toEqual([{ lo: 20, hi: 200, clear: 180 }]);
+  });
+
+  it('rod uses ±1.5cm zone', () => {
+    const items: InteriorItem[] = [
+      { type: 'rod', id: 'r1', heightFromFloor: 180 },
+    ];
+    const gaps = computeInteriorGaps(items, 200);
+    // rod zone [178.5, 181.5] → openings 0..178.5 and 181.5..200
+    expect(gaps).toEqual([
+      { lo: 0, hi: 178.5, clear: 178.5 },
+      { lo: 181.5, hi: 200, clear: 18.5 },
+    ]);
+  });
+
+  it('two shelves: three clear openings between/around them', () => {
+    const items: InteriorItem[] = [
+      { type: 'shelf', id: 's1', heightFromFloor: 60 },
+      { type: 'shelf', id: 's2', heightFromFloor: 120 },
+    ];
+    const gaps = computeInteriorGaps(items, 180, 2);
+    expect(gaps).toEqual([
+      { lo: 0, hi: 60, clear: 60 },
+      { lo: 62, hi: 120, clear: 58 },
+      { lo: 122, hi: 180, clear: 58 },
+    ]);
+  });
+
+  it('overlapping zones merge → no phantom gap', () => {
+    const items: InteriorItem[] = [
+      { type: 'drawer', id: 'd1', heightFromFloor: 0, drawerHeight: 20, mount: 'internal' },
+      { type: 'drawer', id: 'd2', heightFromFloor: 15, drawerHeight: 20, mount: 'internal' },
+    ];
+    const gaps = computeInteriorGaps(items, 200);
+    // zones [0,20] and [15,35] merge to [0,35] → single opening 35..200
+    expect(gaps).toEqual([{ lo: 35, hi: 200, clear: 165 }]);
   });
 });
 

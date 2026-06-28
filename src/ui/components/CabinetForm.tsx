@@ -1866,6 +1866,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   {...(inp.cornerFiller ? { cornerSingleWidth: true } : {})}
                   boxMaterialOverrides={boxMaterialOverrides}
                   customMaterials={customMats}
+                  {...(!isFronts ? { showGaps: true } : {})}
                   {...(!hidePlinthEditor && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
                   {...(!isFronts ? { onBoxClick: handleBoxClick } : {})}
                   onDrawerFrontClick={handleDrawerFrontClick}

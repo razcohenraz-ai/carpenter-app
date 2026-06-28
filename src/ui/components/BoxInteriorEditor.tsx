@@ -1105,6 +1105,7 @@ export default function BoxInteriorEditor({
                         svgWidth={CELL_SKETCH_W}
                         svgHeight={CELL_SKETCH_H}
                         showLabels={false}
+                        showGaps
                         onItemMove={(id, newH) => onCellItemMove(ci, id, newH)}
                         numPartitions={0}
                         bodyMaterialId={effBodyMatId}
@@ -1168,6 +1169,7 @@ export default function BoxInteriorEditor({
                   svgHeight={SKETCH_H}
                   showLabels
                   showDimensions
+                  showGaps
                   onItemMove={onItemMove}
                   numPartitions={0}
                   bodyMaterialId={effBodyMatId}

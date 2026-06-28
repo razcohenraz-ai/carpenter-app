@@ -75,3 +75,18 @@
   pointer-events: none;
 }
 
+/* Inside dimension chain for the clear openings between interior objects. */
+.gapDimLine {
+  stroke: var(--color-text-muted);
+  stroke-width: 0.75;
+  opacity: 0.7;
+}
+
+.gapLabel {
+  font-size: 9px;
+  fill: var(--color-text-secondary);
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-medium);
+  pointer-events: none;
+}
+

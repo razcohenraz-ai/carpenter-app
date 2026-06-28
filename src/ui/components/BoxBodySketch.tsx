@@ -5,6 +5,7 @@ import type { MaterialId } from '../../types/materials';
 import { useTranslation } from '../hooks/useTranslation';
 import { getEffectiveMaterial } from '../../catalog';
 import { buildBoardModel } from '../../core/boards/boardModel';
+import { computeInteriorGaps } from '../../core/interior/interiorUtils';
 import CabinetCutSketch from './CabinetCutSketch';
 import { internalDrawerBoxBoundsCm, drawerBoxBoardRects, liftMechanismRects } from './CabinetSketch.utils';
 import styles from './BoxBodySketch.module.css';
@@ -18,6 +19,11 @@ interface Props {
   svgHeight: number;
   showLabels?: boolean;
   showDimensions?: boolean;
+  /** When true, the clear vertical opening (cm) of every empty space inside the
+   *  body — floor→first object, between each pair, last object→ceiling — is
+   *  drawn as an inside dimension chain. Uses the same physical extents as the
+   *  spacing warnings (see {@link computeInteriorGaps}). */
+  showGaps?: boolean;
   onItemMove?: (id: string, newH: number) => void;
   numPartitions?: number;  // number of vertical partition lines to draw
   /** Inter-front gap in mm; used to lay out the external drawer stack. */
@@ -95,7 +101,7 @@ function computeDragBounds(
 
 export default function BoxBodySketch({
   bodyH, bodyW, bodyD, items, svgWidth, svgHeight,
-  showLabels = false, showDimensions = false, onItemMove,
+  showLabels = false, showDimensions = false, showGaps = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
   bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
   topVariant, sinkTraverseWidthCm, cellItems, liftMechanismId, internalShelvesCm,
@@ -243,6 +249,41 @@ export default function BoxBodySketch({
     if (drag && drag.itemId === item.id) return drag.currentH;
     return item.heightFromFloor;
   }
+
+  // Inside dimension chain of the clear vertical openings between objects. Drawn
+  // in the empty regions only (computeInteriorGaps excludes the object zones), so
+  // it never overlaps a shelf/drawer. `gapItems` is the column's own items; the
+  // band [leftX, leftX+bandW] is the inner cavity (full body or a partition cell).
+  function gapNodes(gapItems: InteriorItem[], leftX: number, bandW: number, keyPrefix: string): React.ReactNode {
+    if (!showGaps || gapItems.length === 0) return null;
+    const gaps = computeInteriorGaps(gapItems, bodyH, tBodyCm);
+    const xDim = leftX + Math.min(10, bandW / 4);
+    return gaps.map((g, i) => {
+      const yTop    = toY(g.hi);
+      const yBottom = toY(g.lo);
+      const mid     = (yTop + yBottom) / 2;
+      return (
+        <g key={`${keyPrefix}-gap-${i}`} pointerEvents="none">
+          <line x1={xDim} y1={yTop} x2={xDim} y2={yBottom} className={styles.gapDimLine} />
+          <line x1={xDim - 3} y1={yTop}    x2={xDim + 3} y2={yTop}    className={styles.gapDimLine} />
+          <line x1={xDim - 3} y1={yBottom} x2={xDim + 3} y2={yBottom} className={styles.gapDimLine} />
+          {(yBottom - yTop) >= 14 && (
+            <text x={xDim + 5} y={mid + 3} className={styles.gapLabel}>{g.clear}</text>
+          )}
+        </g>
+      );
+    });
+  }
+
+  // Body-level gap items: the body's own interior plus any structural section
+  // shelves (drawn as boards from internalShelvesCm). Overlapping zones merge,
+  // so a shelf present in both lists is counted once.
+  const bodyGapItems: InteriorItem[] = [
+    ...items,
+    ...(internalShelvesCm ?? []).map((h, i) => ({
+      type: 'shelf' as const, id: `__intshelf_${i}`, heightFromFloor: h,
+    })),
+  ];
 
   return (
     <svg
@@ -407,6 +448,10 @@ export default function BoxBodySketch({
         });
       })()}
 
+      {/* Inside dimension chain — clear opening of every empty space between
+          objects (single-body / non-partition). Cells draw their own below. */}
+      {!(cellItems && numPartitions > 0) && gapNodes(bodyGapItems, innerX, innerW, 'body')}
+
       {/* Partition cells — each cell's rods + drawers in its half (shelves come
           from the board model above). Cell 0 = right half, cell 1 = left half,
           matching the main cabinet view. */}
@@ -459,7 +504,7 @@ export default function BoxBodySketch({
             );
           });
 
-          return [...internalNodes, ...externalNodes];
+          return [...internalNodes, ...externalNodes, gapNodes(cell, cellInnerX, cellInnerW, `cell${ci}`)];
         });
       })()}
 

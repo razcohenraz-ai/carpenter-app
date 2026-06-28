@@ -576,6 +576,52 @@ function hasSmallGap(items: InteriorItem[], shelfThickness: number): boolean {
   return false;
 }
 
+// ── Clear interior openings (spaces between items) ────────────────────────────
+// The clear vertical space of every empty region inside the body: floor → first
+// object, between each consecutive pair, and last object → ceiling (bodyH). Uses
+// the same physical extents as the spacing warnings (drawer height, shelf
+// thickness, ±1.5cm around a rod centre), so the displayed openings agree with
+// the small_zone logic. Overlapping object zones merge so an overlap never
+// creates a phantom gap. Regions with non-positive clearance are dropped.
+
+export interface InteriorGap {
+  /** Bottom of the clear opening, cm from the body floor. */
+  lo: number;
+  /** Top of the clear opening, cm from the body floor. */
+  hi: number;
+  /** Clear height of the opening (hi − lo), cm. */
+  clear: number;
+}
+
+export function computeInteriorGaps(
+  items: InteriorItem[],
+  bodyH: number,
+  shelfThickness = 1.8,
+): InteriorGap[] {
+  const zones = items
+    .map(i => physicalZone(i, shelfThickness))
+    .map(z => ({ lo: Math.max(0, z.lo), hi: Math.min(bodyH, z.hi) }))
+    .filter(z => z.hi > z.lo)
+    .sort((a, b) => a.lo - b.lo);
+
+  // Merge overlapping object zones.
+  const merged: Array<{ lo: number; hi: number }> = [];
+  for (const z of zones) {
+    const last = merged[merged.length - 1];
+    if (!last || z.lo > last.hi) merged.push({ ...z });
+    else last.hi = Math.max(last.hi, z.hi);
+  }
+
+  const gaps: InteriorGap[] = [];
+  let cursor = 0;
+  for (const z of merged) {
+    if (z.lo > cursor) gaps.push({ lo: cursor, hi: z.lo, clear: roundCm(z.lo - cursor) });
+    cursor = Math.max(cursor, z.hi);
+  }
+  if (cursor < bodyH) gaps.push({ lo: cursor, hi: bodyH, clear: roundCm(bodyH - cursor) });
+  return gaps;
+}
+
 export function addShelfRedistributed(
   items: InteriorItem[],
   containerH: number,

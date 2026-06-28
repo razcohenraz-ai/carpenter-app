@@ -144,6 +144,22 @@
   font-family: var(--font-family);
 }
 
+/* Inside dimension chain for the clear openings between interior objects. */
+.gapDimLine {
+  stroke: var(--color-text-muted);
+  stroke-width: 0.75;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.gapLabel {
+  fill: var(--color-text-secondary);
+  font-size: 9px;
+  font-family: var(--font-family);
+  font-weight: var(--font-weight-medium);
+  pointer-events: none;
+}
+
 .dimLabelWidth  { fill: var(--color-width); }
 .dimLabelHeight { fill: var(--color-height); }
 .dimLabelDepth  { fill: var(--color-depth); }
