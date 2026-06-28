@@ -23,7 +23,7 @@ import { buildLiftMechanismHardware } from '../../core/lift/liftMechanismHardwar
 import PlinthEditor from './PlinthEditor';
 import ExternalDrawerEditor from './ExternalDrawerEditor';
 import { checkBoxConsistency } from '../../core/geometry/dimensionConsistency';
-import { MAX_BOX_W, plinthOuterWidth } from '../../core/geometry/boxDecomposition';
+import { MAX_BOX_W, MAX_BOX_H, plinthOuterWidth } from '../../core/geometry/boxDecomposition';
 import styles from './CabinetForm.module.css';
 
 type DoorsPerColumn = 'auto' | '1' | '2' | '3';
@@ -94,6 +94,113 @@ function showLowerDoor(doorsPerColumn: DoorsPerColumn, rawH: string): boolean {
     return !isNaN(h) && h > 180;
   }
   return false;
+}
+
+// ── Height-authoritative collision resolution ──────────────────────────────────
+// The form defaults the door rows seed from; reused as the refit target when a
+// height change collides with the saved values.
+const DEFAULT_LOWER_DOOR_CM = 110;
+const DEFAULT_MIDDLE_DOOR_CM = 80;
+// No built door section may be shorter than this — a sliver door isn't real. The
+// bottom section is `lowerDoorH − plinth`, so the sections sum to `H − plinth`.
+const MIN_SECTION_CM = 30;
+
+/** Whether the engine actually stacks the cabinet into rows for this
+ *  (doorsPerColumn, H) — mirrors decomposeBoxes' `needsSplit`. NOTE auto splits
+ *  only above MAX_BOX_H (200), NOT at showLowerDoor's 180 field-visibility cue. */
+function cabinetSplitsRows(dpc: DoorsPerColumn, H: number): boolean {
+  if (dpc === '2' || dpc === '3') return true;
+  if (dpc === '1') return false;
+  return H > MAX_BOX_H; // 'auto'
+}
+
+/** Largest door-section count (1..3) whose sections all reach MIN_SECTION_CM,
+ *  given the plinth eats into the bottom section (sections sum to H − plinth). */
+function maxSections(H: number, plinth: number): 1 | 2 | 3 {
+  const doorTotal = H - plinth;
+  if (doorTotal >= 3 * MIN_SECTION_CM) return 3;
+  if (doorTotal >= 2 * MIN_SECTION_CM) return 2;
+  return 1;
+}
+
+/** True when the current floor-measured door heights make any built section drop
+ *  below MIN_SECTION_CM (or not fit). bottom = lo − plinth, top = H − lo − (mid). */
+function sectionsViolate(H: number, plinth: number, count: 2 | 3, lo: number, mid: number): boolean {
+  if (!(lo > 0)) return true;
+  if (count === 2) return (lo - plinth) < MIN_SECTION_CM || (H - lo) < MIN_SECTION_CM;
+  if (!(mid > 0)) return true;
+  return (lo - plinth) < MIN_SECTION_CM || mid < MIN_SECTION_CM || (H - lo - mid) < MIN_SECTION_CM;
+}
+
+/** Floor-measured door heights for a `count`-section cabinet, every section
+ *  >= MIN_SECTION_CM: the form defaults when they satisfy it, else an equal split
+ *  of the section space (H − plinth). Assumes `count <= maxSections(H, plinth)`. */
+function fitDoorHeights(H: number, plinth: number, count: 2 | 3): { lowerDoorH: number; middleDoorH?: number } {
+  const each = Math.floor((H - plinth) / count);
+  if (count === 3) {
+    if (!sectionsViolate(H, plinth, 3, DEFAULT_LOWER_DOOR_CM, DEFAULT_MIDDLE_DOOR_CM)) {
+      return { lowerDoorH: DEFAULT_LOWER_DOOR_CM, middleDoorH: DEFAULT_MIDDLE_DOOR_CM };
+    }
+    return { lowerDoorH: plinth + each, middleDoorH: each };
+  }
+  if (!sectionsViolate(H, plinth, 2, DEFAULT_LOWER_DOOR_CM, NaN)) {
+    return { lowerDoorH: DEFAULT_LOWER_DOOR_CM };
+  }
+  return { lowerDoorH: plinth + each };
+}
+
+/** Refit a FormState's section count + door rows + plinth to its height H (H is
+ *  authoritative). Pure. Caps doors-per-column to what fits at MIN_SECTION_CM,
+ *  re-balances any sub-minimum / non-fitting section, and keeps the plinth below
+ *  H and the lower door. Returns whether anything changed (drives the notice). */
+function fitFormToHeight(f: FormState): { next: FormState; changed: boolean } {
+  const H = parseFloat(f.H);
+  if (!(H > 0)) return { next: f, changed: false };
+  let doorsPerColumn = f.doorsPerColumn;
+  let { lowerDoorH, middleDoorH, plinth, doorCoversPlinth } = f;
+  let changed = false;
+  const plinthVal = parseFloat(plinth) || 0;
+
+  if (cabinetSplitsRows(doorsPerColumn, H)) {
+    if (doorsPerColumn === '2' || doorsPerColumn === '3') {
+      const desired = doorsPerColumn === '3' ? 3 : 2;
+      const count = Math.min(desired, maxSections(H, plinthVal));
+      if (count < desired) {                       // too short for the chosen count → cap it
+        doorsPerColumn = count <= 1 ? '1' : '2';
+        changed = true;
+      }
+      if (count === 2 || count === 3) {
+        const lo = parseFloat(lowerDoorH);
+        const mid = parseFloat(middleDoorH);
+        if (count !== desired || sectionsViolate(H, plinthVal, count, lo, mid)) {
+          const fit = fitDoorHeights(H, plinthVal, count);
+          if (String(fit.lowerDoorH) !== lowerDoorH) { lowerDoorH = String(fit.lowerDoorH); changed = true; }
+          if (count === 3 && fit.middleDoorH !== undefined && String(fit.middleDoorH) !== middleDoorH) { middleDoorH = String(fit.middleDoorH); changed = true; }
+        }
+      }
+    } else {
+      // auto (> MAX_BOX_H) → 2 rows; H is large enough that min-30 always holds,
+      // but a saved lower door taller than H still needs refitting.
+      const lo = parseFloat(lowerDoorH);
+      if (sectionsViolate(H, plinthVal, 2, lo, NaN)) {
+        const fit = fitDoorHeights(H, plinthVal, 2);
+        if (String(fit.lowerDoorH) !== lowerDoorH) { lowerDoorH = String(fit.lowerDoorH); changed = true; }
+      }
+    }
+  }
+
+  // Plinth: keep it below H and (when split) below the lower door.
+  const loEff = cabinetSplitsRows(doorsPerColumn, H) ? parseFloat(lowerDoorH) : H;
+  const plinthMax = Math.min(H, loEff);
+  if (plinthVal >= plinthMax) {
+    const newP = Math.max(0, Math.floor(plinthMax) - 1);
+    if (String(newP) !== plinth) { plinth = String(newP); changed = true; }
+    if (newP <= 0) doorCoversPlinth = false;
+  }
+
+  return changed
+    ? { next: { ...f, doorsPerColumn, lowerDoorH, middleDoorH, plinth, doorCoversPlinth }, changed }
+    : { next: f, changed: false };
 }
 
 interface CabinetFormProps {
@@ -209,6 +316,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   // sketch appears without requiring the user to click "חשב".
   // Then restore the saved state so interior/doors/overrides come back.
   const restoredRef = React.useRef(false);
+  // Gate for the live-recalc effect: skip its first run (the mount), which the
+  // restore effect above already owns, so we never recalc over the just-restored
+  // interior/doors. Subsequent form edits recalc + auto-save with no "חשב" click.
+  const liveReadyRef = React.useRef(false);
   React.useEffect(() => {
     if (!initialInput) return;
     // Build CabinetInput from the initialised FormState (mirrors handleSubmit)
@@ -315,6 +426,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>(initialEditing ?? { type: 'none' });
   const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
+  // Inline notice shown when a height change auto-refits the door rows / plinth
+  // (H is authoritative). Set on commit (blur / doors-per-column change), cleared
+  // on the next keystroke.
+  const [fitNotice, setFitNotice] = useState<string | null>(null);
   // Kitchen direct-edit: the body editor's active tab is owned here so it
   // survives the editor remounting when a door/drawer edit opens (and closes).
   const [kitchenEditorTab, setKitchenEditorTab] = useState<EditorTab>('bodies');
@@ -343,6 +458,106 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     return state.edgingFinishMaterialId
       ? { ...base, finishMaterialId: state.edgingFinishMaterialId }
       : base;
+  }
+
+  /** Build the full CabinetInput from a FormState — the single payload shared by
+   *  the mount calculate, Enter-submit, and the live-recalc effect. Mirrors the
+   *  fields handleSubmit assembled; preserves module flags that aren't form
+   *  fields (sink/appliance/wall/lift/corner) from `initialInput`. */
+  function buildCabinetInput(f: FormState) {
+    const doorsPerColumn: 'auto' | 1 | 2 | 3 =
+      f.doorsPerColumn === '1' ? 1 :
+      f.doorsPerColumn === '2' ? 2 :
+      f.doorsPerColumn === '3' ? 3 : 'auto';
+    const backThicknessMm = parseFloat(f.backThicknessMm);
+    const backThicknessCm = Number.isFinite(backThicknessMm) && backThicknessMm >= 0 ? backThicknessMm / 10 : 0.5;
+    const plinthRecessParsed = parseFloat(f.plinthRecess);
+    const plinthRecess = Number.isFinite(plinthRecessParsed) && plinthRecessParsed > 0 ? plinthRecessParsed : 0;
+    const needsLo = showLowerDoor(f.doorsPerColumn, f.H);
+    const needsMid = f.doorsPerColumn === '3';
+    const loDoor = parseFloat(f.lowerDoorH);
+    const midDoor = parseFloat(f.middleDoorH);
+    return {
+      W: parseFloat(f.W), H: parseFloat(f.H), D: parseFloat(f.D),
+      backThickness: backThicknessCm,
+      hasShell: f.hasShell,
+      hasShellLeft: f.hasShellLeft,
+      hasShellRight: f.hasShellRight,
+      hasEnvelopeTop: f.hasEnvelopeTop && (f.hasShellLeft || f.hasShellRight),
+      hasWallEnvelope: f.hasWallEnvelope,
+      bodyMaterialId: f.bodyMaterialId,
+      frontMaterialId: f.frontMaterialId,
+      plinth: parseFloat(f.plinth) || 0,
+      plinthRecess,
+      doorCoversPlinth: f.doorCoversPlinth,
+      lowerDoorH: needsLo ? loDoor : undefined,
+      middleDoorH: needsMid ? midDoor : undefined,
+      doorsPerColumn,
+      doorGapMm: parseFloat(f.doorGap) || 0,
+      maxDoorWidth: Math.max(parseFloat(f.maxDoorWidth) || 60, 10),
+      edging: buildCabinetEdging(f),
+      ...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {}),
+      ...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {}),
+      ...(initialInput?.hasFronts !== undefined ? { hasFronts: initialInput.hasFronts } : {}),
+      ...(initialInput?.hasBack !== undefined ? { hasBack: initialInput.hasBack } : {}),
+      ...(initialInput?.hasBottom !== undefined ? { hasBottom: initialInput.hasBottom } : {}),
+      ...(initialInput?.mount !== undefined ? { mount: initialInput.mount } : {}),
+      ...(initialInput?.liftMechanism !== undefined ? { liftMechanism: initialInput.liftMechanism } : {}),
+      ...(f.liftMechanismId ? { liftMechanismId: f.liftMechanismId } : {}),
+      ...(initialInput?.singleFront !== undefined ? { singleFront: initialInput.singleFront } : {}),
+      ...(initialInput?.cornerFiller ? { cornerFiller: {
+        doorSide: f.cornerDoorSide,
+        doorWidthCm: Math.max(parseFloat(f.cornerDoorWidthCm) || 60, 1),
+        returnDepthCm: Math.max(parseFloat(f.cornerReturnCm) || 7, 0),
+      } } : {}),
+    };
+  }
+
+  /** Recalculate live from a FormState, but only when it can actually be
+   *  decomposed. `decomposeBoxes` THROWS on a degenerate cabinet (plinth ≥ H,
+   *  plinth ≥ lowerDoorH, lowerDoorH ≥ H, or lower+middle ≥ H), and with no error
+   *  boundary that blanks the screen — the old "חשב" handleSubmit gated it the
+   *  same way. We must validate BEFORE calling `calculate`: it records
+   *  `lastInputRef` before it decomposes, so letting it throw would leave the
+   *  embedded sketch reading a degenerate input and crash on the next render.
+   *  Freedom principle: don't block, just hold the last drawing. */
+  function liveRecalc(f: FormState): void {
+    if (!canDecompose(f)) return;
+    calculate(buildCabinetInput(f));
+  }
+
+  /** Mirrors every precondition `decomposeBoxes` enforces (core/geometry/
+   *  boxDecomposition.ts), so the live gate predicts a throw without mutating any
+   *  state. Shared with the inline door-height error below. */
+  function canDecompose(f: FormState): boolean {
+    const H = parseFloat(f.H);
+    if (!(parseFloat(f.W) > 0) || !(H > 0) || !(parseFloat(f.D) > 0)) return false;
+    const plinth = parseFloat(f.plinth) || 0;
+    if (plinth >= H) return false;                          // plinth must be < H
+    // Use the engine's actual split (auto splits at >200, not the 180 field cue),
+    // so we don't over-hold in the 180–200 window where the cabinet is single-row.
+    if (cabinetSplitsRows(f.doorsPerColumn, H)) {
+      const lo = parseFloat(f.lowerDoorH);
+      if (!(lo > 0) || lo >= H) return false;               // lower door fits under the top
+      if (plinth >= lo) return false;                       // plinth must be < lowerDoorH
+      if (f.doorsPerColumn === '3') {
+        const mid = parseFloat(f.middleDoorH);
+        if (!(mid > 0) || lo + mid >= H) return false;      // top row stays positive
+      }
+    }
+    return true;
+  }
+
+  /** Commit a field edit with height-authoritative snapping: apply the optional
+   *  override (the doors-per-column select), refit the door rows + plinth to the
+   *  current height, and surface the inline notice when anything moved. Called on
+   *  blur of H/plinth/door rows and on the doors-per-column change — NOT per
+   *  keystroke, so intermediate typing never clobbers the dependents. */
+  function fitAndCommit(override?: Partial<FormState>): void {
+    const base = override ? { ...form, ...override } : form;
+    const { next, changed } = fitFormToHeight(base);
+    if (override || changed) setForm(next);   // `next` already folds in the override
+    setFitNotice(changed ? t.form.heightFitNotice : null);
   }
 
   function applyPlinthUpdate(patch: { plinth?: number; plinthRecess?: number }): void {
@@ -487,9 +702,31 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.customMaterials]);
 
+  // Live recalc + auto-save on every form change — there is no "חשב" button.
+  // The first run (mount) is skipped: the restore effect above owns the initial
+  // calculate, so this never clobbers the just-restored interior/doors. Kitchen
+  // units (kitchenDirectEdit) already recalc inline per control, so they opt out.
+  React.useEffect(() => {
+    if (kitchenDirectEdit) return;
+    if (!liveReadyRef.current) { liveReadyRef.current = true; return; }
+    // Surface the door-row error inline (so the user sees WHY the drawing held)
+    // and only recalc when it can decompose — mirrors the old handleSubmit gate.
+    const H = parseFloat(form.H);
+    const needsLo = showLowerDoor(form.doorsPerColumn, form.H);
+    const needsMid = form.doorsPerColumn === '3';
+    const lo = parseFloat(form.lowerDoorH);
+    const mid = parseFloat(form.middleDoorH);
+    const loErr = needsLo && !isNaN(H) && !isNaN(lo) && lo >= H ? t.form.errorMustBeLessThanH : '';
+    const midErr = needsMid && !isNaN(H) && !isNaN(lo) && !isNaN(mid) && lo + mid >= H ? t.form.errorSumTooLarge : '';
+    setErrors(prev => (prev.lowerDoorH === loErr && prev.middleDoorH === midErr) ? prev : { ...prev, lowerDoorH: loErr, middleDoorH: midErr });
+    liveRecalc(form);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form]);
+
   // ── handlers ──────────────────────────────────────────────────────────────
 
   function setStr(field: keyof FormErrors, value: string): void {
+    if (fitNotice) setFitNotice(null);   // a fresh edit dismisses the last auto-fit notice
     if (field === 'W') setForm(p => ({ ...p, W: value }));
     else if (field === 'H') setForm(p => ({ ...p, H: value }));
     else if (field === 'D') setForm(p => ({ ...p, D: value }));
@@ -656,6 +893,10 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     label: string,
     min = 0.1,
     axis?: 'width' | 'height' | 'depth',
+    /** Run the height-fit snap when the field commits (blur). Passed for H and
+     *  the dependents (plinth / door rows) so a collision auto-resolves once the
+     *  user finishes typing — never per keystroke (that would clobber). */
+    fitOnBlur = false,
   ): React.JSX.Element {
     const err = errors[field];
     const axisKey = axis ? axis.charAt(0).toUpperCase() + axis.slice(1) : '';
@@ -678,6 +919,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
           min={min}
           onChange={e => setStr(field, e.target.value)}
           onFocus={e => e.target.select()}
+          {...(fitOnBlur ? { onBlur: () => fitAndCommit() } : {})}
         />
         {err && <span className={styles.errorMsg}>{err}</span>}
       </div>
@@ -1060,13 +1302,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             {!hideMainDimensions && (
               <>
                 {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
-                {numInput('input-H', 'H', t.form.height, 0.1, 'height')}
+                {numInput('input-H', 'H', t.form.height, 0.1, 'height', true)}
                 {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
               </>
             )}
 
             {/* שורה 2: צוקל, דלתות לגובה, חומר */}
-            {!hidePlinthEditor && numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height')}
+            {!hidePlinthEditor && numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height', true)}
 
             {!hideDoorsPerColumn && (
               <div className={styles.field}>
@@ -1077,9 +1319,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   id="input-doors-per-col"
                   className={styles.select}
                   value={form.doorsPerColumn}
-                  onChange={e =>
-                    setForm(p => ({ ...p, doorsPerColumn: e.target.value as DoorsPerColumn }))
-                  }
+                  onChange={e => fitAndCommit({ doorsPerColumn: e.target.value as DoorsPerColumn })}
                 >
                   <option value="auto">{t.form.auto}</option>
                   <option value="1">1</option>
@@ -1465,10 +1705,17 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             </div>
 
             {/* שדות מותנים: גובה קומות */}
-            {needsLower  && numInput('input-lower-door',  'lowerDoorH',  lowerLabel,              0.1, 'height')}
-            {needsMiddle && numInput('input-middle-door', 'middleDoorH', t.form.middleDoorHeight, 0.1, 'height')}
+            {needsLower  && numInput('input-lower-door',  'lowerDoorH',  lowerLabel,              0.1, 'height', true)}
+            {needsMiddle && numInput('input-middle-door', 'middleDoorH', t.form.middleDoorHeight, 0.1, 'height', true)}
 
           </div>
+
+          {/* Inline notice when a height change auto-refit the door rows / plinth. */}
+          {fitNotice && (
+            <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: 'var(--color-text-secondary, #6b5f55)' }}>
+              ⓘ {fitNotice}
+            </p>
+          )}
         </div>
 
         <div className={styles.sketchStack}>
@@ -1506,10 +1753,14 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             </div>
           )}
 
-          {/* Main sketch — bodies layout doubles as the cuts-tab reference.
-              Clicking the plinth rect opens the PlinthEditor full-screen
-              (see editing.type === 'plinth' block above). */}
-          {sketchMode === 'bodies' || sketchMode === 'cuts' || sketchMode === 'hardware' || !result ? (
+          {/* Main sketch. BEFORE the first calculation (no mode tabs yet) this is
+              the full standalone sketch with dimension labels, driven live by the
+              form values. AFTER calculation every mode (bodies/fronts/cuts/
+              hardware) shares ONE embedded sketch in a fixed holder, so switching
+              tabs never resizes or shifts the drawing — same as the kitchen
+              overview. Clicking the plinth opens the PlinthEditor; clicking a body
+              opens its editor (bodies/cuts/hardware); fronts adds the overlay. */}
+          {!result ? (
             <CabinetSketch
               W={form.W}
               H={form.H}
@@ -1546,13 +1797,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               {...(initialInput?.cornerFiller ? { cornerSingleWidth: true } : {})}
             />
           ) : (() => {
-            // Fronts view — mirror the kitchen's main fronts look: the body
-            // sketch (embedded → cropped to the cabinet box) with the translucent
-            // orange front panels (CabinetFrontsOverlay) layered on top in the
-            // SAME coordinate space (outerCabW × effH), so the panels land exactly
-            // over the bodies. Built from the shared cabinetSketchModel — single
-            // source with the kitchen's UnitsView. Per-door click-to-edit lives in
-            // the body editor's Fronts tab (open a body from the גופים view).
+            // Post-calculate view — ONE embedded sketch (cropped to the cabinet
+            // box) in a fixed holder, shared by every mode so tabs don't jump
+            // (kitchen UnitsView pattern, via the shared cabinetSketchModel).
+            // Fronts mode layers the translucent orange front panels
+            // (CabinetFrontsOverlay) on top in the SAME coordinate space
+            // (outerCabW × effH) so they land exactly over the bodies. Bodies/
+            // cuts/hardware keep the body + plinth click-to-edit.
             const inp = getLastInput();
             const st = getSnapshot();
             if (!inp) return null;
@@ -1560,6 +1811,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             const m = buildCabinetSketchModel(inp, st, customMats);
             const MAX_H_PX = 480;
             const holderW = `min(100%, ${Math.round(MAX_H_PX * (m.outerCabW / m.effH))}px)`;
+            const isFronts = sketchMode === 'fronts';
             return (
               <div style={{ position: 'relative', width: holderW, aspectRatio: `${m.outerCabW} / ${m.effH}`, margin: '0 auto' }}>
                 <CabinetSketch
@@ -1593,26 +1845,28 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                   {...(inp.hasBack !== undefined ? { hasBack: inp.hasBack } : {})}
                   {...(inp.hasBottom !== undefined ? { hasBottom: inp.hasBottom } : {})}
                   {...(inp.cornerFiller ? { cornerSingleWidth: true } : {})}
+                  boxMaterialOverrides={boxMaterialOverrides}
                   customMaterials={customMats}
-                />
-                <CabinetFrontsOverlay
-                  input={inp}
-                  state={st}
-                  customMaterials={customMats}
-                  viewBoxW={m.outerCabW}
-                  viewBoxH={m.effH}
-                  onDoorClick={handleDoorClick}
+                  {...(!hidePlinthEditor && (parseFloat(form.plinth) || 0) > 0 ? { onPlinthClick: handlePlinthClick } : {})}
+                  {...(!isFronts ? { onBoxClick: handleBoxClick } : {})}
                   onDrawerFrontClick={handleDrawerFrontClick}
                 />
+                {isFronts && (
+                  <CabinetFrontsOverlay
+                    input={inp}
+                    state={st}
+                    customMaterials={customMats}
+                    viewBoxW={m.outerCabW}
+                    viewBoxH={m.effH}
+                    onDoorClick={handleDoorClick}
+                    onDrawerFrontClick={handleDrawerFrontClick}
+                  />
+                )}
               </div>
             );
           })()}
         </div>
       </div>
-
-      <button type="submit" className={styles.submitBtn}>
-        {t.form.calculate}
-      </button>
 
       {result !== null && boxDimensionOverrides.size > 0 && (() => {
         const envTopH = (form.hasEnvelopeTop && form.hasShell) ? frontThicknessCm : 0;

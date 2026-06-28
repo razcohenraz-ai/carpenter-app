@@ -7,7 +7,7 @@ import { roundInternal } from "../utils/round";
 export const MAX_BOX_W = 100;
 
 /** גובה שמעליו מפצלים לקופסה עליונה ותחתונה (במצב auto), ס"מ */
-const MAX_BOX_H = 200;
+export const MAX_BOX_H = 200;
 
 /** רוחב מקסימלי ליחידת צוקל בודדת, ס"מ */
 export const MAX_PLINTH_W = 240;

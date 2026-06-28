@@ -90,6 +90,8 @@ export interface Translations {
     errorInvalid: string;
     errorMustBeLessThanH: string;
     errorSumTooLarge: string;
+    /** Inline notice when a height change auto-refits the door rows / plinth. */
+    heightFitNotice: string;
     shellWidthWarning: (cm: number) => string;
     doorGap: string;
     doorGapWarn: string;
@@ -430,6 +432,7 @@ const he: Translations = {
     errorInvalid: 'יש להזין מספר חיובי',
     errorMustBeLessThanH: 'חייב להיות קטן מגובה הארון',
     errorSumTooLarge: 'סכום הקומות חייב להיות קטן מגובה הארון',
+    heightFitNotice: 'התאמתי את גובה הדלתות/הצוקל לגובה הארון',
     shellWidthWarning: (cm: number) => `רוחב הגופים הפנימיים נמוך מאוד (${cm.toFixed(1)} ס"מ). שקול ארון רחב יותר או ביטול המעטפת.`,
     doorGap: 'רווח בין דלתות (מ"מ)',
     doorGapWarn: 'רווח גדול מ-4 מ"מ נחשב גדול מהמקובל. וודא שהצירים מתאימים.',
@@ -747,6 +750,7 @@ const en: Translations = {
     errorInvalid: 'Must be a positive number',
     errorMustBeLessThanH: 'Must be less than cabinet height',
     errorSumTooLarge: 'Sections sum must be less than cabinet height',
+    heightFitNotice: 'Adjusted the door/plinth heights to fit the cabinet height',
     shellWidthWarning: (cm: number) => `Inner body width is very low (${cm.toFixed(1)} cm). Consider a wider cabinet or removing the envelope.`,
     doorGap: 'Door Gap (mm)',
     doorGapWarn: 'Gap over 4 mm is larger than standard. Ensure hinges are suitable.',
