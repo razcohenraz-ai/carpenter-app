@@ -240,7 +240,9 @@ export function RoomView3D({ room, products, selectedId, onSelect, onOpenProduct
           );
         })}
 
-        <OrbitControls target={center} makeDefault zoomToCursor />
+        {/* enableZoom=false: two-finger trackpad scroll (wheel events) no longer
+            dollies the camera — rotate (drag) and pan still work. */}
+        <OrbitControls target={center} makeDefault enableZoom={false} />
       </Canvas>
     </div>
   );

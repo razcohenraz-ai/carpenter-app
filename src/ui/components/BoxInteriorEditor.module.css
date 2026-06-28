@@ -4,6 +4,22 @@
   gap: var(--spacing-md);
 }
 
+/* ── Sticky top bar (back button + title + tabs) ──
+   Keeps the navigation pinned to the top of the scroll area on every screen
+   the editor renders in. Sticks just below the global app header
+   (`--header-height`, z-index 100), so it never overlaps it. The negative
+   horizontal margin + matching padding let the bar's background span the
+   form's padding edge-to-edge, so scrolled content can't peek at the sides. */
+.stickyBar {
+  position: sticky;
+  top: var(--header-height);
+  z-index: 20;
+  background: var(--color-surface);
+  margin: 0 calc(-1 * var(--spacing-md));
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
 /* ── Header ── */
 
 .header {

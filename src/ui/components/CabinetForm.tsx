@@ -426,6 +426,23 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>(initialEditing ?? { type: 'none' });
   const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
+  // Compact input sidebar — which group flyout is open (one at a time; click the
+  // active button again to collapse). null = all collapsed.
+  type InputPanel = 'dim' | 'materials' | 'shell' | 'structure';
+  const [openPanel, setOpenPanel] = useState<InputPanel | null>(null);
+  const togglePanel = (p: InputPanel): void => setOpenPanel(cur => (cur === p ? null : p));
+  // Close the open flyout on a click outside the rail (button + panel).
+  const railRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (openPanel === null) return;
+    function onDocMouseDown(e: MouseEvent): void {
+      if (railRef.current && !railRef.current.contains(e.target as Node)) {
+        setOpenPanel(null);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [openPanel]);
   // Inline notice shown when a height change auto-refits the door rows / plinth
   // (H is authoritative). Set on commit (blur / doors-per-column change), cleared
   // on the next keystroke.
@@ -1314,418 +1331,445 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
 
       <div className={styles.twoCol}>
         <div className={styles.formCol}>
-          <div className={styles.grid}>
+          {/* Compact input sidebar — a rail of group buttons; each opens a
+              flyout of its fields next to it, one at a time (click again to
+              collapse). Replaces the old flat field grid. */}
+          <div className={styles.rail} ref={railRef}>
 
-            {/* שורה 1: W, H, D — hidden for kitchen units (dimensions edited
-                exclusively via per-body override in BoxInteriorEditor) */}
+            {/* ── מידות / Dimensions ── H, W, D */}
             {!hideMainDimensions && (
-              <>
-                {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
-                {numInput('input-H', 'H', t.form.height, 0.1, 'height', true)}
-                {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
-              </>
-            )}
-
-            {/* שורה 2: צוקל, דלתות לגובה, חומר */}
-            {!hidePlinthEditor && numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height', true)}
-
-            {!hideDoorsPerColumn && (
-              <div className={styles.field}>
-                <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
-                  {t.form.doorsPerColumn}
-                </label>
-                <select
-                  id="input-doors-per-col"
-                  className={styles.select}
-                  value={form.doorsPerColumn}
-                  onChange={e => fitAndCommit({ doorsPerColumn: e.target.value as DoorsPerColumn })}
+              <div className={styles.railItem}>
+                <button
+                  type="button"
+                  className={`${styles.railBtn} ${openPanel === 'dim' ? styles.railBtnActive : ''}`}
+                  onClick={() => togglePanel('dim')}
                 >
-                  <option value="auto">{t.form.auto}</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select>
+                  📐 {t.form.groupDimensions}
+                </button>
+                {openPanel === 'dim' && (
+                  <div className={styles.flyout}>
+                    {numInput('input-H', 'H', t.form.height, 0.1, 'height', true)}
+                    {numInput('input-W', 'W', t.form.width, 0.1, 'width')}
+                    {numInput('input-D', 'D', t.form.depth, 0.1, 'depth')}
+                  </div>
+                )}
               </div>
             )}
 
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-body-material">
-                {t.form.bodyMaterial}
-              </label>
-              <select
-                id="input-body-material"
-                className={styles.select}
-                value={form.bodyMaterialId}
-                onChange={e => {
-                  const newId = e.target.value as MaterialId;
-                  setForm(p => ({ ...p, bodyMaterialId: newId }));
-                  // Live-update: recalculate immediately so the saved cabinet input
-                  // (and therefore the kitchen overview's cuts/hardware) reflects
-                  // the new material right away — without requiring "חשב".
-                  const lastInput = getLastInput();
-                  if (lastInput) calculate({ ...lastInput, bodyMaterialId: newId });
-                }}
+            {/* ── חומרים / Materials ── body, front, back thickness, edging */}
+            <div className={styles.railItem}>
+              <button
+                type="button"
+                className={`${styles.railBtn} ${openPanel === 'materials' ? styles.railBtnActive : ''}`}
+                onClick={() => togglePanel('materials')}
               >
-                {availableBodyMaterials.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-back-thickness">
-                {t.form.backThickness}
-              </label>
-              <input
-                id="input-back-thickness"
-                className={styles.input}
-                type="number"
-                value={form.backThicknessMm}
-                step={0.5}
-                min={0}
-                onChange={e => setForm(p => ({ ...p, backThicknessMm: e.target.value }))}
-                onFocus={e => e.target.select()}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-front-material">
-                {t.form.frontMaterial}
-              </label>
-              <select
-                id="input-front-material"
-                className={styles.select}
-                value={form.frontMaterialId}
-                onChange={e => {
-                  const newId = e.target.value as MaterialId;
-                  setForm(p => ({ ...p, frontMaterialId: newId }));
-                  const lastInput = getLastInput();
-                  if (lastInput) calculate({ ...lastInput, frontMaterialId: newId });
-                }}
-              >
-                {availableFrontMaterials.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* קנט — עובי + גמר. ברירת מחדל ארון: 0.6 mm + אוטומטי. ה-Edging
-                שנבנה כאן יוזרם אל calculate() ויהיה ה-cabinetDefault של
-                edgingCtx; per-body override נשלט בעורך הגוף. */}
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-edging-thickness">
-                {t.edging.thickness}
-              </label>
-              <select
-                id="input-edging-thickness"
-                className={styles.select}
-                value={form.edgingThicknessMm}
-                onChange={e =>
-                  setForm(p => ({ ...p, edgingThicknessMm: e.target.value as '0.6' | '1.3' }))
-                }
-              >
-                <option value="0.6">0.6</option>
-                <option value="1.3">1.3</option>
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-edging-finish">
-                {t.edging.finish}
-              </label>
-              <select
-                id="input-edging-finish"
-                className={styles.select}
-                value={form.edgingFinishMaterialId}
-                onChange={e =>
-                  setForm(p => ({ ...p, edgingFinishMaterialId: e.target.value as '' | MaterialId }))
-                }
-              >
-                <option value="">{t.edging.finishAuto}</option>
-                {materialsArray.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* צ'קבוקסים — משתרעים על כל הרוחב */}
-            <div className={styles.checkboxRow}>
-              {splitShellSides ? (
-                <>
-                  {checkbox(
-                    'input-shell-left',
-                    form.hasShellLeft,
-                    t.form.hasShellLeft,
-                    v => {
-                      setForm(p => ({
-                        ...p,
-                        hasShellLeft: v,
-                        hasShell: v && p.hasShellRight,
-                        ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}),
-                      }));
-                      const li = getLastInput();
-                      if (li) calculate({
-                        ...li,
-                        hasShellLeft: v,
-                        hasShell: v && form.hasShellRight,
-                        ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}),
-                      });
-                    },
-                  )}
-                  {checkbox(
-                    'input-shell-right',
-                    form.hasShellRight,
-                    t.form.hasShellRight,
-                    v => {
-                      setForm(p => ({
-                        ...p,
-                        hasShellRight: v,
-                        hasShell: p.hasShellLeft && v,
-                        ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
-                      }));
-                      const li = getLastInput();
-                      if (li) calculate({
-                        ...li,
-                        hasShellRight: v,
-                        hasShell: form.hasShellLeft && v,
-                        ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
-                      });
-                    },
-                  )}
-                </>
-              ) : (
-                <div className={styles.checkboxWithWarn}>
-                  {checkbox(
-                    'input-shell',
-                    form.hasShell,
-                    t.form.hasShell,
-                    v => {
-                      setForm(p => ({
-                        ...p,
-                        hasShell: v,
-                        hasShellLeft: v,
-                        hasShellRight: v,
-                        ...(v ? {} : { hasEnvelopeTop: false }),
-                        ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
-                      }));
-                      const li = getLastInput();
-                      if (li) calculate({
-                        ...li,
-                        hasShell: v, hasShellLeft: v, hasShellRight: v,
-                        hasEnvelopeTop: v ? li.hasEnvelopeTop : false,
-                        ...(form.doorGapManuallySet ? {} : { doorGapMm: v ? 2 : 0 }),
-                      });
-                    },
-                  )}
-                  {shellWidthWarning && (
-                    <span className={styles.warnMsg}>{shellWidthWarning}</span>
-                  )}
-                </div>
-              )}
-              {!hidePlinthEditor && checkbox(
-                'input-covers-plinth',
-                form.doorCoversPlinth,
-                t.form.doorCoversPlinth,
-                v => {
-                  setForm(p => ({ ...p, doorCoversPlinth: v }));
-                  setCoversSkirt(v);
-                  const li = getLastInput();
-                  if (li) calculate({ ...li, doorCoversPlinth: v });
-                },
-                parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
-              )}
-              {!hideEnvelopeTop && (
-                <div className={styles.checkboxWithWarn}>
-                  {checkbox(
-                    'input-envelope-top',
-                    form.hasEnvelopeTop,
-                    t.form.hasEnvelopeTop,
-                    v => {
-                      setForm(p => ({ ...p, hasEnvelopeTop: v }));
-                      const li = getLastInput();
-                      if (li) calculate({ ...li, hasEnvelopeTop: v });
-                    },
-                    !form.hasShellLeft && !form.hasShellRight,
-                  )}
-                  {envelopeTopWarning && (
-                    <span className={styles.warnMsg}>{envelopeTopWarning}</span>
-                  )}
-                </div>
-              )}
-              {/* Wall-cabinet (קלפה) top+bottom envelope — independent of side
-                  shell. Shown only for wall units; replaces the shell-gated
-                  "מעטפת תקרה" which is hidden by hideEnvelopeTop.
-                  Live recalculate (mirrors the material selectors): toggling
-                  the checkbox runs calculate() immediately so the body shrinks
-                  and the envelope-bottom board reaches the cut list without
-                  requiring the user to press "חשב". */}
-              {initialInput?.mount === 'wall' && checkbox(
-                'input-wall-envelope',
-                form.hasWallEnvelope,
-                t.form.hasWallEnvelope,
-                v => {
-                  setForm(p => ({ ...p, hasWallEnvelope: v }));
-                  const lastInput = getLastInput();
-                  if (lastInput) calculate({ ...lastInput, hasWallEnvelope: v });
-                },
-              )}
-              {/* Lift-mechanism family picker (קלפה) — only for a wall-cabinet
-                  flap. Picks the AVENTOS family that prices the hardware line;
-                  re-runs calculate live (mirrors the wall-envelope checkbox). A
-                  height/width out of the family's range shows a non-blocking
-                  warning (freedom principle). */}
-              {initialInput?.liftMechanism === true && (() => {
-                const enabledLift = settings?.enabledLiftMechanismIds;
-                const liftOptions = Object.values(LIFT_MECHANISMS)
-                  .filter(m => !enabledLift || enabledLift.includes(m.id));
-                // Check each EFFECTIVE body (result.boxes — per-body overrides
-                // already applied) against the family range, not the un-overridden
-                // form W/H. Falls back to the form dims until the first calculate.
-                const liftBodies = (result?.boxes ?? []).filter(b => b.level !== 'plinth');
-                const liftDims = liftBodies.length > 0
-                  ? liftBodies.map(b => ({ h: b.H, w: b.W }))
-                  : [{ h: parseFloat(form.H) || 0, w: parseFloat(form.W) || 0 }];
-                const liftWarnings = !form.liftMechanismId ? [] : Array.from(new Set(
-                  liftDims.flatMap(d => buildLiftMechanismHardware({
-                    liftMechanismId: form.liftMechanismId,
-                    cabinetHeightCm: d.h,
-                    cabinetWidthCm: d.w,
-                    flapCount: 1,
-                  }).warnings),
-                ));
-                return (
+                🎨 {t.form.groupMaterials}
+              </button>
+              {openPanel === 'materials' && (
+                <div className={styles.flyout}>
                   <div className={styles.field}>
-                    <label className={styles.fieldLabel} htmlFor="lift-mechanism">מנגנון הרמה (קלפה)</label>
+                    <label className={styles.fieldLabel} htmlFor="input-body-material">
+                      {t.form.bodyMaterial}
+                    </label>
                     <select
-                      id="lift-mechanism"
-                      className={styles.input}
-                      value={form.liftMechanismId}
+                      id="input-body-material"
+                      className={styles.select}
+                      value={form.bodyMaterialId}
                       onChange={e => {
-                        const id = e.target.value;
-                        setForm(p => ({ ...p, liftMechanismId: id }));
-                        const li = getLastInput();
-                        if (li) {
-                          const { liftMechanismId: _drop, ...rest } = li;
-                          calculate(id ? { ...rest, liftMechanismId: id } : rest);
-                        }
+                        const newId = e.target.value as MaterialId;
+                        setForm(p => ({ ...p, bodyMaterialId: newId }));
+                        // Live-update: recalculate immediately so the saved cabinet
+                        // input (and the kitchen overview's cuts/hardware) reflects
+                        // the new material right away — without requiring "חשב".
+                        const lastInput = getLastInput();
+                        if (lastInput) calculate({ ...lastInput, bodyMaterialId: newId });
                       }}
                     >
-                      <option value="">ללא</option>
-                      {liftOptions.map(m => (
+                      {availableBodyMaterials.map(m => (
                         <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
                     </select>
-                    {liftWarnings.map((w, i) => (
-                      <span key={i} style={{ color: '#b8860b', fontSize: '0.8rem', marginTop: 2 }}>{w}</span>
-                    ))}
                   </div>
-                );
-              })()}
-            </div>
 
-            {/* Corner unit (פינה) controls — door side / width / hinge-post depth.
-                Each edits cornerFiller and recalculates live (mirrors the wall-
-                envelope checkbox) so the door + filler follow immediately. */}
-            {initialInput?.cornerFiller && (
-              <>
-                <div className={styles.field}>
-                  <label className={styles.fieldLabel} htmlFor="corner-door-side">{t.form.cornerDoorSide}</label>
-                  <select
-                    id="corner-door-side"
-                    className={styles.input}
-                    value={form.cornerDoorSide}
-                    onChange={e => {
-                      const side = e.target.value as 'left' | 'right';
-                      setForm(p => ({ ...p, cornerDoorSide: side }));
-                      const li = getLastInput();
-                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorSide: side } });
-                    }}
-                  >
-                    <option value="right">{t.form.cornerSideRight}</option>
-                    <option value="left">{t.form.cornerSideLeft}</option>
-                  </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.fieldLabel} htmlFor="corner-door-w">{t.form.cornerDoorWidth}</label>
-                  <input
-                    id="corner-door-w"
-                    className={styles.input}
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={form.cornerDoorWidthCm}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setForm(p => ({ ...p, cornerDoorWidthCm: val }));
-                      const li = getLastInput();
-                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorWidthCm: Math.max(parseFloat(val) || 60, 1) } });
-                    }}
-                  />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.fieldLabel} htmlFor="corner-return">{t.form.cornerReturn}</label>
-                  <input
-                    id="corner-return"
-                    className={styles.input}
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={form.cornerReturnCm}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setForm(p => ({ ...p, cornerReturnCm: val }));
-                      const li = getLastInput();
-                      if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, returnDepthCm: Math.max(parseFloat(val) || 7, 0) } });
-                    }}
-                  />
-                </div>
-              </>
-            )}
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="input-front-material">
+                      {t.form.frontMaterial}
+                    </label>
+                    <select
+                      id="input-front-material"
+                      className={styles.select}
+                      value={form.frontMaterialId}
+                      onChange={e => {
+                        const newId = e.target.value as MaterialId;
+                        setForm(p => ({ ...p, frontMaterialId: newId }));
+                        const lastInput = getLastInput();
+                        if (lastInput) calculate({ ...lastInput, frontMaterialId: newId });
+                      }}
+                    >
+                      {availableFrontMaterials.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-            {/* רווח בין דלתות */}
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-door-gap">
-                {t.form.doorGap}
-              </label>
-              <input
-                id="input-door-gap"
-                className={styles.input}
-                type="number"
-                value={form.doorGap}
-                step={0.5}
-                min={0}
-                onChange={e => setForm(p => ({ ...p, doorGap: e.target.value, doorGapManuallySet: true }))}
-                onFocus={e => e.target.select()}
-              />
-              {(parseFloat(form.doorGap) || 0) > 4 && (
-                <span className={styles.warnMsg}>{t.form.doorGapWarn}</span>
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="input-back-thickness">
+                      {t.form.backThickness}
+                    </label>
+                    <input
+                      id="input-back-thickness"
+                      className={styles.input}
+                      type="number"
+                      value={form.backThicknessMm}
+                      step={0.5}
+                      min={0}
+                      onChange={e => setForm(p => ({ ...p, backThicknessMm: e.target.value }))}
+                      onFocus={e => e.target.select()}
+                    />
+                  </div>
+
+                  {/* קנט — עובי + גמר. ה-Edging שנבנה כאן יוזרם אל calculate()
+                      ויהיה ה-cabinetDefault; per-body override נשלט בעורך הגוף. */}
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="input-edging-thickness">
+                      {t.edging.thickness}
+                    </label>
+                    <select
+                      id="input-edging-thickness"
+                      className={styles.select}
+                      value={form.edgingThicknessMm}
+                      onChange={e =>
+                        setForm(p => ({ ...p, edgingThicknessMm: e.target.value as '0.6' | '1.3' }))
+                      }
+                    >
+                      <option value="0.6">0.6</option>
+                      <option value="1.3">1.3</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="input-edging-finish">
+                      {t.edging.finish}
+                    </label>
+                    <select
+                      id="input-edging-finish"
+                      className={styles.select}
+                      value={form.edgingFinishMaterialId}
+                      onChange={e =>
+                        setForm(p => ({ ...p, edgingFinishMaterialId: e.target.value as '' | MaterialId }))
+                      }
+                    >
+                      <option value="">{t.edging.finishAuto}</option>
+                      {materialsArray.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* רוחב מקסימלי לחזית */}
-            <div className={styles.field}>
-              <label className={styles.fieldLabel} htmlFor="input-max-door-width">
-                {t.form.maxDoorWidth}
-              </label>
-              <input
-                id="input-max-door-width"
-                className={styles.input}
-                type="number"
-                value={form.maxDoorWidth}
-                step={5}
-                min={10}
-                onChange={e => setForm(p => ({ ...p, maxDoorWidth: e.target.value }))}
-                onFocus={e => e.target.select()}
-              />
+            {/* ── מעטפת / Shell ── outer shell, ceiling panel, door covers plinth */}
+            <div className={styles.railItem}>
+              <button
+                type="button"
+                className={`${styles.railBtn} ${openPanel === 'shell' ? styles.railBtnActive : ''}`}
+                onClick={() => togglePanel('shell')}
+              >
+                🛡️ {t.form.groupShell}
+              </button>
+              {openPanel === 'shell' && (
+                <div className={styles.flyout}>
+                  <div className={styles.checkboxColumn}>
+                    {splitShellSides ? (
+                      <>
+                        {checkbox(
+                          'input-shell-left',
+                          form.hasShellLeft,
+                          t.form.hasShellLeft,
+                          v => {
+                            setForm(p => ({
+                              ...p,
+                              hasShellLeft: v,
+                              hasShell: v && p.hasShellRight,
+                              ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}),
+                            }));
+                            const li = getLastInput();
+                            if (li) calculate({
+                              ...li,
+                              hasShellLeft: v,
+                              hasShell: v && form.hasShellRight,
+                              ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}),
+                            });
+                          },
+                        )}
+                        {checkbox(
+                          'input-shell-right',
+                          form.hasShellRight,
+                          t.form.hasShellRight,
+                          v => {
+                            setForm(p => ({
+                              ...p,
+                              hasShellRight: v,
+                              hasShell: p.hasShellLeft && v,
+                              ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
+                            }));
+                            const li = getLastInput();
+                            if (li) calculate({
+                              ...li,
+                              hasShellRight: v,
+                              hasShell: form.hasShellLeft && v,
+                              ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}),
+                            });
+                          },
+                        )}
+                      </>
+                    ) : (
+                      <div className={styles.checkboxWithWarn}>
+                        {checkbox(
+                          'input-shell',
+                          form.hasShell,
+                          t.form.hasShell,
+                          v => {
+                            setForm(p => ({
+                              ...p,
+                              hasShell: v,
+                              hasShellLeft: v,
+                              hasShellRight: v,
+                              ...(v ? {} : { hasEnvelopeTop: false }),
+                              ...(p.doorGapManuallySet ? {} : { doorGap: v ? '2' : '0' }),
+                            }));
+                            const li = getLastInput();
+                            if (li) calculate({
+                              ...li,
+                              hasShell: v, hasShellLeft: v, hasShellRight: v,
+                              hasEnvelopeTop: v ? li.hasEnvelopeTop : false,
+                              ...(form.doorGapManuallySet ? {} : { doorGapMm: v ? 2 : 0 }),
+                            });
+                          },
+                        )}
+                        {shellWidthWarning && (
+                          <span className={styles.warnMsg}>{shellWidthWarning}</span>
+                        )}
+                      </div>
+                    )}
+                    {!hideEnvelopeTop && (
+                      <div className={styles.checkboxWithWarn}>
+                        {checkbox(
+                          'input-envelope-top',
+                          form.hasEnvelopeTop,
+                          t.form.hasEnvelopeTop,
+                          v => {
+                            setForm(p => ({ ...p, hasEnvelopeTop: v }));
+                            const li = getLastInput();
+                            if (li) calculate({ ...li, hasEnvelopeTop: v });
+                          },
+                          !form.hasShellLeft && !form.hasShellRight,
+                        )}
+                        {envelopeTopWarning && (
+                          <span className={styles.warnMsg}>{envelopeTopWarning}</span>
+                        )}
+                      </div>
+                    )}
+                    {!hidePlinthEditor && checkbox(
+                      'input-covers-plinth',
+                      form.doorCoversPlinth,
+                      t.form.doorCoversPlinth,
+                      v => {
+                        setForm(p => ({ ...p, doorCoversPlinth: v }));
+                        setCoversSkirt(v);
+                        const li = getLastInput();
+                        if (li) calculate({ ...li, doorCoversPlinth: v });
+                      },
+                      parseFloat(form.plinth) <= 0 || isNaN(parseFloat(form.plinth)),
+                    )}
+                    {/* Wall-cabinet (קלפה) top+bottom envelope — independent of
+                        side shell. Shown only for wall units. Live recalculate
+                        (mirrors the material selectors). */}
+                    {initialInput?.mount === 'wall' && checkbox(
+                      'input-wall-envelope',
+                      form.hasWallEnvelope,
+                      t.form.hasWallEnvelope,
+                      v => {
+                        setForm(p => ({ ...p, hasWallEnvelope: v }));
+                        const lastInput = getLastInput();
+                        if (lastInput) calculate({ ...lastInput, hasWallEnvelope: v });
+                      },
+                    )}
+                  </div>
+
+                  {/* Lift-mechanism family picker (קלפה) — only for a wall-cabinet
+                      flap. Picks the AVENTOS family that prices the hardware line;
+                      re-runs calculate live. Out-of-range → non-blocking warning. */}
+                  {initialInput?.liftMechanism === true && (() => {
+                    const enabledLift = settings?.enabledLiftMechanismIds;
+                    const liftOptions = Object.values(LIFT_MECHANISMS)
+                      .filter(m => !enabledLift || enabledLift.includes(m.id));
+                    const liftBodies = (result?.boxes ?? []).filter(b => b.level !== 'plinth');
+                    const liftDims = liftBodies.length > 0
+                      ? liftBodies.map(b => ({ h: b.H, w: b.W }))
+                      : [{ h: parseFloat(form.H) || 0, w: parseFloat(form.W) || 0 }];
+                    const liftWarnings = !form.liftMechanismId ? [] : Array.from(new Set(
+                      liftDims.flatMap(d => buildLiftMechanismHardware({
+                        liftMechanismId: form.liftMechanismId,
+                        cabinetHeightCm: d.h,
+                        cabinetWidthCm: d.w,
+                        flapCount: 1,
+                      }).warnings),
+                    ));
+                    return (
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="lift-mechanism">מנגנון הרמה (קלפה)</label>
+                        <select
+                          id="lift-mechanism"
+                          className={styles.input}
+                          value={form.liftMechanismId}
+                          onChange={e => {
+                            const id = e.target.value;
+                            setForm(p => ({ ...p, liftMechanismId: id }));
+                            const li = getLastInput();
+                            if (li) {
+                              const { liftMechanismId: _drop, ...rest } = li;
+                              calculate(id ? { ...rest, liftMechanismId: id } : rest);
+                            }
+                          }}
+                        >
+                          <option value="">ללא</option>
+                          {liftOptions.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                        {liftWarnings.map((w, i) => (
+                          <span key={i} style={{ color: '#b8860b', fontSize: '0.8rem', marginTop: 2 }}>{w}</span>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
-            {/* שדות מותנים: גובה קומות */}
-            {needsLower  && numInput('input-lower-door',  'lowerDoorH',  lowerLabel,              0.1, 'height', true)}
-            {needsMiddle && numInput('input-middle-door', 'middleDoorH', t.form.middleDoorHeight, 0.1, 'height', true)}
+            {/* ── מבנה / Structure ── plinth height, doors-per-column (+ floor
+                heights), door gap, corner controls */}
+            <div className={styles.railItem}>
+              <button
+                type="button"
+                className={`${styles.railBtn} ${openPanel === 'structure' ? styles.railBtnActive : ''}`}
+                onClick={() => togglePanel('structure')}
+              >
+                🧱 {t.form.groupStructure}
+              </button>
+              {openPanel === 'structure' && (
+                <div className={styles.flyout}>
+                  {!hidePlinthEditor && numInput('input-plinth', 'plinth', t.form.plinthHeight, 0, 'height', true)}
+
+                  {!hideDoorsPerColumn && (
+                    <div className={styles.field}>
+                      <label className={styles.fieldLabel} htmlFor="input-doors-per-col">
+                        {t.form.doorsPerColumn}
+                      </label>
+                      <select
+                        id="input-doors-per-col"
+                        className={styles.select}
+                        value={form.doorsPerColumn}
+                        onChange={e => fitAndCommit({ doorsPerColumn: e.target.value as DoorsPerColumn })}
+                      >
+                        <option value="auto">{t.form.auto}</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* גובה קומות — מותנה ב-doorsPerColumn */}
+                  {needsLower  && numInput('input-lower-door',  'lowerDoorH',  lowerLabel,              0.1, 'height', true)}
+                  {needsMiddle && numInput('input-middle-door', 'middleDoorH', t.form.middleDoorHeight, 0.1, 'height', true)}
+
+                  {/* רווח בין דלתות */}
+                  <div className={styles.field}>
+                    <label className={styles.fieldLabel} htmlFor="input-door-gap">
+                      {t.form.doorGap}
+                    </label>
+                    <input
+                      id="input-door-gap"
+                      className={styles.input}
+                      type="number"
+                      value={form.doorGap}
+                      step={0.5}
+                      min={0}
+                      onChange={e => setForm(p => ({ ...p, doorGap: e.target.value, doorGapManuallySet: true }))}
+                      onFocus={e => e.target.select()}
+                    />
+                    {(parseFloat(form.doorGap) || 0) > 4 && (
+                      <span className={styles.warnMsg}>{t.form.doorGapWarn}</span>
+                    )}
+                  </div>
+
+                  {/* Corner unit (פינה) controls — door side / width / hinge-post
+                      depth. Each edits cornerFiller and recalculates live. */}
+                  {initialInput?.cornerFiller && (
+                    <>
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="corner-door-side">{t.form.cornerDoorSide}</label>
+                        <select
+                          id="corner-door-side"
+                          className={styles.input}
+                          value={form.cornerDoorSide}
+                          onChange={e => {
+                            const side = e.target.value as 'left' | 'right';
+                            setForm(p => ({ ...p, cornerDoorSide: side }));
+                            const li = getLastInput();
+                            if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorSide: side } });
+                          }}
+                        >
+                          <option value="right">{t.form.cornerSideRight}</option>
+                          <option value="left">{t.form.cornerSideLeft}</option>
+                        </select>
+                      </div>
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="corner-door-w">{t.form.cornerDoorWidth}</label>
+                        <input
+                          id="corner-door-w"
+                          className={styles.input}
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={form.cornerDoorWidthCm}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setForm(p => ({ ...p, cornerDoorWidthCm: val }));
+                            const li = getLastInput();
+                            if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, doorWidthCm: Math.max(parseFloat(val) || 60, 1) } });
+                          }}
+                        />
+                      </div>
+                      <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="corner-return">{t.form.cornerReturn}</label>
+                        <input
+                          id="corner-return"
+                          className={styles.input}
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={form.cornerReturnCm}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setForm(p => ({ ...p, cornerReturnCm: val }));
+                            const li = getLastInput();
+                            if (li?.cornerFiller) calculate({ ...li, cornerFiller: { ...li.cornerFiller, returnDepthCm: Math.max(parseFloat(val) || 7, 0) } });
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* רוחב מקסימלי לחזית (maxDoorWidth) — hidden for now. The value is
+                kept in form state and still flows into calculate(); only the UI
+                control is removed pending a decision on where to surface it. */}
 
           </div>
 
@@ -1738,37 +1782,40 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
         </div>
 
         <div className={styles.sketchStack}>
-          {/* Mode toggle — shown only after first calculation */}
+          {/* Mode toggle — shown only after first calculation. Wrapped in a
+              sticky bar so the tabs stay pinned to the top of the scroll area. */}
           {result && (
-            <div className={styles.modeToggle}>
-              <button
-                type="button"
-                className={`${styles.modeBtn} ${styles.modeBtnBodies} ${sketchMode === 'bodies' ? styles.modeBtnActive : ''}`}
-                onClick={() => setSketchMode('bodies')}
-              >
-                {t.doors.bodies}
-              </button>
-              <button
-                type="button"
-                className={`${styles.modeBtn} ${styles.modeBtnFronts} ${sketchMode === 'fronts' ? styles.modeBtnActive : ''}`}
-                onClick={() => setSketchMode('fronts')}
-              >
-                {t.doors.fronts}
-              </button>
-              <button
-                type="button"
-                className={`${styles.modeBtn} ${styles.modeBtnCuts} ${sketchMode === 'cuts' ? styles.modeBtnActive : ''}`}
-                onClick={() => setSketchMode('cuts')}
-              >
-                {t.cutsList.tab}
-              </button>
-              <button
-                type="button"
-                className={`${styles.modeBtn} ${sketchMode === 'hardware' ? styles.modeBtnActive : ''}`}
-                onClick={() => setSketchMode('hardware')}
-              >
-                {t.hardwareList.tab}
-              </button>
+            <div className={styles.stickyTabs}>
+              <div className={styles.modeToggle}>
+                <button
+                  type="button"
+                  className={`${styles.modeBtn} ${styles.modeBtnBodies} ${sketchMode === 'bodies' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('bodies')}
+                >
+                  {t.doors.bodies}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeBtn} ${styles.modeBtnFronts} ${sketchMode === 'fronts' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('fronts')}
+                >
+                  {t.doors.fronts}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeBtn} ${styles.modeBtnCuts} ${sketchMode === 'cuts' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('cuts')}
+                >
+                  {t.cutsList.tab}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeBtn} ${sketchMode === 'hardware' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('hardware')}
+                >
+                  {t.hardwareList.tab}
+                </button>
+              </div>
             </div>
           )}
 

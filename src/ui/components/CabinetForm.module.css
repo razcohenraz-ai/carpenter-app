@@ -21,18 +21,108 @@
    מקבלת 1fr → כל הרוחב הזמין במרכז, לא רק 2/3. */
 .twoCol {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  /* Left column is now a compact button rail (fields live in flyouts), so it
+     only needs to fit the buttons — the sketch gets the rest of the width. */
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
   gap: var(--spacing-lg);
   align-items: start;
 }
 
 .formCol {
   min-width: 0;
+  /* Pin the compact button rail to the top of the scroll area (below the global
+     header). align-self:start gives sticky room to move within the tall grid
+     row; z-index sits above the sketch column's sticky tabs (20) so an open
+     flyout still renders over them, but below the global header (100). */
+  position: sticky;
+  top: var(--header-height);
+  align-self: start;
+  z-index: 25;
+}
+
+/* ── Compact input sidebar (rail of group buttons + flyout panels) ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.railItem {
+  position: relative;
+}
+
+.railBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: start;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.railBtn:hover {
+  background: var(--color-surface-raised);
+}
+
+.railBtnActive,
+.railBtnActive:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-surface-raised);
+}
+
+/* Flyout opens beside the active button on the inline-end side (logical, so it
+   works in both RTL and LTR), overlaying the start of the sketch area. */
+.flyout {
+  position: absolute;
+  inset-inline-start: 100%;
+  top: 0;
+  margin-inline-start: var(--spacing-sm);
+  width: 240px;
+  max-width: 70vw;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-md);
+}
+
+.checkboxColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
 @media (max-width: 768px) {
   .twoCol {
     grid-template-columns: 1fr;
+  }
+  /* Single column: don't pin the rail (it would stick a tall, inline-expanded
+     column over the sketch). */
+  .formCol {
+    position: static;
+  }
+  /* On narrow screens the side flyout would overflow — drop it inline below
+     the button instead. */
+  .flyout {
+    position: static;
+    inset-inline-start: auto;
+    margin-inline-start: 0;
+    width: auto;
+    max-width: none;
+    margin-top: var(--spacing-xs);
   }
 }
 
@@ -174,6 +264,20 @@
   gap: var(--spacing-sm);
   align-items: stretch;
   width: 100%;
+}
+
+/* ── Sticky tabs bar ──
+   Pins the mode tabs to the top of the scroll area, just below the global app
+   header (`--header-height`, z-index 100). Full-column-width surface background
+   so the sketch/list scrolling underneath is covered; the pill stays centered. */
+.stickyTabs {
+  position: sticky;
+  top: var(--header-height);
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  background: var(--color-surface);
+  padding: var(--spacing-sm) 0;
 }
 
 /* ── Toggle: גופים / חזיתות ── */

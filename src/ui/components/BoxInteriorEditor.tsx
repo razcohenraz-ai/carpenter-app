@@ -790,34 +790,39 @@ export default function BoxInteriorEditor({
         </div>
       )}
 
-      {/* Header */}
-      <div className={styles.header}>
-        <button className={styles.backBtn} onClick={onBack}>
-          ← {t.interior.back}
-        </button>
-        <h2 className={styles.title}>
-          {t.interior.editBody} — {boxLabel}
-          <span className={styles.bodyHint}> ({bodyH} ס"מ)</span>
-        </h2>
-      </div>
-
-      {/* Tab bar — גופים/חזיתות share the editable screen (fronts just adds the
-          door overlay); חיתוכים/פרזולים are read-only lists for this body.
-          Sits above the unit-settings section. */}
-      <div className={styles.viewToggle}>
-        {(['bodies', 'fronts', 'cuts', 'hardware'] as const).map(id => (
-          <button
-            key={id}
-            type="button"
-            className={`${styles.viewBtn} ${tab === id ? styles.viewBtnActive : ''}`}
-            onClick={() => setTab(id)}
-          >
-            {id === 'bodies' ? t.doors.bodies
-              : id === 'fronts' ? t.doors.fronts
-              : id === 'cuts' ? t.cutsList.tab
-              : t.hardwareList.tab}
+      {/* Sticky top bar — back button + title + tabs stay pinned to the top of
+          the scroll area on every screen (single body, partition, kitchen
+          direct-edit). */}
+      <div className={styles.stickyBar}>
+        {/* Header */}
+        <div className={styles.header}>
+          <button className={styles.backBtn} onClick={onBack}>
+            ← {t.interior.back}
           </button>
-        ))}
+          <h2 className={styles.title}>
+            {t.interior.editBody} — {boxLabel}
+            <span className={styles.bodyHint}> ({bodyH} ס"מ)</span>
+          </h2>
+        </div>
+
+        {/* Tab bar — גופים/חזיתות share the editable screen (fronts just adds the
+            door overlay); חיתוכים/פרזולים are read-only lists for this body.
+            Sits above the unit-settings section. */}
+        <div className={styles.viewToggle}>
+          {(['bodies', 'fronts', 'cuts', 'hardware'] as const).map(id => (
+            <button
+              key={id}
+              type="button"
+              className={`${styles.viewBtn} ${tab === id ? styles.viewBtnActive : ''}`}
+              onClick={() => setTab(id)}
+            >
+              {id === 'bodies' ? t.doors.bodies
+                : id === 'fronts' ? t.doors.fronts
+                : id === 'cuts' ? t.cutsList.tab
+                : t.hardwareList.tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Folded-in unit-level controls (kitchen direct-edit) — shell sides,

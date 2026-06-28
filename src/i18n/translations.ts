@@ -69,6 +69,11 @@ export interface Translations {
 
   form: {
     title: string;
+    /** Compact sidebar group buttons (main cabinet form). */
+    groupDimensions: string;
+    groupMaterials: string;
+    groupShell: string;
+    groupStructure: string;
     width: string;
     height: string;
     depth: string;
@@ -411,6 +416,10 @@ const he: Translations = {
 
   form: {
     title: 'מידות הארון',
+    groupDimensions: 'מידות',
+    groupMaterials: 'חומרים',
+    groupShell: 'מעטפת',
+    groupStructure: 'מבנה',
     width: 'רוחב (ס"מ)',
     height: 'גובה (ס"מ)',
     depth: 'עומק (ס"מ)',
@@ -729,6 +738,10 @@ const en: Translations = {
 
   form: {
     title: 'Cabinet Dimensions',
+    groupDimensions: 'Dimensions',
+    groupMaterials: 'Materials',
+    groupShell: 'Shell',
+    groupStructure: 'Structure',
     width: 'Width (cm)',
     height: 'Height (cm)',
     depth: 'Depth (cm)',
