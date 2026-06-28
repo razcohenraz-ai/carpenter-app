@@ -47,6 +47,11 @@ interface Props {
    *  centered partition board — matching the main cabinet view. Body-level
    *  `items` is then expected to be empty (the parts live in the cells). */
   cellItems?: [InteriorItem[], InteriorItem[]];
+  /** Body-local heights (cm from this body's own floor) of structural section
+   *  shelves (מדפים מבניים) that divide a merged body into door sections.
+   *  When set, `buildBoardModel` emits `internal-shelf` boards for them — the
+   *  same boards shown in the 3D view and the cut list. */
+  internalShelvesCm?: number[];
 }
 
 interface DragState {
@@ -93,7 +98,7 @@ export default function BoxBodySketch({
   showLabels = false, showDimensions = false, onItemMove,
   numPartitions = 0, gapMm = 2, onExternalDrawerClick,
   bodyMaterialId, frontMaterialId, hasOuterShell = false, hasEnvelopeTop = false,
-  topVariant, sinkTraverseWidthCm, cellItems, liftMechanismId,
+  topVariant, sinkTraverseWidthCm, cellItems, liftMechanismId, internalShelvesCm,
 }: Props): React.JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -172,6 +177,8 @@ export default function BoxBodySketch({
           D: bodyD ?? 60,
           position: 'single',
           level: 'single',
+          ...(internalShelvesCm && internalShelvesCm.length > 0
+            ? { internalShelves: internalShelvesCm } : {}),
         } as Box,
         bodyMaterial: bodyMat,
         frontMaterial: frontMat ?? bodyMat,

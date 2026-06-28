@@ -47,7 +47,7 @@ describe('initInteriorFromBoxes', () => {
       { id: 'b0', W: 60, H: 100, D: 60, position: 'single', level: 'top' },
       { id: 'b1', W: 60, H: 80,  D: 60, position: 'single', level: 'bottom' },
     ];
-    const result = initInteriorFromBoxes(boxes, 0);
+    const result = initInteriorFromBoxes(boxes);
     expect(result['b0']).toEqual([]);
     expect(result['b1']).toEqual([]);
   });
@@ -57,20 +57,19 @@ describe('initInteriorFromBoxes', () => {
       { id: 'b0', W: 60, H: 170, D: 60, position: 'single', level: 'single' },
       { id: 'b1', W: 60, H: 10,  D: 60, position: 'single', level: 'plinth' },
     ];
-    const result = initInteriorFromBoxes(boxes, 10);
+    const result = initInteriorFromBoxes(boxes);
     expect(result['b0']).toEqual([]);
     expect(Object.keys(result)).not.toContain('b1');
   });
 
   it('converts internalShelves to body-relative ShelfItems', () => {
-    // top body H=70, bottom body H=165, plinth=5
-    // top body floor = 165; bodyRelative = 220 - 5 - 165 = 50
+    // top body H=70, internalShelves are body-local: [50] = midH
     const boxes: Box[] = [
-      { id: 'b0', W: 60, H: 70,  D: 60, position: 'single', level: 'top', internalShelves: [220] },
+      { id: 'b0', W: 60, H: 70,  D: 60, position: 'single', level: 'top', internalShelves: [50] },
       { id: 'b1', W: 60, H: 165, D: 60, position: 'single', level: 'bottom' },
       { id: 'b2', W: 60, H: 5,   D: 60, position: 'single', level: 'plinth' },
     ];
-    const result = initInteriorFromBoxes(boxes, 5);
+    const result = initInteriorFromBoxes(boxes);
     expect(result['b0']).toHaveLength(1);
     expect(result['b0']![0]!.type).toBe('shelf');
     expect((result['b0']![0] as { heightFromFloor: number }).heightFromFloor).toBeCloseTo(50);
@@ -78,12 +77,12 @@ describe('initInteriorFromBoxes', () => {
 
   it('multi-column: each box gets its own entry', () => {
     const boxes: Box[] = [
-      { id: 'b0', W: 80, H: 70, D: 60, position: 'left',  level: 'top', internalShelves: [220] },
-      { id: 'b1', W: 80, H: 70, D: 60, position: 'right', level: 'top', internalShelves: [220] },
+      { id: 'b0', W: 80, H: 70, D: 60, position: 'left',  level: 'top', internalShelves: [50] },
+      { id: 'b1', W: 80, H: 70, D: 60, position: 'right', level: 'top', internalShelves: [50] },
       { id: 'b2', W: 60, H: 165, D: 60, position: 'single', level: 'bottom' },
       { id: 'b3', W: 60, H: 5,   D: 60, position: 'single', level: 'plinth' },
     ];
-    const result = initInteriorFromBoxes(boxes, 5);
+    const result = initInteriorFromBoxes(boxes);
     expect(result['b0']).toHaveLength(1);
     expect(result['b1']).toHaveLength(1);
     expect(result['b2']).toEqual([]);
@@ -103,7 +102,7 @@ describe('initInteriorFromBoxes', () => {
       { id: 'p0', W: 80, H: 10,  D: 60, position: 'left',   level: 'plinth' },
       { id: 'p1', W: 80, H: 10,  D: 60, position: 'right',  level: 'plinth' },
     ];
-    const result = initInteriorFromBoxes(boxes, 10);
+    const result = initInteriorFromBoxes(boxes);
     const bodyKeys = Object.keys(result);
     expect(bodyKeys).toHaveLength(7);
     expect(bodyKeys).not.toContain('p0');

@@ -7,8 +7,12 @@ export interface Hinge {
 export interface Door {
   id: string;
   boxId: string;
-  frontIndex: number;  // 0 = rightmost front, 1, 2, ... left-to-right (RTL order)
-  height: number; // cm — door panel height (= box.H)
+  frontIndex: number;     // 0 = rightmost front, 1, 2, ... left-to-right (RTL order)
+  sectionIndex?: number;  // 0 = bottom section; >0 for split doors at internalShelves (default: 0)
+  /** Bottom of this section in box-local cm (from body bottom). 0 for si=0.
+   *  Used by sketches to position section-doors without re-deriving shelf geometry. */
+  sectionY0?: number;
+  height: number; // cm — door panel height
   width: number;  // cm — door panel width per front
   hingeSide: 'right' | 'left';
   hingeCount: number | 'auto'; // 'auto' = derived from height; number = user-set, preserved

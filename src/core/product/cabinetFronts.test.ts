@@ -170,6 +170,54 @@ describe('cabinetFrontPanels', () => {
     });
   });
 
+  // ── Section split: doorsPerColumn merging → per-section door faces ──────────
+  describe('section split (internalShelves)', () => {
+    // H=170, dpc=3, lo=120, mid=45 → merged body, internalShelves=[120,165]
+    // Expected: 3 stacked door panels per front column
+    const mergedInput = (): CabinetInput => ({
+      ...defaultInputForType('wardrobe'),
+      W: 60, H: 170, plinth: 0,
+      lowerDoorH: 120, middleDoorH: 45, doorsPerColumn: 3,
+    });
+
+    it('merged body emits 3 door faces (one per section) instead of 1', () => {
+      const panels = cabinetFrontPanels(mergedInput(), state(), [])
+        .filter(p => p.hingeSide !== undefined);
+      expect(panels).toHaveLength(3);
+    });
+
+    it('section panels tile the body height without gaps or overlaps', () => {
+      const panels = cabinetFrontPanels(mergedInput(), state(), [])
+        .filter(p => p.hingeSide !== undefined)
+        .sort((a, b) => a.y0 - b.y0);
+      // Each panel's top edge should equal the next panel's bottom (within gap tolerance)
+      const gapCm = mergedInput().doorGapMm / 10;
+      for (let i = 0; i < panels.length - 1; i++) {
+        // The gap is split around each shelf: top of lower section + gap/2 ≈ bottom of next section - gap/2
+        const topOfLower = panels[i]!.y1;
+        const botOfUpper = panels[i + 1]!.y0;
+        expect(botOfUpper - topOfLower).toBeCloseTo(gapCm, 0);
+      }
+    });
+
+    it('3-section panels match the cut-list door count', () => {
+      const input = mergedInput();
+      const { cuts } = computeUnitCutsAndHardware(input, state(), []);
+      const cutDoors = cuts.filter(c => c.group === 'door');
+      const renderDoors = cabinetFrontPanels(input, state(), []).filter(p => p.hingeSide !== undefined);
+      expect(renderDoors).toHaveLength(cutDoors.length);
+    });
+
+    it('lift cabinet stays single-section even with dpc=3', () => {
+      // Lift cabinets (קלפה) open upward as one panel — section split must not apply.
+      const input = kitchenModuleInput('wall');
+      const panels = cabinetFrontPanels(input, kitchenModuleState('wall') as SavedCabinetState, [])
+        .filter(p => p.hingeSide !== undefined);
+      // A wall lift unit is a single short box — no internalShelves → one panel.
+      expect(panels).toHaveLength(1);
+    });
+  });
+
   it('קלפה with wall envelope: the lift door sits BETWEEN the caps, not over them', () => {
     // Regression: calcDoors laid the door over the full external H, ignoring the
     // top+bottom envelope caps (front material, tFront each) → the door overlapped

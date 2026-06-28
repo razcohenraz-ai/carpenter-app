@@ -70,7 +70,7 @@ export function splitWidth(
  *
  * איחוד גופים (doorsPerColumn=3 בלבד):
  * סריקה מלמעלה למטה — אם גוף < 60 ס"מ, מאחד עם הגוף שתחתיו.
- * הגוף המאוחד מקבל internalShelves עם הגבהים המוחלטים (מרצפה) של המחיצות הפנימיות.
+ * הגוף המאוחד מקבל internalShelves עם הגבהים הלוקאליים (מרצפת הגוף עצמו) של המדפים הפנימיים.
  */
 export function decomposeBoxes(
   W: number,
@@ -184,11 +184,23 @@ export function decomposeBoxes(
     // אם נשאר גוף אחד בלבד — מסמנים כ-single
     if (bodies.length === 1) bodies[0]!.level = "single";
 
-    // בניית protos מהגופים הסופיים
-    for (const body of bodies) {
+    // בניית protos מהגופים הסופיים.
+    // גבהי המדפים הפנימיים ממירים ל-body-local (מרצפת הגוף עצמו, לא מרצפת הכלל)
+    // כדי ש-buildBoardModel ו-shelfYRange יוכלו להשתמש בהם ישירות כ-heightFromFloor.
+    // גופים ממויינים מלמעלה למטה; הגוף התחתון ביותר מתחיל בגובה plinthHeight.
+    const bodyFloorFromPhysical = new Array<number>(bodies.length);
+    bodyFloorFromPhysical[bodies.length - 1] = plinthHeight;
+    for (let i = bodies.length - 2; i >= 0; i--) {
+      bodyFloorFromPhysical[i] = bodyFloorFromPhysical[i + 1]! + bodies[i + 1]!.H;
+    }
+
+    for (let bi = 0; bi < bodies.length; bi++) {
+      const body = bodies[bi]!;
+      const floor = bodyFloorFromPhysical[bi]!;
       const bodyProtos = splitWidth(W, body.H, D, body.level, noWidthSplit);
       if (body.shelves.length > 0) {
-        protos.push(...bodyProtos.map(p => ({ ...p, internalShelves: body.shelves })));
+        const localShelves = body.shelves.map(s => s - floor);
+        protos.push(...bodyProtos.map(p => ({ ...p, internalShelves: localShelves })));
       } else {
         protos.push(...bodyProtos);
       }

@@ -983,13 +983,31 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // its local items and feeds this through cabinetBoardBoxes (single source).
       const ovr3d = boxMaterialOverrides.get(editingBoxSlotId);
       const cabInput3d = getLastInput();
+
+      // For the isolated body preview, derive section info from internalShelves
+      // so the fronts overlay shows one door per section (not one tall door).
+      // internalShelves are already body-local (height from this body's own floor),
+      // so no floor subtraction is needed.
+      const editingBoxLocalShelves = (editingBox.internalShelves ?? [])
+        .filter(s => s > 0 && s < editingBox.H)
+        .sort((a, b) => a - b);
+      // Section-aware dpc/lowerDoorH/middleDoorH for the isolated body.
+      // Falls back to doorsPerColumn:1 when no sections (no internalShelves).
+      const isolatedSectionOverride = editingBoxLocalShelves.length > 0 ? {
+        doorsPerColumn: Math.min(3, editingBoxLocalShelves.length + 1) as 1 | 2 | 3,
+        lowerDoorH: editingBoxLocalShelves[0]!,
+        ...(editingBoxLocalShelves[1] !== undefined
+          ? { middleDoorH: editingBoxLocalShelves[1] - editingBoxLocalShelves[0]! }
+          : {}),
+      } : { doorsPerColumn: 1 as const };
+
       const bodyInput3d = cabInput3d ? {
         ...cabInput3d,
         W: editingBox.W, H: editingBox.H, D: editingBox.D,
         plinth: 0,
         hasShell: false, hasShellLeft: false, hasShellRight: false,
         hasEnvelopeTop: false,
-        doorsPerColumn: 1 as const,
+        ...isolatedSectionOverride,
         bodyMaterialId: ovr3d?.bodyMaterialId ?? form.bodyMaterialId,
         frontMaterialId: ovr3d?.frontMaterialId ?? form.frontMaterialId,
         backThickness: ovr3d?.backThicknessCm ?? cabInput3d.backThickness,
@@ -1199,6 +1217,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             {...(initialInput?.mount === 'wall' || initialInput?.cornerFiller ? { shelfOnly: true } : {})}
             {...(initialInput?.topVariant ? { topVariant: initialInput.topVariant } : {})}
             {...(initialInput?.sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm: initialInput.sinkTraverseWidthCm } : {})}
+            {...(editingBoxLocalShelves.length > 0 ? { internalShelvesCm: editingBoxLocalShelves } : {})}
           />
           {/* Kitchen direct-edit: clicking an external-drawer front in the
               Fronts tab opens its editor as an overlay (the main form — which

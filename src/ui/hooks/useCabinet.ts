@@ -16,6 +16,7 @@ import {
   getSkirtCoveringDrawer,
   getItemsForFront,
 } from '../../core/doors/doorUtils';
+import { buildBodyDoorCells, makeSavedDoorKey } from '../../core/doors/bodyDoors';
 import { deriveDrawerFronts } from '../../core/doors/drawerFrontsCalc';
 import {
   computeRowFrontLayout,
@@ -723,7 +724,6 @@ export function useCabinet(settings?: {
 
   function getSnapshot(): SavedCabinetState {
     const boxes = prevBoxesRef.current ?? [];
-    const nfMap = numFrontsRef.current;
 
     const interior: SavedCabinetState['interior'] = {};
     const cellInterior: SavedCabinetState['cellInterior'] = {};
@@ -742,20 +742,20 @@ export function useCabinet(settings?: {
 
       if (partitionsRef.current.get(box.id)) partitions[slotKey] = true;
 
-      const nf = nfMap.get(box.id) ?? 1;
-      for (let fi = 0; fi < nf; fi++) {
-        const doorId = makeDoorId(box.id, fi);
-        const door = doorsRef.current[doorId];
-        if (door) {
-          const savedDoor: SavedDoor = {
-            hingeSide: door.hingeSide,
-            hingeCount: door.hingeCount,
-            hinges: door.hinges.map(h => ({ positionFromBottom: h.positionFromBottom, isManual: h.isManual })),
-            hasDoor: door.hasDoor,
-            ...(door.thicknessOverride ? { thicknessOverride: door.thicknessOverride as MaterialId } : {}),
-          };
-          doors[`${slotKey}:${fi}`] = savedDoor;
-        }
+      // Iterate runtime doors for this box directly — avoids needing section
+      // geometry in getSnapshot (which is called outside calculate's scope).
+      for (const [, door] of Object.entries(doorsRef.current)) {
+        if (door.boxId !== box.id) continue;
+        const fi = door.frontIndex;
+        const si = door.sectionIndex ?? 0;
+        const savedDoor: SavedDoor = {
+          hingeSide: door.hingeSide,
+          hingeCount: door.hingeCount,
+          hinges: door.hinges.map(h => ({ positionFromBottom: h.positionFromBottom, isManual: h.isManual })),
+          hasDoor: door.hasDoor,
+          ...(door.thicknessOverride ? { thicknessOverride: door.thicknessOverride as MaterialId } : {}),
+        };
+        doors[makeSavedDoorKey(slotKey, fi, si)] = savedDoor;
       }
     }
 
@@ -880,7 +880,6 @@ export function useCabinet(settings?: {
     const currentInterior = interiorRef.current;
     const currentCellInterior = cellInteriorRef.current;
     const currentDoors = doorsRef.current;
-    const prevNumFronts = numFrontsRef.current;
 
     const stableInteriorMap   = new Map<string, { items: InteriorItem[]; H: number }>();
     const stableCellMap       = new Map<string, InteriorItem[][]>();
@@ -895,10 +894,10 @@ export function useCabinet(settings?: {
         const cells = currentCellInterior[box.id];
         if (cells) stableCellMap.set(key, cells);
         if (partitionsRef.current.get(box.id)) stablePartitionsMap.set(key, true);
-        const nf = prevNumFronts.get(box.id) ?? 1;
-        for (let fi = 0; fi < nf; fi++) {
-          const d = currentDoors[makeDoorId(box.id, fi)];
-          if (d) stableDoorMap.set(`${key}:${fi}`, d);
+        for (const [, d] of Object.entries(currentDoors)) {
+          if (d.boxId !== box.id) continue;
+          const si = d.sectionIndex ?? 0;
+          stableDoorMap.set(makeSavedDoorKey(key, d.frontIndex, si), d);
         }
       }
     }
@@ -919,42 +918,42 @@ export function useCabinet(settings?: {
         if (savedCells) stableCellMap.set(slotKey, savedCells);
         if (pendingRestore.partitions[slotKey]) stablePartitionsMap.set(slotKey, true);
         const nf = frontColumnsForBox(box.W, maxDoorWidth, input.mount, input.singleFront);
-        for (let fi = 0; fi < nf; fi++) {
-          const dsk = `${slotKey}:${fi}`;
-          const sd = pendingRestore.doors[dsk];
-          if (sd) {
-            // Reconstruct a Door from SavedDoor — derived fields (height,
-            // width, coversSkirt, gapMm) are filled in during the door loop
-            // below; we only need the user-controlled fields here.
-            const hinges: Hinge[] = sd.hinges.map(h => ({
-              id: newItemId(),
-              positionFromBottom: h.positionFromBottom,
-              isManual: h.isManual,
-            }));
-            // Temporarily store as a partial Door keyed by DoorSlotKey so the
-            // door loop (which uses stableDoorMap keyed by `${key}:${fi}`) can
-            // find it and fill in the derived fields via recomputeDoorHinges.
-            stableDoorMap.set(dsk, {
-              id: dsk, // placeholder — overwritten in the door loop
-              boxId: box.id,
-              frontIndex: fi,
-              height: 0,   // derived
-              width: 0,    // derived
-              hingeSide: sd.hingeSide,
-              hingeCount: sd.hingeCount,
-              hinges,
-              hasDoor: sd.hasDoor,
-              coversSkirt: false, // derived
-              gapMm: doorGapMm,
-              ...(sd.thicknessOverride ? { thicknessOverride: sd.thicknessOverride } : {}),
-            });
-          }
+        // Iterate ALL saved door keys for this slot — handles both si=0 keys
+        // (${slotKey}:${fi}) and si>0 section keys (${slotKey}:${fi}:${si}).
+        const prefix = `${slotKey}:`;
+        for (const [dsk, sd] of Object.entries(pendingRestore.doors)) {
+          if (!dsk.startsWith(prefix)) continue;
+          const rest = dsk.slice(prefix.length);
+          const parts = rest.split(':');
+          const fi = parseInt(parts[0]!, 10);
+          if (isNaN(fi) || fi >= nf) continue;
+          // Reconstruct a Door from SavedDoor — derived fields (height,
+          // width, coversSkirt, gapMm) are filled in during the door loop.
+          const hinges: Hinge[] = sd.hinges.map(h => ({
+            id: newItemId(),
+            positionFromBottom: h.positionFromBottom,
+            isManual: h.isManual,
+          }));
+          stableDoorMap.set(dsk, {
+            id: dsk, // placeholder — overwritten in the door loop
+            boxId: box.id,
+            frontIndex: fi,
+            height: 0,   // derived
+            width: 0,    // derived
+            hingeSide: sd.hingeSide,
+            hingeCount: sd.hingeCount,
+            hinges,
+            hasDoor: sd.hasDoor,
+            coversSkirt: false, // derived
+            gapMm: doorGapMm,
+            ...(sd.thicknessOverride ? { thicknessOverride: sd.thicknessOverride } : {}),
+          });
         }
       }
     }
 
     // ── Interior, partitions, cells preservation ───────────────────────────
-    const baselineInterior = initInteriorFromBoxes(boxes, plinth);
+    const baselineInterior = initInteriorFromBoxes(boxes);
     const newInterior: InteriorById = {};
     const newCellInteriorById: CellInteriorById = {};
     const newPartitionsMap = new Map<string, boolean>();
@@ -1057,18 +1056,29 @@ export function useCabinet(settings?: {
       const cornerCf = isCorner(input) ? input.cornerFiller! : null;
       const frontW = cornerCf ? cornerCf.doorWidthCm : bodyLayout.frontWidth;
 
-      for (let fi = 0; fi < numFronts; fi++) {
-        const doorId = makeDoorId(box.id, fi);
-        const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
-        const panelH = calcMainDoorHeight(box.H, itemsForFront, doorGapMm, hasBottomGap, hasTopGap);
+      // internalShelves are already body-local (height from this body's own floor).
+      const shelvesCm = (box.internalShelves ?? [])
+        .filter(s => s > 0 && s < box.H)
+        .sort((a, b) => a - b);
 
-        // coversSkirt transfer: if there's a lowest external drawer, it
-        // inherits coversSkirt and the door loses it.
-        const skirtDrawer = getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt);
+      for (const cell of buildBodyDoorCells(box.id, numFronts, {
+        hasTopGap, hasBottomGap, shelvesCm, boxH: box.H,
+      })) {
+        const { fi, doorId, si } = cell;
+        // External drawers only belong to the bottom section (si=0).
+        const itemsForFront = cell.si === 0
+          ? getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems)
+          : [];
+        const panelH = calcMainDoorHeight(cell.sectionH, itemsForFront, doorGapMm, cell.hasBottomGap, cell.hasTopGap);
+
+        // coversSkirt: only the bottom-most section of a bottom/single body.
+        const skirtDrawer = cell.si === 0 ? getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt) : null;
         if (skirtDrawer) skirtCoveringIds.add(skirtDrawer.id);
-        const coversSkirt = originalCoversSkirt && skirtDrawer === null;
+        const coversSkirt = cell.si === 0 && originalCoversSkirt && skirtDrawer === null;
 
-        const oldDoor = stableDoorMap.get(`${boxStableKey(box)}:${fi}`);
+        const slotKey = boxStableKey(box);
+        const saveKey = makeSavedDoorKey(slotKey, fi, si);
+        const oldDoor = stableDoorMap.get(saveKey);
         const hingeSide = cornerCf
           ? cornerHingeSide(cornerCf)
           : numFronts > 1
@@ -1080,13 +1090,13 @@ export function useCabinet(settings?: {
           const rawHinges: Hinge[] = defaults.map(p => ({ id: newItemId(), positionFromBottom: p, isManual: false }));
           const { hinges } = adjustHingesForInterior(rawHinges, itemsForFront, doorGapMm, panelH);
           newDoors[doorId] = {
-            id: doorId, boxId: box.id, frontIndex: fi,
+            id: doorId, boxId: box.id, frontIndex: fi, sectionIndex: si, sectionY0: cell.sectionY0,
             height: panelH, width: frontW,
             hingeSide, hingeCount: 'auto', hinges, hasDoor: !skipFronts, coversSkirt, gapMm: doorGapMm,
           };
         } else {
           const recomputed = recomputeDoorHinges(
-            { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm,
+            { ...oldDoor, id: doorId, boxId: box.id, frontIndex: fi, sectionIndex: si, sectionY0: cell.sectionY0, height: panelH, width: frontW, coversSkirt, gapMm: doorGapMm,
               ...(cornerCf ? { hingeSide: cornerHingeSide(cornerCf) } : {}) },
             itemsForFront, plinth,
           );

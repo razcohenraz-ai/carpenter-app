@@ -336,7 +336,7 @@ describe("decomposeBoxes", () => {
     expect(body).toHaveLength(2);
     const upper = body.find(b => b.level === "top")!;
     expect(upper.H).toBe(70);   // 20+50
-    expect(upper.internalShelves).toEqual([220]); // loDoor+midDoor=170+50 (sorted asc)
+    expect(upper.internalShelves).toEqual([50]); // body-local: SHELF_TOP_MID(220) - bodyFloor(170) = midH=50
     const lower = body.find(b => b.level === "bottom")!;
     expect(lower.H).toBe(165);
     expect(lower.internalShelves).toBeUndefined();
@@ -354,7 +354,7 @@ describe("decomposeBoxes", () => {
     expect(upper.internalShelves).toBeUndefined();
     const lower = body.find(b => b.level === "middle")!; // level של הגוף המאוחד = middle (upper.level בשלב האיחוד)
     expect(lower.H).toBe(105); // 30+75
-    expect(lower.internalShelves).toEqual([80]); // loDoor=80
+    expect(lower.internalShelves).toEqual([75]); // body-local: SHELF_MID_BOT(80) - plinth(5) = botH=75
   });
 
   it("top+middle שניהם <60, מאוחד>=60 → 2 גופים, מדף ב-220", () => {
@@ -362,7 +362,7 @@ describe("decomposeBoxes", () => {
     const boxes = decomposeBoxes(50, 240, 60, 170, 5, 3, 50);
     const body = boxes.filter(b => b.level !== "plinth");
     expect(body).toHaveLength(2);
-    expect(body.find(b => b.level === "top")!.internalShelves).toEqual([220]);
+    expect(body.find(b => b.level === "top")!.internalShelves).toEqual([50]); // body-local: 220 - 170 = 50
   });
 
   it("top+middle שניהם <60, מאוחד גם <60 → גוף יחיד עם 2 מדפים", () => {
@@ -374,7 +374,7 @@ describe("decomposeBoxes", () => {
     expect(body).toHaveLength(1);
     expect(body[0]!.level).toBe("single");
     expect(body[0]!.H).toBe(190);
-    expect(body[0]!.internalShelves).toEqual([170, 190]); // loDoor=170, loDoor+midDoor=190
+    expect(body[0]!.internalShelves).toEqual([160, 180]); // body-local (plinth=10): [170-10, 190-10]
   });
 
   it("גוף יחיד לאחר איחוד: internalShelves מסודרים בסדר עולה (מרצפה)", () => {
@@ -391,7 +391,7 @@ describe("decomposeBoxes", () => {
     const boxes = decomposeBoxes(160, 240, 60, 170, 5, 3, 50);
     const mergedBoxes = boxes.filter(b => b.level === "top");
     expect(mergedBoxes).toHaveLength(2); // W=160 → 2 עמודות
-    mergedBoxes.forEach(b => expect(b.internalShelves).toEqual([220]));
+    mergedBoxes.forEach(b => expect(b.internalShelves).toEqual([50])); // body-local: 220 - 170 = 50
   });
 
   // ── מעטפת תקרה (envelopeTopH) ────────────────────────────────────────────────

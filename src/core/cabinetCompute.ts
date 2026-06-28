@@ -20,6 +20,7 @@ import { isCorner, cornerHingeSide, cornerFillerCutItems } from './product/corne
 import { computePartitionCuts } from './cuts/partitionCuts';
 import { boxStableKey } from './interior/interiorUtils';
 import { shouldCoverSkirt, makeDoorId, getItemsForFront, calcMainDoorHeight, getSkirtCoveringDrawer, defaultHingeSide, salonHingeSide, isHingeSideFree, computeDefaultHingePositions, adjustHingesForInterior } from './doors/doorUtils';
+import { buildBodyDoorCells, makeSavedDoorKey } from './doors/bodyDoors';
 import {
   computeRowFrontLayout,
   getTotalFrontsInRow,
@@ -219,6 +220,20 @@ export function computeUnitCutsAndHardware(
   // ── Doors ────────────────────────────────────────────────────────────────────
   const newDoors: DoorById = {};
 
+  // Per-level floor positions for section splitting (mirrors cabinetFronts).
+  const LEVEL_ORDER_CC: BoxLevel[] = ['top', 'middle', 'bottom', 'single'];
+  const levelHeightCC = new Map<BoxLevel, number>();
+  for (const b of bodyBoxes) if (!levelHeightCC.has(b.level)) levelHeightCC.set(b.level, b.H);
+  const activeLevelsCC = LEVEL_ORDER_CC.filter(l => levelHeightCC.has(l));
+  const levelFloorsCC = new Map<BoxLevel, number>();
+  {
+    let y = plinth + envelopeBottomH;
+    for (const lvl of [...activeLevelsCC].reverse()) {
+      levelFloorsCC.set(lvl, y);
+      y += levelHeightCC.get(lvl)!;
+    }
+  }
+
   for (const box of bodyBoxes) {
     const numFronts = newNumFrontsMap.get(box.id)!;
     const hasPartition = newPartitionsMap.has(box.id);
@@ -242,13 +257,22 @@ export function computeUnitCutsAndHardware(
     const cornerCf = isCorner(input) ? input.cornerFiller! : null;
     const frontW = cornerCf ? cornerCf.doorWidthCm : bodyLayout.frontWidth;
 
-    for (let fi = 0; fi < numFronts; fi++) {
-      const doorId = makeDoorId(box.id, fi);
-      const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
-      const panelH = calcMainDoorHeight(box.H, itemsForFront, doorGapMm, hasBottomGap, hasTopGap);
+    // internalShelves are already body-local (height from this body's own floor).
+    const shelvesCmCC = (box.internalShelves ?? [])
+      .filter(s => s > 0 && s < box.H)
+      .sort((a, b) => a - b);
 
-      const skirtDrawer = getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt);
-      const coversSkirt = originalCoversSkirt && skirtDrawer === null;
+    for (const cell of buildBodyDoorCells(box.id, numFronts, {
+      hasTopGap, hasBottomGap, shelvesCm: shelvesCmCC, boxH: box.H,
+    })) {
+      const { fi, doorId, si } = cell;
+      const itemsForFront = cell.si === 0
+        ? getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems)
+        : [];
+      const panelH = calcMainDoorHeight(cell.sectionH, itemsForFront, doorGapMm, cell.hasBottomGap, cell.hasTopGap);
+
+      const skirtDrawer = cell.si === 0 ? getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt) : null;
+      const coversSkirt = cell.si === 0 && originalCoversSkirt && skirtDrawer === null;
 
       const hingeSide = cornerCf
         ? cornerHingeSide(cornerCf)
@@ -263,7 +287,7 @@ export function computeUnitCutsAndHardware(
       // wall-row modules (e.g. עליון מזווה) keep normal hinges.
       const isWall = input.liftMechanism === true;
       const slotKey = boxStableKey(box);
-      const savedDoor = savedState.doors[`${slotKey}:${fi}`];
+      const savedDoor = savedState.doors[makeSavedDoorKey(slotKey, fi, si)];
 
       if (savedDoor) {
         // Reconstruct from saved state — use saved hinges
@@ -273,7 +297,7 @@ export function computeUnitCutsAndHardware(
           isManual: h.isManual,
         }));
         newDoors[doorId] = {
-          id: doorId, boxId: box.id, frontIndex: fi,
+          id: doorId, boxId: box.id, frontIndex: fi, sectionIndex: si, sectionY0: cell.sectionY0,
           height: panelH, width: frontW,
           // A saved hinge side is honored only when the side is physically
           // free to choose; otherwise it's clamped to the forced gable
@@ -299,7 +323,7 @@ export function computeUnitCutsAndHardware(
           hinges = adjustHingesForInterior(rawHinges, itemsForFront, doorGapMm, panelH).hinges;
         }
         newDoors[doorId] = {
-          id: doorId, boxId: box.id, frontIndex: fi,
+          id: doorId, boxId: box.id, frontIndex: fi, sectionIndex: si, sectionY0: cell.sectionY0,
           height: panelH, width: frontW,
           hingeSide, hingeCount: isWall ? 0 : 'auto', hinges, hasDoor: !skipFronts,
           coversSkirt, gapMm: doorGapMm,

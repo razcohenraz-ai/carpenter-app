@@ -3,7 +3,6 @@ import type { Door } from '../../types/doors';
 import type { Box, BoxLevel } from '../../types/geometry';
 import type { Edging } from '../../types/edging';
 import type { MaterialId } from '../../types/materials';
-import { makeDoorId } from '../doors/doorUtils';
 
 // Door dimensions are in cm; CutItem dimensions are in mm.
 const cm = (v: number) => v * 10;
@@ -51,7 +50,9 @@ function doorCutName(level: BoxLevel): string {
 export function buildDoorCutItems(args: {
   doors: Record<string, Door>;
   bodyBoxes: ReadonlyArray<Box>;
-  numFrontsPerBox: ReadonlyMap<string, number>;
+  /** @deprecated numFrontsPerBox is no longer used — section-split doors are
+   *  derived from the doors map directly. Kept for backward-compat call sites. */
+  numFrontsPerBox?: ReadonlyMap<string, number>;
   edging?: Edging;
   /** Optional per-body front material id. When provided, each door cut is tagged
    *  with its body's (possibly overridden) front material so the cut list groups
@@ -59,25 +60,31 @@ export function buildDoorCutItems(args: {
    *  to the cabinet front material via group enrichment. */
   frontMaterialForBox?: (boxId: string) => MaterialId | string | undefined;
 }): CutItem[] {
-  const { doors, bodyBoxes, numFrontsPerBox, edging, frontMaterialForBox } = args;
+  const { doors, bodyBoxes, edging, frontMaterialForBox } = args;
   const perimMm = edging ? 2 * edging.thickness : 0;
+
+  // Build a lookup from boxId → Box so we can tag each door cut with the
+  // correct level name and front material without a nested loop.
+  const boxById = new Map(bodyBoxes.map(b => [b.id, b]));
+
   const cuts: CutItem[] = [];
-  for (const box of bodyBoxes) {
-    const nf = numFrontsPerBox.get(box.id) ?? 1;
+  // Iterate the doors map directly — it already contains one entry per
+  // (box, fi, si) cell, including section-split doors (si>0). This avoids
+  // having to re-derive section geometry (internalShelves → shelvesCm) here.
+  for (const door of Object.values(doors)) {
+    if (!door.hasDoor) continue;
+    const box = boxById.get(door.boxId);
+    if (!box) continue;
     const name = doorCutName(box.level);
-    const matId = frontMaterialForBox?.(box.id);
-    for (let fi = 0; fi < nf; fi++) {
-      const door = doors[makeDoorId(box.id, fi)];
-      if (!door || !door.hasDoor) continue;
-      cuts.push({
-        name,
-        qty: 1,
-        w: cm(door.width) - perimMm,
-        h: cm(door.height) - perimMm,
-        group: 'door',
-        ...(matId !== undefined ? { materialId: matId } : {}),
-      });
-    }
+    const matId = frontMaterialForBox?.(door.boxId);
+    cuts.push({
+      name,
+      qty: 1,
+      w: cm(door.width) - perimMm,
+      h: cm(door.height) - perimMm,
+      group: 'door',
+      ...(matId !== undefined ? { materialId: matId } : {}),
+    });
   }
   return cuts;
 }

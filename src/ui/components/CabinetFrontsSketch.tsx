@@ -272,8 +272,11 @@ export default function CabinetFrontsSketch({
               // frontIndex 0 is the box's RIGHTMOST column → leftmost = nf-1-fi.
               const panelX = innerLeftSvg + bodyFrontX(bodyLayout, numFronts - 1 - fi) * geo.scale;
               const panelH   = door.height * geo.scale;
-              const stackPx  = stackTopForDoor(boxId, fi) * geo.scale;
-              const panelY   = rect.y + rect.h - stackPx - panelH;
+              // sectionY0: box-local cm from body bottom (0 for bottom section / single-section bodies).
+              // Positions the door within the box rect; only si=0 doors have a drawer stack offset.
+              const sectionY0Px = (door.sectionY0 ?? 0) * geo.scale;
+              const stackPx  = (door.sectionIndex ?? 0) === 0 ? stackTopForDoor(boxId, fi) * geo.scale : 0;
+              const panelY   = rect.y + rect.h - sectionY0Px - stackPx - panelH;
               // Hinge positions are in DOOR frame (0 = door's structural
               // bottom). Anchor at the door panel's bottom edge — NOT the
               // body's bottom — so a door above an external-drawer stack

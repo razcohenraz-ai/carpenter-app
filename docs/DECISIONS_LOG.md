@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-06-28 — דלתות עוקבות חלוקות (Option A): doors follow sections, לא גופים
+
+**ההקשר**: `doorsPerColumn=3` + ארון שצר מ-MIN_BODY_HEIGHT (60 ס"מ) = איחוד גופים עם `internalShelves`. הבאג: הדלת עקבה אחרי ה-**גוף המאוחד** (דלת אחת גבוהה מ-160 ס"מ) ולא אחרי ה-**חלוקה** (שלוש דלתות מוערמות). אישור הנגר: Option A — דלתות עוקבות חלוקות.
+
+**ההחלטה — section-split בגנרטור משותף**: חולץ `buildBodyDoorCells(boxId, nf, opts)` ב-`core/doors/bodyDoors.ts`. הגנרטור מקבל `shelvesCm` (קואורדינטות מקומיות של המדפים בגוף) + `boxH` ומפיק רשת `(fi × si)`. שלושת מסלולי ה-compute (useCabinet, cabinetCompute, cabinetFronts) + שני הצרכנים (doorCuts, doorUtils) עוברים **כולם** דרכו — מניעת drift.
+
+**מזהים backward-compat**: `makeDoorId(boxId, fi, si=0)` = מזהה הישן בדיוק (si=0 לא מוסיף suffix). גופים ללא `internalShelves` מפיקים si=0 בלבד → תוצאה זהה byte-per-byte לפני השינוי.
+
+**שמירת הצירים**: `${slotKey}:${fi}` לsi=0 (ישן), `${slotKey}:${fi}:${si}` לsi>0. הגוף המאוחד שחטפ sections חדשים שומר את הצירים הישנים בדלת התחתונה (si=0); מקטעים עליונים מקבלים ברירת מחדל. **אין migration** — החלטה מאושרת.
+
+**`buildDoorCutItems` מ-doorsById**: חיתוכי הדלת נגזרים מ-`doors` map ישירות (לא מ-buildBodyDoorCells שוב) — ה-map כבר מכיל את כל מקטעי si≥0 עם הגאומטריה הנכונה. הפרמטר `numFrontsPerBox` הפך deprecated.
+
+**ממספר התצוגה**: `assignDoorDisplayNumbers` ספרה `Σ(nf × ns)` תאים בעמודה; שימוש באות עברית לכל תא → גוף עם 3 מקטעים יקבל "1א","1ב","1ג". גופים ללא internalShelves — תוצאה זהה לפני (ns=1 → totalCells=totalFronts).
+
+**אלטרנטיבה שנדחתה — Option B (גופים עצמאיים)**: לא לאחד גופים קטנים, לשמור כל קומה כגוף נפרד. נדחה: גורם לקרשי מדפים כפולים בין גופים סמוכים + אי-עקביות עם הנגרות האמיתית (גוף מאוחד = לוח אחד, לא שניים).
+
+**יישום**: `src/core/doors/bodyDoors.ts` (NEW), `src/types/doors.ts` (sectionIndex/sectionY0), `src/core/doors/doorUtils.ts` (makeDoorId 3rd arg, assignDoorDisplayNumbers section-aware), `src/core/cuts/doorCuts.ts` (iterate doors map), `src/ui/hooks/useCabinet.ts` + `src/core/cabinetCompute.ts` + `src/core/product/cabinetFronts.ts` (section loop), `src/ui/components/CabinetFrontsSketch.tsx` (sectionY0 positioning). בדיקות: +7 bodyDoors, +3 doorUtils, +4 cabinetFronts. 989 עוברים.
+
+---
+
 ## 2026-06-17 — מודול פינה (corner): דלת קבועה + מילוי בצורת L
 
 **ההקשר**: הנגר ביקש מודול מטבח חדש "פינה" — גוף רחב (125) שחזיתו דלת אחת בגודל קבוע (60) בצד נבחר + לוח מילוי שמכסה את השאר, עם רגל ניצבת (זקף) שנושאת את הצירים. מנוע החזית הקיים תמיד מחלק את הרוחב הפנימי לעמודות דלת **שוות** — דלת 60 על גוף 125 + מילוי + צד עיוור הם **קונספט חזית חדש** שאינו קיים.

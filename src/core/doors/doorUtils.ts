@@ -232,9 +232,16 @@ export function recomputeDoorHinges(door: Door, items: InteriorItem[], plinthH =
 
 // ── Multi-front helpers ───────────────────────────────────────────────────────
 
-// doorId for frontIndex 0 equals boxId (backward-compat); fi > 0 → "${boxId}:${fi}"
-export function makeDoorId(boxId: string, frontIndex: number): string {
-  return frontIndex === 0 ? boxId : `${boxId}:${frontIndex}`;
+// doorId for frontIndex 0 equals boxId (backward-compat); fi > 0 → "${boxId}:${fi}".
+// sectionIndex defaults to 0 (Phase 0 / single-section bodies) — si > 0 produces
+// "${boxId}:${fi}:${si}" for split-section bodies (Phase 1+).
+export function makeDoorId(boxId: string, frontIndex: number, sectionIndex: number = 0): string {
+  if (sectionIndex === 0) {
+    return frontIndex === 0 ? boxId : `${boxId}:${frontIndex}`;
+  }
+  return frontIndex === 0
+    ? `${boxId}:0:${sectionIndex}`
+    : `${boxId}:${frontIndex}:${sectionIndex}`;
 }
 
 // Salon-style hinge side for horizontal front splitting within a single box.
@@ -474,20 +481,28 @@ export function assignDoorDisplayNumbers(
       (a, b) => (LEVEL_RANK[a.level] ?? 0) - (LEVEL_RANK[b.level] ?? 0),
     );
 
-    const totalFronts = colBoxes.reduce(
-      (sum, box) => sum + (numFrontsMap.get(box.id) ?? 1),
-      0,
-    );
+    // Total door cells = Σ(nf × ns) per box, where ns = number of vertical
+    // sections from internalShelves (doorsPerColumn merging). ns=1 when no
+    // shelves → backward-compat with pre-Phase-1 cabinets.
+    const totalCells = colBoxes.reduce((sum, box) => {
+      const nf = numFrontsMap.get(box.id) ?? 1;
+      const ns = (box.internalShelves?.length ?? 0) + 1;
+      return sum + nf * ns;
+    }, 0);
 
-    if (totalFronts === 1) {
-      result.set(makeDoorId(colBoxes[0]!.id, 0), `${colNum}`);
+    if (totalCells === 1) {
+      result.set(makeDoorId(colBoxes[0]!.id, 0, 0), `${colNum}`);
     } else {
       let letterIdx = 0;
       for (const box of colBoxes) {
         const nf = numFrontsMap.get(box.id) ?? 1;
+        const ns = (box.internalShelves?.length ?? 0) + 1;
+        // Order: fi (right→left) then si (bottom→top) within each front.
         for (let fi = 0; fi < nf; fi++) {
-          result.set(makeDoorId(box.id, fi), `${colNum}${HEBREW[letterIdx] ?? letterIdx}`);
-          letterIdx++;
+          for (let si = 0; si < ns; si++) {
+            result.set(makeDoorId(box.id, fi, si), `${colNum}${HEBREW[letterIdx] ?? letterIdx}`);
+            letterIdx++;
+          }
         }
       }
     }

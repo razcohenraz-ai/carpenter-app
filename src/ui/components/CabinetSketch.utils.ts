@@ -332,22 +332,6 @@ export function computeSketchGeometry(
     splitLines.push({ x1: splitX, y1: cabY, x2: splitX, y2: cabY + bodyH });
   }
 
-  // ── Internal shelf lines (absolute heights from floor, merged bodies only) ──
-  const internalShelfHeights = new Set<number>();
-  for (const box of boxes) {
-    if (box.internalShelves) {
-      for (const sh of box.internalShelves) {
-        internalShelfHeights.add(sh);
-      }
-    }
-  }
-  const internalShelfLines: SketchLine[] = [...internalShelfHeights].map(sh => ({
-    x1: cabX + leftInsetPx,
-    y1: cabY + (effectiveH - sh) * scale,
-    x2: cabX + cabW - rightInsetPx,
-    y2: cabY + (effectiveH - sh) * scale,
-  }));
-
   // ── Body floors: cumulative cm above plinth, bottom-to-top ──────────────────
   const bodyFloors: Partial<Record<BodyLevel, number>> = {};
   {
@@ -357,6 +341,24 @@ export function computeSketchGeometry(
       cum += levelHeightMap.get(level)!;
     }
   }
+
+  // ── Internal shelf lines (body-local heights, merged bodies only) ─────────
+  // internalShelves stores heights from each body's own floor. Convert to
+  // absolute (plinth + bodyFloors[level] + localH) for the sketch y-position.
+  const internalShelfAbsHeights = new Set<number>();
+  for (const box of boxes) {
+    if (box.level === 'plinth' || !box.internalShelves) continue;
+    const bodyFloorAbs = plinth + (bodyFloors[box.level as BodyLevel] ?? 0);
+    for (const localH of box.internalShelves) {
+      internalShelfAbsHeights.add(bodyFloorAbs + localH);
+    }
+  }
+  const internalShelfLines: SketchLine[] = [...internalShelfAbsHeights].map(sh => ({
+    x1: cabX + leftInsetPx,
+    y1: cabY + (effectiveH - sh) * scale,
+    x2: cabX + cabW - rightInsetPx,
+    y2: cabY + (effectiveH - sh) * scale,
+  }));
 
   // ── Box SVG rects: one per non-plinth box ─────────────────────────────────
   const boxSvgRects: Record<string, BoxSvgRect> = {};

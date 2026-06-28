@@ -7,6 +7,20 @@
 
 ## [Unreleased]
 
+### נוסף — דלתות עוקבות חלוקות (doorsPerColumn=3 + ארון גבוה)
+
+- **גוף מאוחד עם `internalShelves`** (כשקומה < 60 ס"מ מאוחדת עם הסמוכה ב-dpc=3) מפיק כעת **k+1 דלתות מוערמות** במקום דלת אחת גבוהה. כל מקטע = span בין מדפים פנימיים; גבול הדלת = מרכז המדף (הרווח מתחלק שווה).
+- **מזהה backward-compat**: si=0 → מזהה הישן בדיוק; si>0 → `boxId:fi:si`. גופים ללא sections: תוצאה זהה byte-per-byte.
+- **שמירת הגדרות דלת (צירים/כיוון/hasDoor)**: `${slotKey}:${fi}` לsi=0 (ישן); `${slotKey}:${fi}:${si}` לsi>0. ייצוא/ייבוא שומר את כל המקטעים. אין migration.
+- **ממספר תצוגה**: עמודה עם N מקטעים מקבלת N אותיות עבריות (1א/1ב/1ג); גוף ללא sections → כמו קודם.
+- **רשימת חיתוכים מסונכרנת**: `buildDoorCutItems` נגזר מ-`doorsById` ישירות (לא מ-buildBodyDoorCells בשנית) — כולל מקטעים.
+- **כל 3 מסלולי ה-compute + 2 הצרכנים** עוברים דרך `buildBodyDoorCells` (`core/doors/bodyDoors.ts`) — מניעת drift.
+
+### תוקן — מדף מבני בגוף מאוחד (דלתות עוקבות חלוקות)
+
+- **מדף מבני נעדר מסקיצת-החתך 2D של עורך-הגוף**: המדף האופקי המבני שמחלק גוף מאוחד הוצג ב-3D של עורך-הגוף וברשימת-החיתוכים, אך לא בסקיצת-החתך 2D. `BoxBodySketch` בנה `Box` סינתטי ל-`buildBoardModel` בלי `internalShelves`, ולכן לוח-המדף לא נפלט. כעת `internalShelvesCm` מושחל מ-`CabinetForm` → `BoxInteriorEditor` → `BoxBodySketch`.
+- **מדף "מרחף" מעל הארון בתצוגת-החדר 3D**: `Box.internalShelves` אוחסן כגבהים **מוחלטים** (מרצפת הצוקל) בעוד `boardModel.ts::shelfYRange` ציפה לגבהים **לוקאליים-לגוף**. בגוף מאוחד (top+middle, H=70) ערך מוחלט (220) חרג מגובה-הגוף → `yTo` שלילי → הלוח הונח מאות ס"מ מעל הארון. כעת `internalShelves` מנורמל ל-body-local **בזמן האחסון** ב-`decomposeBoxes` (`bodyFloorFromPhysical`), וכל ההמרות במורד-הזרם (`cabinetFronts`, `useCabinet`, `cabinetCompute`, `initInteriorFromBoxes`) הוסרו. `initInteriorFromBoxes` כבר לא צריך `plinthHeight`.
+
 ### שונה — עריכה חיה בארון (ללא כפתור "חשב") + ריענון תצוגה אחיד
 
 - **כפתור "חשב" הוסר.** כל שינוי בטופס הארון מחשב מחדש ושומר אוטומטית (אפקט על `[form]` ב-`CabinetForm`, מדלג על ריצת-ה-mount כדי לא לדרוס את ה-state המשוחזר; מודולי מטבח כבר חישבו-חי ולכן מוחרגים). שדה לא-תקין/חצי-מוקלד שומר על הציור האחרון במקום להזין NaN למנוע.

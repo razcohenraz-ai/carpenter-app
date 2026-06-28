@@ -722,6 +722,33 @@ describe('assignDoorDisplayNumbers', () => {
     expect(nums.get('lb')).toBe('2א');
     expect(nums.get('lt')).toBe('2ב');
   });
+
+  // ── section numbering (Phase 1: doorsPerColumn merging) ───────────────────
+
+  it('1 shelf → 2 sections: get Hebrew letters (bottom=א, top=ב)', () => {
+    const b: Box = { id: 'box', W: 60, H: 170, D: 60, position: 'single', level: 'single', internalShelves: [120] };
+    const nums = assignDoorDisplayNumbers([b]);
+    // totalCells = 1 front × 2 sections = 2 → Hebrew mode
+    expect(nums.get('box')).toBe('1א');         // fi=0, si=0 → backward-compat key
+    expect(nums.get('box:0:1')).toBe('1ב');     // fi=0, si=1
+  });
+
+  it('2 shelves → 3 sections: 1א, 1ב, 1ג', () => {
+    const b: Box = { id: 'box', W: 60, H: 170, D: 60, position: 'single', level: 'single', internalShelves: [120, 165] };
+    const nums = assignDoorDisplayNumbers([b]);
+    expect(nums.get('box')).toBe('1א');
+    expect(nums.get('box:0:1')).toBe('1ב');
+    expect(nums.get('box:0:2')).toBe('1ג');
+  });
+
+  it('no shelves (ns=1): backward-compat — totalCells = totalFronts', () => {
+    // A 2-front single box without sections should behave as before
+    const b: Box = { id: 'box', W: 120, H: 100, D: 60, position: 'single', level: 'single' };
+    const nfMap = new Map([['box', 2]]);
+    const nums = assignDoorDisplayNumbers([b], nfMap);
+    expect(nums.get('box')).toBe('1א');    // fi=0, si=0
+    expect(nums.get('box:1')).toBe('1ב'); // fi=1, si=0
+  });
 });
 
 // ── getDoorHeight ─────────────────────────────────────────────────────────────

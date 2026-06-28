@@ -107,6 +107,10 @@ interface Props {
    *  with the effective per-body materials. Null when no compute input exists
    *  — the 3D toggle is then hidden. */
   bodyInput: CabinetInput | null;
+  /** Body-local heights (cm from this body's floor) of structural section
+   *  shelves (מדפים מבניים). Forwarded to BoxBodySketch so the 2D cross-section
+   *  renders them as real boards, matching the 3D view and the cut list. */
+  internalShelvesCm?: number[];
   customMaterials: CustomMaterial[];
   // ── Per-body MATERIAL override (relocated from the old body-view screen) ──
   /** This body's material override, if any (`undefined` ↔ inheriting cabinet). */
@@ -184,14 +188,26 @@ const INTERIOR_ROLES_3D = new Set<BoardBox3D['role']>([
 
 /** The 2D fronts overlay computes its panels from the ISOLATED single-body input,
  *  so its door ids are keyed to that body's lone carcass (`box_0`), not the real
- *  cabinet box. Recover just the front index so the click can be re-mapped onto
- *  the real box id (`makeDoorId(box.id, fi)`). Decompose box ids never contain
- *  ':', so the only ':' present is `makeDoorId`'s front-index separator. */
-function frontIndexFromIsolatedDoorId(doorId: string): number {
-  const i = doorId.lastIndexOf(':');
-  if (i === -1) return 0;
-  const fi = parseInt(doorId.slice(i + 1), 10);
-  return Number.isFinite(fi) ? fi : 0;
+ *  cabinet box. Parse fi and si so the click can be re-mapped to the real cabinet
+ *  door id (`makeDoorId(box.id, fi, si)`).
+ *
+ *  Isolated door id formats (boxId = 'box_N', no colons):
+ *    'box_N'        → fi=0, si=0
+ *    'box_N:fi'     → fi=fi, si=0
+ *    'box_N:fi:si'  → fi=fi, si=si
+ */
+function parseFiSiFromIsolatedDoorId(doorId: string): { fi: number; si: number } {
+  const firstColon = doorId.indexOf(':');
+  if (firstColon === -1) return { fi: 0, si: 0 };
+  const rest = doorId.slice(firstColon + 1);
+  const secondColon = rest.indexOf(':');
+  if (secondColon === -1) {
+    const fi = parseInt(rest, 10);
+    return { fi: Number.isFinite(fi) ? fi : 0, si: 0 };
+  }
+  const fi = parseInt(rest.slice(0, secondColon), 10);
+  const si = parseInt(rest.slice(secondColon + 1), 10);
+  return { fi: Number.isFinite(fi) ? fi : 0, si: Number.isFinite(si) ? si : 0 };
 }
 
 /** The 'bodies'/'fronts' tabs are one editable screen; 'cuts'/'hardware' are
@@ -219,6 +235,7 @@ export default function BoxInteriorEditor({
   tab: controlledTab, onTabChange, bodyDoors,
   onFrontDoorClick, onFrontDrawerClick,
   enabledRunnerIds = [],
+  internalShelvesCm,
 }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const [localItems, setLocalItems] = useState<InteriorItem[]>(items);
@@ -1049,7 +1066,7 @@ export default function BoxInteriorEditor({
                   customMaterials={customMaterials}
                   viewBoxW={box.W}
                   viewBoxH={box.H}
-                  {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => onFrontDoorClick(makeDoorId(box.id, frontIndexFromIsolatedDoorId(isoId))) } : {})}
+                  {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => { const { fi, si } = parseFiSiFromIsolatedDoorId(isoId); onFrontDoorClick(makeDoorId(box.id, fi, si)); } } : {})}
                   {...(onFrontDrawerClick ? { onDrawerFrontClick: onFrontDrawerClick } : {})}
                 />
               </div>
@@ -1159,6 +1176,7 @@ export default function BoxInteriorEditor({
                   hasEnvelopeTop={hasEnvelopeTop}
                   {...(topVariant ? { topVariant } : {})}
                   {...(sinkTraverseWidthCm !== undefined ? { sinkTraverseWidthCm } : {})}
+                  {...(internalShelvesCm && internalShelvesCm.length > 0 ? { internalShelvesCm } : {})}
                 />
                 {/* 'fronts' tab — overlay this body's door/drawer faces on the
                     editable sketch (translucent, interior still visible). */}
@@ -1173,7 +1191,7 @@ export default function BoxInteriorEditor({
                       customMaterials={customMaterials}
                       viewBoxW={box.W}
                       viewBoxH={box.H}
-                      {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => onFrontDoorClick(makeDoorId(box.id, frontIndexFromIsolatedDoorId(isoId))) } : {})}
+                      {...(onFrontDoorClick ? { onDoorClick: (isoId: string) => { const { fi, si } = parseFiSiFromIsolatedDoorId(isoId); onFrontDoorClick(makeDoorId(box.id, fi, si)); } } : {})}
                       {...(onFrontDrawerClick ? { onDrawerFrontClick: onFrontDrawerClick } : {})}
                     />
                   </div>

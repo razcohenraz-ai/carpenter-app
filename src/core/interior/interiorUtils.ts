@@ -50,33 +50,21 @@ export function computeBodyFloors(
 
 // ── Init interior from decomposeBoxes result ──────────────────────────────────
 // Returns one entry per non-plinth box, keyed by Box.id.
-// Converts Box.internalShelves (absolute cm from cabinet floor) to ShelfItems
-// with heights relative to each body's own floor.
+// Converts Box.internalShelves (body-local cm from each body's own floor) to ShelfItems.
 
 export function initInteriorFromBoxes(
   boxes: Box[],
-  plinthHeight: number,
 ): InteriorById {
-  const levelHeightMap = new Map<BodyLevel, number>();
-  for (const box of boxes) {
-    if (box.level === 'plinth') continue;
-    const lvl = box.level as BodyLevel;
-    if (!levelHeightMap.has(lvl)) levelHeightMap.set(lvl, box.H);
-  }
-
-  const bodyFloors = computeBodyFloors(levelHeightMap);
   const result: InteriorById = {};
 
   for (const box of boxes) {
     if (box.level === 'plinth') continue;
-    const level = box.level as BodyLevel;
-    const bodyFloor = bodyFloors.get(level) ?? 0;
 
     if (box.internalShelves && box.internalShelves.length > 0) {
-      result[box.id] = box.internalShelves.map(absH => ({
+      result[box.id] = box.internalShelves.map(localH => ({
         type: 'shelf' as const,
         id: newItemId(),
-        heightFromFloor: absH - plinthHeight - bodyFloor,
+        heightFromFloor: localH,
       } satisfies ShelfItem));
     } else {
       result[box.id] = [];

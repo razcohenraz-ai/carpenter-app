@@ -16,6 +16,7 @@ import {
   calcMainDoorHeight, getItemsForFront, salonHingeSide, defaultHingeSide, shouldCoverSkirt,
   getDrawerFrontVisualHeight, getSkirtCoveringDrawer, isHingeSideFree, makeDoorId,
 } from '../doors/doorUtils';
+import { buildBodyDoorCells, makeSavedDoorKey } from '../doors/bodyDoors';
 import { deriveDrawerFronts } from '../doors/drawerFrontsCalc';
 import { getShellSides } from '../../types/cabinet';
 import { getMaterialWithCustom } from '../../catalog';
@@ -239,16 +240,26 @@ export function cabinetFrontPanels(
       for (const f of cellFronts) pushDrawerFront(x0base + x, f);
     }
 
-    // ── Door faces of this body (one per front column, above any drawer stack) ─
+    // ── Door faces of this body (one per front column × section, above any drawer stack) ─
     if (skipFronts) continue;
     const originalCoversSkirt = inp.doorCoversPlinth && shouldCoverSkirt(box.level);
     const isBottomMost = box.level === 'bottom' || box.level === 'single';
     const hasBottomGap = !(isBottomMost && inp.plinth > 0 && !originalCoversSkirt);
     const hasTopGap = box.level === 'top' || box.level === 'single';
 
-    for (let fi = 0; fi < numFronts; fi++) {
-      const itemsForFront = getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems);
-      const panelH = calcMainDoorHeight(box.H, itemsForFront, inp.doorGapMm, hasBottomGap, hasTopGap);
+    // internalShelves are already body-local (height from this body's own floor).
+    const shelvesCmFP = (box.internalShelves ?? [])
+      .filter(s => s > 0 && s < box.H)
+      .sort((a, b) => a - b);
+
+    for (const cell of buildBodyDoorCells(box.id, numFronts, {
+      hasTopGap, hasBottomGap, shelvesCm: shelvesCmFP, boxH: box.H,
+    })) {
+      const { fi, doorId, si } = cell;
+      const itemsForFront = cell.si === 0
+        ? getItemsForFront(fi, numFronts, hasPartition, bodyItems, cellItems)
+        : [];
+      const panelH = calcMainDoorHeight(cell.sectionH, itemsForFront, inp.doorGapMm, cell.hasBottomGap, cell.hasTopGap);
       if (panelH <= MIN_DOOR_PANEL_H_CM) continue;
       // Door.frontIndex 0 is the body's RIGHTMOST column → leftmost = nf-1-fi.
       const doorX = bodyFrontX(bodyLayout, numFronts - 1 - fi);
@@ -256,7 +267,7 @@ export function cabinetFrontPanels(
       // the live door state (edited in the door editor) — but only when the side
       // is physically free to choose; otherwise clamp to the forced gable
       // (salon). Lift-up doors (קלפה) always hinge at the top.
-      const savedDoorHinge = state.doors[`${boxStableKey(box)}:${fi}`];
+      const savedDoorHinge = state.doors[makeSavedDoorKey(boxStableKey(box), fi, si)];
       const hingeFree = isHingeSideFree(numFronts, hasPartition);
       const hingeSide: 'left' | 'right' | 'top' =
         inp.liftMechanism === true
@@ -266,19 +277,19 @@ export function cabinetFrontPanels(
             : numFronts > 1
               ? salonHingeSide(fi, numFronts)
               : defaultHingeSide(box.position, allPositions);
-      // When this door (not an external drawer) carries the skirt, it extends
-      // DOWN over the plinth — its bottom drops, the top stays. Mirrors
-      // getDoorVisualHeight; the structural panelH is unchanged.
-      const doorCoversSkirt = originalCoversSkirt && getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt) === null;
+      // skirtExt only applies to the bottom section (si=0) of a bottom/single body.
+      const doorCoversSkirt = cell.si === 0 && originalCoversSkirt && getSkirtCoveringDrawer(itemsForFront, originalCoversSkirt) === null;
       const skirtExt = doorCoversSkirt && inp.plinth > 0 ? (inp.plinth - 1) + gapCm : 0;
-      const bottom = boxBottom + stackTopForDoor(box.id, fi);
+      // Drawer stack top only applies to the bottom section; upper sections start at the shelf.
+      const stackTop = cell.si === 0 ? stackTopForDoor(box.id, fi) : 0;
+      const bottom = boxBottom + cell.sectionY0 + stackTop;
       panels.push({
         x0: x0base + doorX,
         x1: x0base + doorX + Math.max(bodyLayout.frontWidth, 0),
         y0: bottom - skirtExt,
         y1: bottom + panelH,
         hingeSide,
-        doorId: makeDoorId(box.id, fi),
+        doorId,
       });
     }
   }

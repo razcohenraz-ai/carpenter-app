@@ -656,8 +656,8 @@ export function buildBoardModel(args: BuildBoardModelArgs): Board[] {
   }
 
   // ── Internal shelves (merged-body structural splits) ─────────────────────
-  // Heights are absolute (cm from cabinet floor) and stable for a given
-  // merged-body decomposition — use them as the per-shelf sub-key.
+  // Heights are body-local (cm from this body's own floor, same as
+  // heightFromFloor for user shelves) — use them as the per-shelf sub-key.
   if (box.internalShelves) {
     for (const hf of box.internalShelves) {
       const y = shelfYRange(hf);
