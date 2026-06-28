@@ -145,6 +145,8 @@ export interface Translations {
     shelf: string;
     drawer: string;
     rod: string;
+    /** Compact body-editor "Add" tool button (opens the add-item flyout). */
+    addItem: string;
     addShelf: string;
     addDrawer: string;
     addRod: string;
@@ -490,6 +492,7 @@ const he: Translations = {
     shelf: 'מדף',
     drawer: 'מגירה',
     rod: 'מוט תליה',
+    addItem: 'הוספה',
     addShelf: '+ מדף',
     addDrawer: '+ מגירה',
     addRod: '+ מוט תליה',
@@ -812,6 +815,7 @@ const en: Translations = {
     shelf: 'Shelf',
     drawer: 'Drawer',
     rod: 'Hanging Rod',
+    addItem: 'Add',
     addShelf: '+ Shelf',
     addDrawer: '+ Drawer',
     addRod: '+ Hanging Rod',

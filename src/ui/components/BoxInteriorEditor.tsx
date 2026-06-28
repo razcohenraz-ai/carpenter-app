@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 import BoxBodySketch from './BoxBodySketch';
 import CutsList from './CutsList';
@@ -243,6 +243,22 @@ export default function BoxInteriorEditor({
     cellItems.length === 2 ? cellItems : [[], []],
   );
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
+  // Compact tool bar — which group flyout is open (one at a time; click the
+  // active button again, or click outside the bar, to collapse).
+  type EditorTool = 'dim' | 'materials' | 'add';
+  const [openTool, setOpenTool] = useState<EditorTool | null>(null);
+  const toggleTool = (tool: EditorTool): void => setOpenTool(cur => (cur === tool ? null : tool));
+  const toolBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openTool === null) return;
+    function onDocMouseDown(e: MouseEvent): void {
+      if (toolBarRef.current && !toolBarRef.current.contains(e.target as Node)) {
+        setOpenTool(null);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [openTool]);
   const [view, setView] = useState<'2d' | '3d'>('3d');
   const [tabInternal, setTabInternal] = useState<EditorTab>('bodies');
   const tab: EditorTab = controlledTab ?? tabInternal;
@@ -841,164 +857,212 @@ export default function BoxInteriorEditor({
         <HardwareList items={hardwareItems} />
       ) : (
       <>
-      {/* Per-body edging override.
-          - "כמו ארון" (default) → no override entry; cabinet edging applies.
-          - "מותאם" → an entry seeded from `cabinetEdging`, then edited
-            in-place via the two dropdowns. Switching back to "כמו ארון"
-            deletes the entry (setter receives `undefined`).
-          Section sits above both layout branches so the carpenter sees the
-          same control in partitioned and single-body modes. */}
-      <div className={styles.edgingSection}>
-        <span className={styles.edgingLabel}>{t.edging.overrideLabel}:</span>
-        <label className={styles.edgingRadioLabel}>
-          <input
-            type="radio"
-            name={`edging-${box.id}`}
-            checked={bodyEdgingOverride === undefined}
-            onChange={() => onSetBodyEdging(undefined)}
-          />
-          {t.edging.inherit}
-        </label>
-        <label className={styles.edgingRadioLabel}>
-          <input
-            type="radio"
-            name={`edging-${box.id}`}
-            checked={bodyEdgingOverride !== undefined}
-            onChange={() => onSetBodyEdging({ ...cabinetEdging })}
-          />
-          {t.edging.custom}
-        </label>
+      {/* Compact tool bar — dimension override / material override / add item.
+          Each button opens a flyout with its fields; one open at a time; click
+          the active button again, or anywhere outside the bar, to collapse.
+          Replaces the old always-open override sections + add row. */}
+      <div className={styles.toolBar} ref={toolBarRef}>
 
-        {bodyEdgingOverride !== undefined && (
-          <>
-            <label className={styles.edgingField}>
-              <span className={styles.edgingFieldLabel}>{t.edging.thicknessShort}</span>
-              <select
-                className={styles.edgingSelect}
-                value={String(bodyEdgingOverride.thickness)}
-                onChange={e => onSetBodyEdging({
-                  ...bodyEdgingOverride,
-                  thickness: e.target.value === '1.3' ? 1.3 : 0.6,
-                })}
-              >
-                <option value="0.6">0.6</option>
-                <option value="1.3">1.3</option>
-              </select>
-            </label>
-
-            <label className={styles.edgingField}>
-              <span className={styles.edgingFieldLabel}>{t.edging.finishShort}</span>
-              <select
-                className={styles.edgingSelect}
-                value={bodyEdgingOverride.finishMaterialId ?? ''}
-                onChange={e => {
-                  const v = e.target.value as '' | MaterialId;
-                  // '' = auto → drop the key so the band tracks the panel
-                  // material. Any other value pins the band's color.
-                  if (v === '') {
-                    onSetBodyEdging({ thickness: bodyEdgingOverride.thickness });
-                  } else {
-                    onSetBodyEdging({ ...bodyEdgingOverride, finishMaterialId: v });
-                  }
-                }}
-              >
-                <option value="">{t.edging.finishAuto}</option>
-                {Object.values(MATERIALS).map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
-      </div>
-
-      {/* ── Dimension overrides ─────────────────────────────────────────── */}
-      <div className={styles.dimOverrideSection}>
-        <span className={styles.dimOverrideTitle}>{t.interior.dimOverrideTitle}</span>
-        {(['W', 'H', 'D'] as const).map(axis => {
-          const derived = axis === 'W' ? derivedW : axis === 'H' ? derivedH : derivedD;
-          const overrideVal = boxDimensionOverride?.[axis];
-          return (
-            <label key={axis} className={styles.dimOverrideField}>
-              <span className={styles.dimOverrideLabel}>
-                {axis === 'W' ? t.interior.dimOverrideW
-                  : axis === 'H' ? t.interior.dimOverrideH
-                  : t.interior.dimOverrideD}
-              </span>
-              <input
-                type="number"
-                className={`${styles.dimOverrideInput} ${overrideVal !== undefined ? styles.dimOverrideInputActive : ''}`}
-                value={overrideVal !== undefined ? overrideVal : ''}
-                placeholder={String(Math.round(derived * 10) / 10)}
-                min={1}
-                step={0.5}
-                onChange={e => {
-                  const v = parseFloat(e.target.value);
-                  onSetBoxDimension(axis, isNaN(v) || v <= 0 ? undefined : v);
-                }}
-              />
-            </label>
-          );
-        })}
-        {boxDimensionOverride !== undefined && (
+        {/* ── עקיפת מידות / Dimension override ── */}
+        <div className={styles.toolItem}>
           <button
             type="button"
-            className={styles.dimOverrideResetBtn}
-            onClick={onResetBoxDimensions}
+            className={`${styles.toolBtn} ${openTool === 'dim' ? styles.toolBtnActive : ''} ${boxDimensionOverride !== undefined ? styles.toolBtnDirty : ''}`}
+            onClick={() => toggleTool('dim')}
           >
-            {t.interior.dimOverrideReset}
+            📐 {t.interior.dimOverrideTitle}
           </button>
-        )}
-      </div>
+          {openTool === 'dim' && (
+            <div className={styles.toolFlyout}>
+              {(['W', 'H', 'D'] as const).map(axis => {
+                const derived = axis === 'W' ? derivedW : axis === 'H' ? derivedH : derivedD;
+                const overrideVal = boxDimensionOverride?.[axis];
+                return (
+                  <label key={axis} className={styles.dimOverrideField}>
+                    <span className={styles.dimOverrideLabel}>
+                      {axis === 'W' ? t.interior.dimOverrideW
+                        : axis === 'H' ? t.interior.dimOverrideH
+                        : t.interior.dimOverrideD}
+                    </span>
+                    <input
+                      type="number"
+                      className={`${styles.dimOverrideInput} ${overrideVal !== undefined ? styles.dimOverrideInputActive : ''}`}
+                      value={overrideVal !== undefined ? overrideVal : ''}
+                      placeholder={String(Math.round(derived * 10) / 10)}
+                      min={1}
+                      step={0.5}
+                      onChange={e => {
+                        const v = parseFloat(e.target.value);
+                        onSetBoxDimension(axis, isNaN(v) || v <= 0 ? undefined : v);
+                      }}
+                    />
+                  </label>
+                );
+              })}
+              {boxDimensionOverride !== undefined && (
+                <button type="button" className={styles.dimOverrideResetBtn} onClick={onResetBoxDimensions}>
+                  {t.interior.dimOverrideReset}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* ── Per-body material override (relocated from the body view) ─────────
-          Body material / front material / back-panel thickness. Sits directly
-          under the dimension override; visible in both 2D and 3D. */}
-      <div className={styles.dimOverrideSection}>
-        <span className={styles.dimOverrideTitle}>{t.interior.materialOverrideTitle}</span>
-        <label className={styles.dimOverrideField}>
-          <span className={styles.dimOverrideLabel}>{t.form.bodyMaterial}</span>
-          <select
-            className={styles.edgingSelect}
-            value={bodyMaterialOverride?.bodyMaterialId ?? ''}
-            onChange={e => onSetBodyMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
-          >
-            <option value="">{t.bodyView.inherit}: {matName(availableBodyMaterials, cabinetBodyMaterialId)}</option>
-            {availableBodyMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </label>
-        <label className={styles.dimOverrideField}>
-          <span className={styles.dimOverrideLabel}>{t.form.frontMaterial}</span>
-          <select
-            className={styles.edgingSelect}
-            value={bodyMaterialOverride?.frontMaterialId ?? ''}
-            onChange={e => onSetFrontMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
-          >
-            <option value="">{t.bodyView.inherit}: {matName(availableFrontMaterials, cabinetFrontMaterialId)}</option>
-            {availableFrontMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-          </select>
-        </label>
-        <label className={styles.dimOverrideField}>
-          <span className={styles.dimOverrideLabel}>{t.form.backThickness}</span>
-          <input
-            type="number"
-            className={styles.dimOverrideInput}
-            step={0.5}
-            min={0}
-            value={bodyMaterialOverride?.backThicknessCm !== undefined ? bodyMaterialOverride.backThicknessCm * 10 : ''}
-            placeholder={String(cabinetBackThicknessMm)}
-            onChange={e => onSetBackThickness(e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0))}
-            onFocus={e => e.target.select()}
-          />
-        </label>
-        {hasMaterialOverride && (
+        {/* ── עקיפת חומרים + קנט / Material override (+ edging) ── */}
+        <div className={styles.toolItem}>
           <button
             type="button"
-            className={styles.dimOverrideResetBtn}
-            onClick={onResetBoxMaterials}
+            className={`${styles.toolBtn} ${openTool === 'materials' ? styles.toolBtnActive : ''} ${(hasMaterialOverride || bodyEdgingOverride !== undefined) ? styles.toolBtnDirty : ''}`}
+            onClick={() => toggleTool('materials')}
           >
-            {t.bodyView.reset}
+            🎨 {t.interior.materialOverrideTitle}
           </button>
+          {openTool === 'materials' && (
+            <div className={styles.toolFlyout}>
+              <label className={styles.dimOverrideField}>
+                <span className={styles.dimOverrideLabel}>{t.form.bodyMaterial}</span>
+                <select
+                  className={styles.edgingSelect}
+                  value={bodyMaterialOverride?.bodyMaterialId ?? ''}
+                  onChange={e => onSetBodyMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
+                >
+                  <option value="">{t.bodyView.inherit}: {matName(availableBodyMaterials, cabinetBodyMaterialId)}</option>
+                  {availableBodyMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </label>
+              <label className={styles.dimOverrideField}>
+                <span className={styles.dimOverrideLabel}>{t.form.frontMaterial}</span>
+                <select
+                  className={styles.edgingSelect}
+                  value={bodyMaterialOverride?.frontMaterialId ?? ''}
+                  onChange={e => onSetFrontMaterial(e.target.value === '' ? undefined : (e.target.value as MaterialId))}
+                >
+                  <option value="">{t.bodyView.inherit}: {matName(availableFrontMaterials, cabinetFrontMaterialId)}</option>
+                  {availableFrontMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </label>
+              <label className={styles.dimOverrideField}>
+                <span className={styles.dimOverrideLabel}>{t.form.backThickness}</span>
+                <input
+                  type="number"
+                  className={styles.dimOverrideInput}
+                  step={0.5}
+                  min={0}
+                  value={bodyMaterialOverride?.backThicknessCm !== undefined ? bodyMaterialOverride.backThicknessCm * 10 : ''}
+                  placeholder={String(cabinetBackThicknessMm)}
+                  onChange={e => onSetBackThickness(e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0))}
+                  onFocus={e => e.target.select()}
+                />
+              </label>
+
+              {/* Per-body edging override (inherit / custom + thickness + finish). */}
+              <div className={styles.edgingInFlyout}>
+                <span className={styles.dimOverrideLabel}>{t.edging.overrideLabel}</span>
+                <div className={styles.edgingRadioRow}>
+                  <label className={styles.edgingRadioLabel}>
+                    <input
+                      type="radio"
+                      name={`edging-${box.id}`}
+                      checked={bodyEdgingOverride === undefined}
+                      onChange={() => onSetBodyEdging(undefined)}
+                    />
+                    {t.edging.inherit}
+                  </label>
+                  <label className={styles.edgingRadioLabel}>
+                    <input
+                      type="radio"
+                      name={`edging-${box.id}`}
+                      checked={bodyEdgingOverride !== undefined}
+                      onChange={() => onSetBodyEdging({ ...cabinetEdging })}
+                    />
+                    {t.edging.custom}
+                  </label>
+                </div>
+                {bodyEdgingOverride !== undefined && (
+                  <>
+                    <label className={styles.edgingField}>
+                      <span className={styles.edgingFieldLabel}>{t.edging.thicknessShort}</span>
+                      <select
+                        className={styles.edgingSelect}
+                        value={String(bodyEdgingOverride.thickness)}
+                        onChange={e => onSetBodyEdging({
+                          ...bodyEdgingOverride,
+                          thickness: e.target.value === '1.3' ? 1.3 : 0.6,
+                        })}
+                      >
+                        <option value="0.6">0.6</option>
+                        <option value="1.3">1.3</option>
+                      </select>
+                    </label>
+                    <label className={styles.edgingField}>
+                      <span className={styles.edgingFieldLabel}>{t.edging.finishShort}</span>
+                      <select
+                        className={styles.edgingSelect}
+                        value={bodyEdgingOverride.finishMaterialId ?? ''}
+                        onChange={e => {
+                          const v = e.target.value as '' | MaterialId;
+                          // '' = auto → drop the key so the band tracks the panel
+                          // material. Any other value pins the band's color.
+                          if (v === '') {
+                            onSetBodyEdging({ thickness: bodyEdgingOverride.thickness });
+                          } else {
+                            onSetBodyEdging({ ...bodyEdgingOverride, finishMaterialId: v });
+                          }
+                        }}
+                      >
+                        <option value="">{t.edging.finishAuto}</option>
+                        {Object.values(MATERIALS).map(m => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+              </div>
+
+              {hasMaterialOverride && (
+                <button type="button" className={styles.dimOverrideResetBtn} onClick={onResetBoxMaterials}>
+                  {t.bodyView.reset}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── הוספה / Add item ── single-body only; partition cells keep their
+            own per-cell add rows below. */}
+        {!hideInteriorControls && !hasPartitions && (
+          <div className={styles.toolItem}>
+            <button
+              type="button"
+              className={`${styles.toolBtn} ${openTool === 'add' ? styles.toolBtnActive : ''}`}
+              onClick={() => toggleTool('add')}
+            >
+              ➕ {t.interior.addItem}
+            </button>
+            {openTool === 'add' && (
+              <div className={`${styles.toolFlyout} ${styles.addFlyout}`}>
+                <button className={styles.addBtn} onClick={addShelf}>
+                  {t.interior.addShelf}
+                </button>
+                {!shelfOnly && (
+                  <button className={styles.addBtn} onClick={addDrawer}>
+                    {t.interior.addDrawer}
+                  </button>
+                )}
+                {!hideRodOption && !shelfOnly && (
+                  <button className={styles.addBtn} onClick={addRod}>
+                    {t.interior.addRod}
+                  </button>
+                )}
+                {numFronts > 1 && !shelfOnly && (
+                  <button className={styles.addBtn} onClick={requestAddPartition}>
+                    {t.interior.addPartition}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -1207,31 +1271,9 @@ export default function BoxInteriorEditor({
             </div>
           )}
 
-          {/* Controls */}
+          {/* Controls — the add buttons moved to the "הוספה" tool flyout above;
+              this column now holds the warnings + item list. */}
           <div className={styles.controlsCol}>
-            {!hideInteriorControls && (
-              <div className={styles.addRow}>
-                <button className={styles.addBtn} onClick={addShelf}>
-                  {t.interior.addShelf}
-                </button>
-                {!shelfOnly && (
-                  <button className={styles.addBtn} onClick={addDrawer}>
-                    {t.interior.addDrawer}
-                  </button>
-                )}
-                {!hideRodOption && !shelfOnly && (
-                  <button className={styles.addBtn} onClick={addRod}>
-                    {t.interior.addRod}
-                  </button>
-                )}
-                {numFronts > 1 && !shelfOnly && (
-                  <button className={styles.addBtn} onClick={requestAddPartition}>
-                    {t.interior.addPartition}
-                  </button>
-                )}
-              </div>
-            )}
-
             {renderShelfWarnings(boxShelfWarnings, dismissBoxWarning)}
 
             {renderItemList(
