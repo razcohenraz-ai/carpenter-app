@@ -843,6 +843,7 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
                 {...(inp.hasBack !== undefined ? { hasBack: inp.hasBack } : {})}
                 {...(inp.hasBottom !== undefined ? { hasBottom: inp.hasBottom } : {})}
                 {...(inp.cornerFiller ? { cornerSingleWidth: true } : {})}
+                {...(viewMode === 'bodies' ? { showGaps: true } : {})}
                 customMaterials={customMaterials}
                 {...((() => {
                   const splits = unitPlinthSplits.get(unit.id);

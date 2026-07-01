@@ -1018,11 +1018,26 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
           : {}),
       } : { doorsPerColumn: 1 as const };
 
+      // Side-shell handling differs by context:
+      //  • Standalone cabinet body editor — a body is a sub-part of a larger
+      //    cabinet and the shell wraps the WHOLE cabinet, so a single body shows
+      //    no shell (forced off).
+      //  • Kitchen unit — the unit IS this body, so the shell wraps it. Reflect
+      //    the live shell flags so toggling the "מעטפת" button shows in the
+      //    preview, and widen by the shelled sides' thickness so the inner
+      //    carcass still matches editingBox.W after the board model re-reduces it
+      //    (the unit's outer width stays constant across the toggle).
+      const previewShellSides = kitchenDirectEdit
+        ? ((form.hasShellLeft ? 1 : 0) + (form.hasShellRight ? 1 : 0))
+        : 0;
       const bodyInput3d = cabInput3d ? {
         ...cabInput3d,
-        W: editingBox.W, H: editingBox.H, D: editingBox.D,
+        W: editingBox.W + frontThicknessCm * previewShellSides,
+        H: editingBox.H, D: editingBox.D,
         plinth: 0,
-        hasShell: false, hasShellLeft: false, hasShellRight: false,
+        hasShell: kitchenDirectEdit ? form.hasShell : false,
+        hasShellLeft: kitchenDirectEdit ? form.hasShellLeft : false,
+        hasShellRight: kitchenDirectEdit ? form.hasShellRight : false,
         hasEnvelopeTop: false,
         ...isolatedSectionOverride,
         bodyMaterialId: ovr3d?.bodyMaterialId ?? form.bodyMaterialId,
@@ -1056,28 +1071,37 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
       // editor's own per-body override sections, so only shell sides, door gap,
       // max door width, the wall-envelope + lift-mechanism family (קלפה) and the
       // corner controls live here.
-      const unitControls = kitchenDirectEdit ? (
-        <>
-          {splitShellSides && (
-            <div className={styles.checkboxRow}>
-              {checkbox('k-shell-left', form.hasShellLeft, t.form.hasShellLeft, v => {
-                setForm(p => ({ ...p, hasShellLeft: v, hasShell: v && p.hasShellRight, ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}) }));
-                const li = getLastInput();
-                if (li) calculate({ ...li, hasShellLeft: v, hasShell: v && form.hasShellRight, ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}) });
-              })}
-              {checkbox('k-shell-right', form.hasShellRight, t.form.hasShellRight, v => {
-                setForm(p => ({ ...p, hasShellRight: v, hasShell: p.hasShellLeft && v, ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}) }));
-                const li = getLastInput();
-                if (li) calculate({ ...li, hasShellRight: v, hasShell: form.hasShellLeft && v, ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}) });
-              })}
-              {initialInput?.mount === 'wall' && checkbox('k-wall-env', form.hasWallEnvelope, t.form.hasWallEnvelope, v => {
-                setForm(p => ({ ...p, hasWallEnvelope: v }));
-                const li = getLastInput();
-                if (li) calculate({ ...li, hasWallEnvelope: v });
-              })}
-            </div>
-          )}
+      // Outer-shell controls (per-side shell + wall envelope) → surfaced as a
+      // "מעטפת" button in the body editor's compact tool bar (see shellControls
+      // prop), not inline in the unit-settings section.
+      const shellControls = kitchenDirectEdit && splitShellSides ? (
+        <div className={styles.checkboxColumn}>
+          {checkbox('k-shell-left', form.hasShellLeft, t.form.hasShellLeft, v => {
+            setForm(p => ({ ...p, hasShellLeft: v, hasShell: v && p.hasShellRight, ...((!v && !p.hasShellRight) ? { hasEnvelopeTop: false } : {}) }));
+            const li = getLastInput();
+            if (li) calculate({ ...li, hasShellLeft: v, hasShell: v && form.hasShellRight, ...((!v && !form.hasShellRight) ? { hasEnvelopeTop: false } : {}) });
+          })}
+          {checkbox('k-shell-right', form.hasShellRight, t.form.hasShellRight, v => {
+            setForm(p => ({ ...p, hasShellRight: v, hasShell: p.hasShellLeft && v, ...((!v && !p.hasShellLeft) ? { hasEnvelopeTop: false } : {}) }));
+            const li = getLastInput();
+            if (li) calculate({ ...li, hasShellRight: v, hasShell: form.hasShellLeft && v, ...((!v && !form.hasShellLeft) ? { hasEnvelopeTop: false } : {}) });
+          })}
+          {initialInput?.mount === 'wall' && checkbox('k-wall-env', form.hasWallEnvelope, t.form.hasWallEnvelope, v => {
+            setForm(p => ({ ...p, hasWallEnvelope: v }));
+            const li = getLastInput();
+            if (li) calculate({ ...li, hasWallEnvelope: v });
+          })}
+        </div>
+      ) : undefined;
 
+      // Remaining unit-level settings (lift family / corner geometry). The
+      // door-gap + max-front-width fields were intentionally dropped from the
+      // kitchen editor — their values still live in form state and flow into
+      // calculate(). Section is omitted entirely when there's nothing to show.
+      const hasUnitSettings = kitchenDirectEdit
+        && (initialInput?.liftMechanism === true || !!initialInput?.cornerFiller);
+      const unitControls = hasUnitSettings ? (
+        <>
           {initialInput?.liftMechanism === true && (() => {
             const enabledLift = settings?.enabledLiftMechanismIds;
             const liftOptions = Object.values(LIFT_MECHANISMS).filter(m => !enabledLift || enabledLift.includes(m.id));
@@ -1126,21 +1150,6 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
               </div>
             </>
           )}
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="k-door-gap">{t.form.doorGap}</label>
-            <input id="k-door-gap" className={styles.input} type="number" value={form.doorGap} step={0.5} min={0}
-              onChange={e => { const val = e.target.value; setForm(p => ({ ...p, doorGap: val, doorGapManuallySet: true })); const li = getLastInput(); if (li) calculate({ ...li, doorGapMm: parseFloat(val) || 0 }); }}
-              onFocus={e => e.target.select()} />
-            {(parseFloat(form.doorGap) || 0) > 4 && <span className={styles.warnMsg}>{t.form.doorGapWarn}</span>}
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="k-max-door-width">{t.form.maxDoorWidth}</label>
-            <input id="k-max-door-width" className={styles.input} type="number" value={form.maxDoorWidth} step={5} min={10}
-              onChange={e => { const val = e.target.value; setForm(p => ({ ...p, maxDoorWidth: val })); const li = getLastInput(); if (li) calculate({ ...li, maxDoorWidth: Math.max(parseFloat(val) || 60, 10) }); }}
-              onFocus={e => e.target.select()} />
-          </div>
         </>
       ) : undefined;
       // Interactive fronts sketch for the editor's Fronts tab (kitchen only):
@@ -1180,6 +1189,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
             onChange={items => setBoxInterior(editingBox.id, items)}
             onBack={kitchenDirectEdit && onExit ? onExit : closeEditor}
             {...(unitControls ? { unitControls } : {})}
+            {...(shellControls ? { shellControls } : {})}
             {...(frontsSketch ? { frontsSketch } : {})}
             {...(kitchenDirectEdit ? { tab: kitchenEditorTab, onTabChange: setKitchenEditorTab } : {})}
             bodyDoors={bodyDoors}

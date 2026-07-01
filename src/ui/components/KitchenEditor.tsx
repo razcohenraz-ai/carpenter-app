@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { KitchenUnit } from '../../types/project';
 import type { KitchenModuleType } from '../../core/product/kitchenModules';
 import type { MaterialId } from '../../types/materials';
@@ -46,6 +46,19 @@ export function KitchenEditor({
   const [selectedModule, setSelectedModule] = useState<KitchenModuleType>('drawers');
   const [unitW, setUnitW] = useState<string>('60');
   const [unitName, setUnitName] = useState('');
+  // Kitchen-wide materials — compact button + flyout (click outside to close).
+  const [materialsOpen, setMaterialsOpen] = useState(false);
+  const materialsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!materialsOpen) return;
+    function onDocMouseDown(e: MouseEvent): void {
+      if (materialsRef.current && !materialsRef.current.contains(e.target as Node)) {
+        setMaterialsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [materialsOpen]);
 
   const selectedUnit = selectedUnitId ? units.find(u => u.id === selectedUnitId) ?? null : null;
   const selectedIndex = selectedUnit ? units.indexOf(selectedUnit) : -1;
@@ -67,6 +80,13 @@ export function KitchenEditor({
   }
   const commonBody = sharedMaterial(u => u.cabinet.input.bodyMaterialId);
   const commonFront = sharedMaterial(u => u.cabinet.input.frontMaterialId);
+  // Shared back-panel thickness (cm) across units, or null when they differ.
+  function sharedNumber(pick: (u: KitchenUnit) => number): number | null {
+    if (units.length === 0) return null;
+    const first = pick(units[0]!);
+    return units.every(u => pick(u) === first) ? first : null;
+  }
+  const commonBack = sharedNumber(u => u.cabinet.input.backThickness);
   function materialOptions(enabledIds: string[] | undefined, current: string | null) {
     const enabled = enabledIds ?? DEFAULT_MATERIAL_IDS;
     const base = allMaterials.filter(m => enabled.includes(m.id));
@@ -79,7 +99,7 @@ export function KitchenEditor({
   }
   const bodyOptions = materialOptions(settings?.bodyEnabledMaterialIds, commonBody);
   const frontOptions = materialOptions(settings?.frontEnabledMaterialIds, commonFront);
-  function setAllMaterials(patch: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId }): void {
+  function setAllMaterials(patch: { bodyMaterialId?: MaterialId; frontMaterialId?: MaterialId; backThickness?: number }): void {
     if (!onUpdateUnit) return;
     for (const u of units) {
       onUpdateUnit(u.id, { input: { ...u.cabinet.input, ...patch }, state: u.cabinet.state });
@@ -107,37 +127,64 @@ export function KitchenEditor({
 
   return (
     <div className={styles.editor}>
-      {/* Kitchen-wide material selectors — apply to every unit; per-unit
-          overrides happen later via each unit's own editor. */}
+      {/* Kitchen-wide materials — a compact button opening a flyout with the
+          body / front material selectors + back-panel thickness. Applies to
+          every unit; per-unit overrides happen later via each unit's editor. */}
       {units.length > 0 && onUpdateUnit && (
-        <div className={styles.materialsBar}>
-          <span className={styles.materialsTitle}>{t.kitchen.materialsTitle}</span>
-          <label className={styles.materialField}>
-            {t.form.bodyMaterial}
-            <select
-              className={styles.materialSelect}
-              value={commonBody ?? ''}
-              onChange={e => setAllMaterials({ bodyMaterialId: e.target.value as MaterialId })}
-            >
-              {commonBody === null && <option value="" disabled>{t.kitchen.mixed}</option>}
-              {bodyOptions.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.materialField}>
-            {t.form.frontMaterial}
-            <select
-              className={styles.materialSelect}
-              value={commonFront ?? ''}
-              onChange={e => setAllMaterials({ frontMaterialId: e.target.value as MaterialId })}
-            >
-              {commonFront === null && <option value="" disabled>{t.kitchen.mixed}</option>}
-              {frontOptions.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          </label>
+        <div className={styles.materialsTool} ref={materialsRef}>
+          <button
+            type="button"
+            className={`${styles.materialsBtn} ${materialsOpen ? styles.materialsBtnActive : ''}`}
+            onClick={() => setMaterialsOpen(o => !o)}
+          >
+            🎨 {t.kitchen.materialsTitle}
+          </button>
+          {materialsOpen && (
+            <div className={styles.materialsFlyout}>
+              <label className={styles.materialField}>
+                {t.form.bodyMaterial}
+                <select
+                  className={styles.materialSelect}
+                  value={commonBody ?? ''}
+                  onChange={e => setAllMaterials({ bodyMaterialId: e.target.value as MaterialId })}
+                >
+                  {commonBody === null && <option value="" disabled>{t.kitchen.mixed}</option>}
+                  {bodyOptions.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.materialField}>
+                {t.form.frontMaterial}
+                <select
+                  className={styles.materialSelect}
+                  value={commonFront ?? ''}
+                  onChange={e => setAllMaterials({ frontMaterialId: e.target.value as MaterialId })}
+                >
+                  {commonFront === null && <option value="" disabled>{t.kitchen.mixed}</option>}
+                  {frontOptions.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={styles.materialField}>
+                {t.form.backThickness}
+                <input
+                  type="number"
+                  className={styles.materialSelect}
+                  step={0.5}
+                  min={0}
+                  value={commonBack !== null ? commonBack * 10 : ''}
+                  placeholder={commonBack === null ? t.kitchen.mixed : ''}
+                  onChange={e => {
+                    const mm = parseFloat(e.target.value);
+                    setAllMaterials({ backThickness: isNaN(mm) ? 0 : mm / 10 });
+                  }}
+                  onFocus={e => e.target.select()}
+                />
+              </label>
+            </div>
+          )}
         </div>
       )}
 

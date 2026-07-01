@@ -143,6 +143,11 @@ interface Props {
    *  gap, lift-mechanism family, corner controls. Rendered as a "unit settings"
    *  section so the kitchen unit form can be retired. Omitted elsewhere. */
   unitControls?: React.ReactNode;
+  /** Outer-shell controls (kitchen direct-edit) — per-side shell + wall envelope
+   *  checkboxes. When provided, a "מעטפת" button is added to the compact tool
+   *  bar, opening a flyout with these controls. Omitted for the standalone
+   *  cabinet body editor (shell is a cabinet-level setting there, not per-body). */
+  shellControls?: React.ReactNode;
   /** Interactive fronts elevation for the Fronts tab (kitchen direct-edit) —
    *  the real CabinetFrontsSketch with clickable doors (→ door editor) and
    *  hinge marks. When present it replaces the body + overlay on the 2D Fronts
@@ -231,7 +236,7 @@ export default function BoxInteriorEditor({
   cabinetBodyMaterialId, cabinetFrontMaterialId, cabinetBackThicknessMm,
   onSetBodyMaterial, onSetFrontMaterial, onSetBackThickness, onResetBoxMaterials,
   cuts, hardwareItems, cutsSettings,
-  unitControls, frontsSketch,
+  unitControls, shellControls, frontsSketch,
   tab: controlledTab, onTabChange, bodyDoors,
   onFrontDoorClick, onFrontDrawerClick,
   enabledRunnerIds = [],
@@ -245,7 +250,7 @@ export default function BoxInteriorEditor({
   const [pendingAction, setPendingAction] = useState<null | 'add' | 'remove'>(null);
   // Compact tool bar — which group flyout is open (one at a time; click the
   // active button again, or click outside the bar, to collapse).
-  type EditorTool = 'dim' | 'materials' | 'add';
+  type EditorTool = 'dim' | 'materials' | 'shell' | 'add';
   const [openTool, setOpenTool] = useState<EditorTool | null>(null);
   const toggleTool = (tool: EditorTool): void => setOpenTool(cur => (cur === tool ? null : tool));
   const toolBarRef = useRef<HTMLDivElement>(null);
@@ -1028,6 +1033,25 @@ export default function BoxInteriorEditor({
             </div>
           )}
         </div>
+
+        {/* ── מעטפת / Shell ── kitchen direct-edit only (passed in as
+            shellControls); shell is a unit-level setting there. */}
+        {shellControls && (
+          <div className={styles.toolItem}>
+            <button
+              type="button"
+              className={`${styles.toolBtn} ${openTool === 'shell' ? styles.toolBtnActive : ''}`}
+              onClick={() => toggleTool('shell')}
+            >
+              🛡️ {t.form.groupShell}
+            </button>
+            {openTool === 'shell' && (
+              <div className={styles.toolFlyout}>
+                {shellControls}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── הוספה / Add item ── single-body only; partition cells keep their
             own per-cell add rows below. */}
