@@ -1,5 +1,12 @@
 # ארכיטקטורה — Carpenter App
 
+> **ניתוח הנדסי חי (engineering analysis).** מסמכי תלות וזרימת-נתונים ברמת החישובים/מודלים/renderers — לתחזוקה שוטפת עם התפתחות הקוד:
+> - [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md) — תת-מערכות, reverse-dependency ("אם משנים X מה נשבר"), invariants.
+> - [DATA_FLOW_GRAPH.md](DATA_FLOW_GRAPH.md) — גרף זרימה לכל pipeline (cabinet/board/front/hardware/material/2D/3D/DXF/cut-list/sketch).
+> - [PIPELINES.md](PIPELINES.md) — ה-recipe מקצה-לקצה + ה-seams המשותפים.
+> - [SSOT_MAP.md](SSOT_MAP.md) — רישום מקורות-אמת + חישובים כפולים.
+> - [QA_SURFACE_MAP.md](QA_SURFACE_MAP.md) — blast-radius לכל מודול + הבדיקה ששומרת עליו.
+
 ## טכנולוגיות
 
 | כלי | תפקיד |
