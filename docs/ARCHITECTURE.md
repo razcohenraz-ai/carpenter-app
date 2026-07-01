@@ -6,6 +6,9 @@
 > - [PIPELINES.md](PIPELINES.md) — ה-recipe מקצה-לקצה + ה-seams המשותפים.
 > - [SSOT_MAP.md](SSOT_MAP.md) — רישום מקורות-אמת + חישובים כפולים.
 > - [QA_SURFACE_MAP.md](QA_SURFACE_MAP.md) — blast-radius לכל מודול + הבדיקה ששומרת עליו.
+> - [QA_STRATEGY.md](QA_STRATEGY.md) — אסטרטגיית QA ארוכת-טווח סביב invariants (7 סוגי בדיקה, מרשם סיכונים, differential/property/mutation/visual).
+> - [IMPACT_ANALYSIS.md](IMPACT_ANALYSIS.md) — path→subsystem index + מפת impact קריאה-למכונה + אלגוריתם בחירת-QA לכל שינוי.
+> - [QA_REGRESSION.md](QA_REGRESSION.md) — בסיס-ידע רגרסיות: כל באג משמעותי → root cause + invariant שנשבר + הבדיקה השומרת.
 
 ## טכנולוגיות
 

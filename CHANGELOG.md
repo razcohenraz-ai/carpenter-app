@@ -9,7 +9,7 @@
 
 ### נוסף — תיעוד הנדסי חי: dependency + data-flow + QA + impact analysis
 
-- 7 מסמכי `docs/` חדשים המתארים את הארכיטקטורה ההנדסית (חישובים/מודלים/renderers), לתחזוקה שוטפת עם התפתחות הקוד — לא תיעוד מימוש נקודתי:
+- 8 מסמכי `docs/` חדשים המתארים את הארכיטקטורה ההנדסית (חישובים/מודלים/renderers), לתחזוקה שוטפת עם התפתחות הקוד — לא תיעוד מימוש נקודתי:
   - **`DEPENDENCY_GRAPH.md`** — 16 תת-מערכות (S1–S16) עם responsibility/inputs/outputs/SSOT/producers/consumers/purity; reverse-dependency ("אם משנים X מה נשבר"); שכבת ה-adapters; **22 invariants** נגזרים מהקוד (INV-1…22).
   - **`DATA_FLOW_GRAPH.md`** — גרף זרימה (Mermaid) לכל pipeline: cabinet/board/front/hardware/material/2D/3D/DXF/cut-list/sketch. **DXF מתועד כלא-קיים** (future direction בלבד) ולא הומצא.
   - **`PIPELINES.md`** — ה-recipe בן 16 השלבים מקצה-לקצה, שני ה-orchestrators, אגרגציית מטבח, ה-seams המשותפים.
@@ -17,7 +17,8 @@
   - **`QA_SURFACE_MAP.md`** — blast-radius לכל מודול → הבדיקה השומרת עליו (38 suites), invariant→guard, ופערי QA ידועים.
   - **`QA_STRATEGY.md`** — אסטרטגיית QA ארוכת-טווח סביב invariants: 7 סוגי בדיקה לכל תת-מערכת, מרשם סיכונים, differential testing לסגירת D1, property/mutation/visual, ומודל בשלות מדורג.
   - **`IMPACT_ANALYSIS.md`** — מערכת impact analysis: path→subsystem index, propagation closure, רשומת impact לכל תת-מערכת (6 שדות), **בלוק JSON קריא-למכונה** + אלגוריתם בחירת-QA שמאפשרים לחשב אוטומטית אילו בדיקות להריץ לאחר כל שינוי.
-- `ARCHITECTURE.md` — נוסף מצביע לחמשת מסמכי הניתוח בראש הקובץ (discoverability מזרימת קריאת-הסשן).
+  - **`QA_REGRESSION.md`** — בסיס-ידע רגרסיות חי: כל באג משמעותי → root cause + engineering assumption שנשבר + invariant + הבדיקה השומרת. מאותחל עם 9 רגרסיות מתועדות (REG-001…009), template, סטטיסטיקות, וכללי תחזוקה.
+- `ARCHITECTURE.md` — נוסף מצביע לכל מסמכי הניתוח בראש הקובץ (discoverability מזרימת קריאת-הסשן).
 
 ### שונה — כפתור "חומרים" בסקירת המטבח (+ עובי גב)
 
