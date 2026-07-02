@@ -1,80 +1,93 @@
 # הוראות תפעוליות — Carpenter App
 
-## תחילת כל סשן — קריאת מסמכים
+## תהליך העבודה (Development Workflow)
 
-### א. חובה לכל שיחה (לפני כתיבת קוד או החלטה)
-1. **`docs/PROJECT_CONTEXT.md`** — **התחל ב-"Quick orientation"** בראש (state hooks, navigation flow, compute pathways, single source of truth). אחר כך שאר הקובץ: פיצ'רים פעילים + חובות טכניים.
-2. **`docs/DESIGN_PRINCIPLES.md`** — 7 עקרונות שקובעים איך להחליט (החופש בידי הנגר, single source of truth, JSON-driven, BoardModel וכו').
+כל משימה עוברת בשרשרת הזו — אל תדלג שלבים (היקף כל שלב לפי גודל המשימה):
 
-### ב. קריאה לפי הקשר (רק כשרלוונטי לפיצ'ר)
-3. **`docs/ARCHITECTURE.md`** — לפני **שינוי מבני**: הוספת קובץ ב-types/core/ui, שינוי זרימת נתונים, הוספה ל-CabinetInput/SavedCabinetState.
-4. **`docs/CARPENTRY_RULES.md`** — לפני **שינוי לוגיקת חישוב**: boards, fronts, doors, drawers, shell, plinth, kitchen modules, shelves.
-5. **`docs/GLOSSARY.md`** — כשנתקל **במונח לא מוכר** בקוד או בשיחה.
-6. **`CHANGELOG.md`** סקציית `[Unreleased]` — כשהמשתמש **מתייחס לשינוי אחרון** ("הבאג שתיקנו"), או לפני commit כדי לעדכן.
-7. **`docs/DECISIONS_LOG.md`** — כשנתקל **בהחלטה לא ברורה** או לפני שינוי שעלול לסתור החלטה קיימת.
+**הבן → קרא מסמכים רלוונטיים → זהה את תת-המערכת המושפעת → תכנן → מַמֵּש → עדכן תיעוד אם צריך → הרץ את ה-QA הנדרש → אמת invariants הנדסיים → סיים.**
 
-**הכלל**: למשימה קטנה (תיקון UI, טקסט) — די בקריאת קטגוריה א'. למשימה גדולה (פיצ'ר חדש שמשנה types) — קרא גם את הקבצים הרלוונטיים בקטגוריה ב'.
+---
+
+## קריאת מסמכים — רק מה שרלוונטי למשימה
+
+עיקרון-על: **קרא את המינימום** הדרוש למשימה הנוכחית. אל תקרא הכל.
+
+### א. חובה לכל שיחה (לפני קוד/החלטה)
+1. **`docs/PROJECT_CONTEXT.md`** — התחל ב-"Quick orientation" (state hooks, navigation, compute pathways, SSOT). אחריו: פיצ'רים פעילים + חובות טכניים.
+2. **`docs/DESIGN_PRINCIPLES.md`** — 7 עקרונות ההחלטה (החופש בידי הנגר, SSOT, JSON-driven, BoardModel וכו').
+
+### ב. לפי הקשר (רק כשרלוונטי לפיצ'ר)
+3. **`docs/ARCHITECTURE.md`** — לפני **שינוי מבני** (קובץ ב-types/core/ui, זרימת נתונים, CabinetInput/SavedCabinetState).
+4. **`docs/CARPENTRY_RULES.md`** — לפני **שינוי לוגיקת חישוב נגרית** (boards/fronts/doors/drawers/shell/plinth/kitchen/shelves).
+5. **`docs/GLOSSARY.md`** — מונח לא מוכר. · **`CHANGELOG.md` `[Unreleased]`** — התייחסות לשינוי אחרון. · **`docs/DECISIONS_LOG.md`** — החלטה לא ברורה או שינוי שעלול לסתור החלטה.
+
+### ג. Engineering Intelligence (לפני שינוי לוגיקה הנדסית — קרא את הרלוונטי בלבד)
+6. **`docs/DEPENDENCY_GRAPH.md`** — תת-מערכות (S1–S16), reverse-dependency ("אם משנים X מה נשבר"), invariants (INV-1…22).
+7. **`docs/IMPACT_ANALYSIS.md`** — path→subsystem + מפת impact: אילו renderers/exports/בדיקות מושפעים משינוי.
+8. **`docs/SSOT_MAP.md`** — לפני הוספת חישוב/שדה נגזר: מי כבר מחזיק את האמת? (מנע כפילות).
+9. **`docs/PIPELINES.md`** — ה-recipe מקצה-לקצה + שני ה-orchestrators. · **`docs/QA_STRATEGY.md`** — בתכנון בדיקות. · **`docs/QA_REGRESSION.md`** — לפני נגיעה באזור עם באגים קודמים.
+
+**הכלל**: משימה קטנה (UI/טקסט) — קטגוריה א' בלבד. שינוי לוגיקה הנדסית — הוסף את ב'+ג' הרלוונטיים.
 
 ---
 
 ## עקרונות עבודה
 
 ### 1. החופש בידי הנגר
-אל תקבע אילוצים נוקשים. כל ערך אוטומטי — חייב לאפשר override ידני.
-**כשיש ספק**: תמיד לכיוון של "לאפשר שינוי + להזהיר אם צריך".
+אל תקבע אילוצים נוקשים; כבד את הידע המקצועי של הנגר. כל ערך אוטומטי — override ידני. בספק: "לאפשר שינוי + להזהיר".
 
 ### 2. Single source of truth
-אל תאחסן מה שניתן לחשב. חישוב on-the-fly > שמירת state כפול.
-לפני הוספת שדה חדש ל-type: שאל "האם זה נגזר ממשהו אחר?"
+אל תאחסן מה שניתן לחשב; on-the-fly > state כפול. לפני שדה חדש: "נגזר ממשהו?". לפני חישוב חדש: בדוק ב-`SSOT_MAP.md` אם כבר קיים owner.
 
-### 3. הפרדה: core vs ui
-- `core/` — TS טהור, ללא React, ניתן לבדיקה
-- `ui/components/` — תצוגה בלבד, לא מחשבת
-- `ui/hooks/` — מחזיק state, מקשר core ל-UI
+### 3. שפר קיים, אל תשכפל
+העדף שיפור הארכיטקטורה הקיימת על יצירת לוגיקה מקבילה. renderer הוא adapter — לא מחשב; חישוב חדש מנותב דרך ה-core הקיים.
 
-### 4. אבחון לפני תיקון
-אל תקפוץ לתיקון. קרא, חקור, הבן למה קורה מה שקורה — ואז תקן.
+### 4. הפרדה core vs ui
+`core/` — TS טהור, ללא React, בדיק. · `ui/components/` — תצוגה בלבד. · `ui/hooks/` — state, מקשר core ל-UI.
 
-### 5. בדיקות תמיד
-אחרי כל שינוי:
-```bash
-npx tsc --noEmit
-npx vitest run
-```
-**לא דווח על הצלחה לפני שהבדיקות עברו.**
+### 5. אבחון לפני תיקון
+אל תקפוץ לתיקון. הקוד הקיים הוא **עדות, לא הוכחה** — קרא, חקור, הבן *למה* קורה מה שקורה, ואז תקן.
 
 ---
 
-## תחזוקת התיעוד
+## Impact thinking — לפני שינוי לוגיקה הנדסית
 
-### לפני כל commit — עדכן CHANGELOG.md תחת [Unreleased]
+קבע מראש (עזר: `DEPENDENCY_GRAPH.md` + `IMPACT_ANALYSIS.md`):
+- **צרכנים downstream** — מי משתמש בפלט.
+- **renderers מושפעים** — 2D / 3D / cut-list / room.
+- **exports מושפעים** — אילו סמלים/חוזים משתנים.
+- **invariants מושפעים** — אילו INV חייבים אימות מחדש.
 
-| סוג שינוי | קטגוריה |
-|-----------|----------|
-| פיצ'ר חדש | **נוסף** |
-| תיקון באג | **תוקן** |
-| שינוי התנהגות קיימת | **שונה** |
-| הסרת פיצ'ר | **הוסר** |
+---
 
-כשפיצ'ר מלא הושלם: העבר מ-[Unreleased] לסקציה חדשה עם תאריך ושם.
+## QA — פילוסופיה
 
-### אחרי החלטה ארכיטקטונית — עדכן docs/DECISIONS_LOG.md
-פורמט: תאריך, ההחלטה, הנימוק.
+- **בדיקות עוברות אינן מוכיחות נכונות** — תנאי הכרחי, לא מספיק.
+- **invariants הנדסיים קודמים** לבדיקות ספציפיות — אמת אותם (`DEPENDENCY_GRAPH.md` §6).
+- שינוי שנוגע בחישוב הנדסי → אמת **עקביות renderers** (2D/3D תואמים ל-cut list — `renderParity`) **ועקביות export** (cut list / הדפסה / DXF עתידי).
+- **עדכן `docs/QA_REGRESSION.md`** אחרי כל באג אמיתי משמעותי: root cause + ההנחה שנשברה + הבדיקה השומרת.
 
-### אחרי שינוי מבנה הקוד — עדכן docs/ARCHITECTURE.md
+---
 
-### אחרי מונח חדש — עדכן docs/GLOSSARY.md
+## לפני שמסמנים משימה כהושלמה
 
-### אחרי שינוי כלל נגרי — עדכן docs/CARPENTRY_RULES.md
-
-### אחרי פיצ'ר שמשנה מה האפליקציה עושה — עדכן docs/PROJECT_CONTEXT.md
+1. הבדיקות עוברות — **לא לדווח הצלחה לפני כן**:
+   ```bash
+   npx tsc --noEmit
+   npx vitest run
+   ```
+2. invariants הנדסיים אומתו; עקביות renderers/export נבדקה כשרלוונטי (ראה QA).
+3. **התיעוד סונכרן** — עדכן את המושפע בלבד:
+   - **`CHANGELOG.md` `[Unreleased]`**: נוסף / תוקן / שונה / הוסר. פיצ'ר שהושלם → סקציה חדשה עם תאריך.
+   - **`DECISIONS_LOG.md`** — החלטה ארכיטקטונית (תאריך, החלטה, נימוק).
+   - **`ARCHITECTURE.md`** מבנה קוד · **`GLOSSARY.md`** מונח · **`CARPENTRY_RULES.md`** כלל נגרי · **`PROJECT_CONTEXT.md`** שינוי במה שהאפליקציה עושה · **`QA_REGRESSION.md`** באג משמעותי.
 
 ---
 
 ## מוסכמות קוד
 
-- **יחידות**: מידות ארון ב-ס"מ. עובי חומרים ב-מ"מ. CutItem ב-מ"מ.
-- **Box.id**: לא לסמוך על קביעות בין חישובים. השתמש ב-`boxStableKey(box)` לשימור.
-- **חישוב on-the-fly**: לא לאחסן displayNumber, visualHeight, skirtExtension.
-- **catalog JSON**: לשינוי מחיר/עובי — ערוך JSON בלבד, לא TypeScript.
-- **אזהרות**: warning אינפורמטיבי, לא חסימה (ראה DESIGN_PRINCIPLES).
+- **יחידות**: מידות ארון ס"מ; עובי חומרים מ"מ; CutItem מ"מ.
+- **זהות**: `Box.id` לא קבוע בין חישובים — `boxStableKey(box)` לשימור. `Board.stableId` יציב; `Board.id` ל-React בלבד.
+- **on-the-fly**: לא לאחסן displayNumber / visualHeight / skirtExtension.
+- **catalog JSON**: שינוי מחיר/עובי — JSON בלבד, לא TypeScript.
+- **אזהרות**: אינפורמטיבי, לא חוסם (החופש בידי הנגר).
