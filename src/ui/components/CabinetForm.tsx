@@ -16,6 +16,7 @@ import BoxInteriorEditor, { type EditorTab } from './BoxInteriorEditor';
 import DoorEditor from './DoorEditor';
 import DoorsList from './DoorsList';
 import CutsList from './CutsList';
+import LayoutView from './LayoutView';
 import { HardwareList } from './HardwareList';
 import { computeUnitCutsAndHardware } from '../../core/cabinetCompute';
 import { LIFT_MECHANISMS } from '../../catalog/liftMechanisms';
@@ -425,7 +426,7 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
     | { type: 'drawer'; drawerId: string }
     | { type: 'plinth' };
   const [editing, setEditing] = useState<Editing>(initialEditing ?? { type: 'none' });
-  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'hardware'>('bodies');
+  const [sketchMode, setSketchMode] = useState<'bodies' | 'fronts' | 'cuts' | 'layout' | 'hardware'>('bodies');
   // Compact input sidebar — which group flyout is open (one at a time; click the
   // active button again to collapse). null = all collapsed.
   type InputPanel = 'dim' | 'materials' | 'shell' | 'structure';
@@ -1820,6 +1821,13 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 </button>
                 <button
                   type="button"
+                  className={`${styles.modeBtn} ${sketchMode === 'layout' ? styles.modeBtnActive : ''}`}
+                  onClick={() => setSketchMode('layout')}
+                >
+                  {t.layout.tab}
+                </button>
+                <button
+                  type="button"
                   className={`${styles.modeBtn} ${sketchMode === 'hardware' ? styles.modeBtnActive : ''}`}
                   onClick={() => setSketchMode('hardware')}
                 >
@@ -2004,6 +2012,12 @@ export default function CabinetForm({ initialInput, initialState, onCabinetChang
                 frontMaterialPriceOverrides: settings?.frontMaterialPriceOverrides,
                 frontCustomMaterials: settings?.customMaterials,
               }}
+            />
+          )}
+          {sketchMode === 'layout' && (
+            <LayoutView
+              cuts={result.cuts}
+              {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})}
             />
           )}
           {sketchMode === 'hardware' && <HardwareList items={result.hardwareItems} />}

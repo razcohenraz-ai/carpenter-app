@@ -40,6 +40,15 @@
 ### Wall envelope / מעטפת קלפה (עליון+תחתון)
 לקלפה (`mount === 'wall'`) — שני לוחות חזית, **עליון ותחתון**, **בלי תלות ב-shell הצדדי**. דגל יחיד `hasWallEnvelope?: boolean` ב-`CabinetInput` (ברירת מחדל false). מודל גובה זהה ל-`hasEnvelopeTop`: המכסים בתוך ה-H (הגוף הפנימי מתכווץ ב-2×עובי חזית; H חיצוני נשמר). ברמת ה-cuts: BoardRole חדש `'envelope-bottom'` (mirror של `envelope-top`); ROLE_GROUP = `'shell'`; ROLE_LABEL = "מעטפת תחתית". ב-`deriveEnvelopeFlags` מסלול נפרד שעוקף את שער ה-`!sides`. ראה גם DECISIONS_LOG 2026-06-14.
 
+### פריסה / Sheet layout / Nesting
+סידור פריטי החיתוך (`CutItem[]`) על לוחות גלם שלמים. טאב "פריסה" ב-UI. מנוע: `core/cuts/sheetLayout.ts` (`layoutSheets`). **guillotine** — כל חתך בקו ישר מקצה-לקצה (מסור פאנל), מיושם כ-shelf/strip packing דו-שלבי (ריפ לרצועות → חיתוך רוחבי). נגזר on-the-fly מרשימת החיתוכים, לא נשמר.
+
+### קרף / Kerf
+עובי להב המסור — החומר שנאכל בכל חתך. ברירת מחדל 3 מ"מ (`DEFAULT_KERF_MM`). בפריסה: רווח של קרף בין כל שני חלקים סמוכים ובין רצועות.
+
+### יישור / Straightening trim
+חיתוך פינה מרובעת בלוח לפני חיתוך חלקים. בפריסה: 1 ס"מ מכל מימד (`DEFAULT_TRIM_MM=10`), כך ששטח שמיש = לוח פחות 1 ס"מ ברוחב ו-1 ס"מ באורך (243×121 מלוח 244×122).
+
 ---
 
 ## מונחי גיאומטריה בקוד

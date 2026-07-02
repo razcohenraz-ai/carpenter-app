@@ -294,6 +294,36 @@ export interface Translations {
     woodCost: string;
   };
 
+  /** פריסה — nesting the cut list onto full plates. */
+  layout: {
+    tab: string;
+    title: string;
+    /** Global toggle: allow / lock 90° rotation of parts. */
+    lockRotation: string;
+    rotationLocked: string;
+    /** "{n} plates" summary. */
+    sheetsCount: string;
+    /** "Plate {n}" per-plate caption. */
+    plateN: string;
+    /** Material yield, e.g. "Utilization 78%". */
+    utilization: string;
+    /** Plate-size chooser per material. */
+    standardPlate: string;
+    bigPlate: string;
+    useBigPlate: string;
+    useStandardPlate: string;
+    /** Oversize section (parts that don't fit one usable plate). */
+    oversizeTitle: string;
+    oversizeHint: string;
+    oversizeBigPlateHint: string;
+    /** Empty state. */
+    empty: string;
+    /** Badge on a rotated part. */
+    rotatedTag: string;
+    /** Caption: grain direction of the plate. */
+    grainNote: string;
+  };
+
   kitchen: {
     /** Warning shown when units in a kitchen have different heights. */
     mixedHeightsWarning: string;
@@ -629,6 +659,26 @@ const he: Translations = {
     woodCost: 'עלות עץ',
   },
 
+  layout: {
+    tab: 'פריסה',
+    title: 'פריסת לוחות',
+    lockRotation: 'נעל סיבוב',
+    rotationLocked: 'סיבוב נעול',
+    sheetsCount: '{n} לוחות',
+    plateN: 'לוח {n}',
+    utilization: 'ניצולת {p}%',
+    standardPlate: 'לוח 244×122',
+    bigPlate: 'לוח 305×122',
+    useBigPlate: 'מעבר ללוח 305×122',
+    useStandardPlate: 'חזרה ללוח 244×122',
+    oversizeTitle: 'חלקים גדולים מהלוח',
+    oversizeHint: 'דורש לוח גדול יותר או חיבור',
+    oversizeBigPlateHint: 'ייתכן שיתאים בלוח 305×122 — נסה "מעבר ללוח 305×122"',
+    empty: 'אין חלקים להצגה',
+    rotatedTag: 'מסובב',
+    grainNote: 'כיוון סיב לאורך הלוח (אנכי בתצוגה) ⭥',
+  },
+
   kitchen: {
     mixedHeightsWarning: 'גופים בגבהים שונים — בדוק יישור לפני ייצור',
     materialsTitle: 'חומרים — כל המטבח',
@@ -950,6 +1000,26 @@ const en: Translations = {
     plinthRecessLabel: 'Recess (cm)',
     sheetsNeeded: 'Sheets needed',
     woodCost: 'Wood cost',
+  },
+
+  layout: {
+    tab: 'Layout',
+    title: 'Sheet layout',
+    lockRotation: 'Lock rotation',
+    rotationLocked: 'Rotation locked',
+    sheetsCount: '{n} plates',
+    plateN: 'Plate {n}',
+    utilization: 'Utilization {p}%',
+    standardPlate: '244×122 plate',
+    bigPlate: '305×122 plate',
+    useBigPlate: 'Switch to 305×122',
+    useStandardPlate: 'Back to 244×122',
+    oversizeTitle: 'Parts larger than the plate',
+    oversizeHint: 'Needs a larger plate or joining',
+    oversizeBigPlateHint: 'May fit on a 305×122 plate — try "Switch to 305×122"',
+    empty: 'No parts to lay out',
+    rotatedTag: 'rotated',
+    grainNote: 'Grain runs along the plate length (vertical here) ⭥',
   },
 
   kitchen: {

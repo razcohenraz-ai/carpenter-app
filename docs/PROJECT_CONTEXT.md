@@ -39,6 +39,7 @@
 ## פיצ'רים פעילים
 
 - **מחשבון חיתוכים** — קורפוס, מדפים, מגירות, דלתות, מעטפת, צוקל, חיפוי, צוקל נסוג.
+- **פריסת לוחות (טאב "פריסה")** — נסירת רשימת החיתוכים על לוחות שלמים; מנוע `core/cuts/sheetLayout.ts` (guillotine shelf-packing, קרף 3מ"מ, יישור 1ס"מ, לוח 244/305×122), תצוגה `LayoutView` (SVG פר-לוח, ניצולת, נעילת סיבוב, בחירת גודל לוח). נגזר on-the-fly מ-`result.cuts`, קיים בארון הבודד וב-`KitchenOverview`.
 - **פיצול לגופים** — אוטומטי לפי `MAX_BOX_W=100`; doorsPerColumn 1/2/3; איחוד גופים קטנים <60 ס"מ. **גוף מאוחד עם `internalShelves`** (dpc=3) מפיק **k+1 דלתות מוערמות** (section-split) — כל מקטע = דלת עצמאית עם צירים משלה, גובה ורוחב מחושב, מזוהה ב-`doorId = boxId:fi:si`.
 - **שני חומרים נפרדים** — body + front; עובי חזית פר-דלת ופר-drawer חיצוני.
 - **עורך חזיתות + עורך פנים גוף** — צירים, מדפים, מגירות (internal/external), מוט תליה (לא ב-kitchen), מחיצות פנימיות. עורך הפנים כולל **מתג סקיצה 2D ⇄ תלת־ממד** (ברירת מחדל 3D — `Body3DView`, נבנה מ-`cabinetBoardBoxes` כמו תצוגת החדר; צבעי-תפקיד ב-`boards3DStyle.ts`).
@@ -47,7 +48,7 @@
 - **מעטפת** — `hasShell` (סימטרי) או `hasShellLeft`/`hasShellRight` (kitchen — `splitShellSides`); `getShellSides` מאחד.
 - **ניהול פרויקטים** — `useProject` שומר ב-localStorage; ייצוא/יבוא קבצים; ריבוי products במקביל; **ריבוי חדרים** (`rooms[]`).
 - **תצוגת חדר (floor plan) — שלבים 1-3** — `RoomView`: חדר מלבני + מיקום מוצרים, toggle בין 3 מבטים. **מבט-על** (הצמדה-לקיר מספרית + גרירה), **מבט-חזית** (בחירת קיר, מוצרים מוקרנים בגובה הנכון, מטבח=בסיס+קלפה נפרדים, שדה גובה-מהרצפה), **מבט-3D** (`RoomView3D` ב-react-three-fiber, lazy-loaded; OrbitControls; תיבה לכל sub-box). data model 3D-native (`Room`/`ProductPlacement`, schema v3). **מקור יחיד:** `productSubBoxes` (local boxes) → `placementSubBoxAABBs` (room AABB) → החזית מקרינה, ה-3D מרנדר ישירות. שינוי מידות חדר מחזיר הצבות לתוך הגבולות (`updateRoomDims` clamp/re-snap).
-- **מטבחים** — מודולי `drawers`/`shelves`/`sink`/`dishwasher`/`oven`/`pantry`/`wall`/`pantry-top`/`corner` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 4 טאבים (גופים/חזיתות/חיתוכים/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
+- **מטבחים** — מודולי `drawers`/`shelves`/`sink`/`dishwasher`/`oven`/`pantry`/`wall`/`pantry-top`/`corner` (`core/product/kitchenModules.ts`); `KitchenOverview` עם 5 טאבים (גופים/חזיתות/חיתוכים/פריסה/פרזולים); תצוגה מאוחדת UnitsView (bodies + fronts overlay על אותו layout).
 - **חומר גלובלי למטבח** — `KitchenEditor` חושף בורר חומר גוף + חזיתות שחל על כל הגופים. נגזר מהגופים (חומר משותף / "מעורב"), כותב לכולם דרך `onUpdateUnit`; גוף חדש יורש את החומר המשותף. עקיפה פר-גוף דרך עורך הגוף.
 - **sink module** — `topVariant='sink-open'`: אין top board, שני traverse boards (front+back), sink basin overlay בסקיצה.
 - **dishwasher module** — `plinth=0, hasFronts=false, hasBack=false, hasBottom=false`: תא ריק, W=64, יושב ישירות על הרצפה (LEVELER_GAP_CM), קוטע צוקל. 3 לוחות בלבד: 2 דפנות + עליון.

@@ -19,6 +19,7 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import CabinetSketch from './CabinetSketch';
 import { CabinetFrontsOverlay } from './CabinetFrontsOverlay';
 import CutsList from './CutsList';
+import LayoutView from './LayoutView';
 import { HardwareList } from './HardwareList';
 import PlinthEditor from './PlinthEditor';
 import type { Box } from '../../types/geometry';
@@ -47,7 +48,7 @@ interface Props {
   settings?: AppSettingsSlice | undefined;
 }
 
-type ViewMode = 'bodies' | 'fronts' | 'cuts' | 'hardware';
+type ViewMode = 'bodies' | 'fronts' | 'cuts' | 'layout' | 'hardware';
 
 const GAP_CM  = 2;
 const PAD_TOP = 36;
@@ -372,6 +373,13 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, o
           </button>
           <button
             type="button"
+            className={`${styles.toggleBtn} ${viewMode === 'layout' ? styles.toggleBtnActive : ''}`}
+            onClick={() => setViewMode('layout')}
+          >
+            פריסה
+          </button>
+          <button
+            type="button"
             className={`${styles.toggleBtn} ${viewMode === 'hardware' ? styles.toggleBtnActive : ''}`}
             onClick={() => setViewMode('hardware')}
           >
@@ -400,6 +408,9 @@ export function KitchenOverview({ units, selectedUnitId, onSelect, onOpenUnit, o
       {/* Cuts/Hardware tabs — aggregate across all units */}
       {viewMode === 'cuts' && units.length > 0 && (
         <CutsView units={units} settings={settings} />
+      )}
+      {viewMode === 'layout' && units.length > 0 && (
+        <LayoutAggView units={units} settings={settings} />
       )}
       {viewMode === 'hardware' && units.length > 0 && (
         <HardwareView units={units} settings={settings} />
@@ -874,42 +885,48 @@ function UnitsView({ units, selectedUnitId, onSelect, onOpenUnit, onPlinthClickF
   );
 }
 
+// ── kitchen cut aggregation ──────────────────────────────────────────────────
+// Whole-kitchen cut list: per-unit cuts (plinth skipped) prefixed with the unit
+// name, plus the kitchen-level aggregated plinth. Shared by the Cuts tab and the
+// Layout (פריסה) tab so both nest exactly the same pieces.
+function buildAggregateCuts(units: KitchenUnit[], settings?: AppSettingsSlice | undefined): CutItem[] {
+  const out: CutItem[] = [];
+  // Per-unit cuts WITHOUT plinth — plinth is aggregated at the kitchen
+  // level so adjacent units sharing plinth attributes share a single
+  // physical plinth that spans them.
+  for (const unit of units) {
+    const { cuts } = computeUnitCutsAndHardware(
+      unit.cabinet.input,
+      unit.cabinet.state,
+      settings?.customMaterials ?? [],
+      { skipPlinth: true },
+    );
+    // Prefix each cut name with the unit name so the user can tell which
+    // unit each piece belongs to.
+    for (const c of cuts) {
+      out.push({ ...c, name: `${unit.name}: ${c.name}` });
+    }
+  }
+  // Kitchen-level plinth: one group per run of adjacent units with the same
+  // plinth attributes; pieces split at 240 cm boundaries. Wall cabinets
+  // (mount='wall') have no plinth and are excluded so they don't break runs.
+  const groups = groupKitchenUnitsForPlinth(units.filter(u => (u.cabinet.input.mount ?? 'base') !== 'wall'));
+  for (const group of groups) {
+    const plinthCuts = buildKitchenPlinthCuts(group, settings?.customMaterials ?? []);
+    // Label with the joined unit names so the saw operator can see which
+    // run the plinth piece belongs to. Use just "צוקל" prefix for clarity.
+    const label = `צוקל (${group.units.map(u => u.name).join(' + ')})`;
+    for (const c of plinthCuts) {
+      out.push({ ...c, name: `${label}: ${c.name}` });
+    }
+  }
+  return out;
+}
+
 // ── CutsView ────────────────────────────────────────────────────────────────
 // Aggregate cuts from all units into a single CutsList.
 function CutsView({ units, settings }: { units: KitchenUnit[]; settings?: AppSettingsSlice | undefined }) {
-  const allCuts = useMemo<CutItem[]>(() => {
-    const out: CutItem[] = [];
-    // Per-unit cuts WITHOUT plinth — plinth is aggregated at the kitchen
-    // level so adjacent units sharing plinth attributes share a single
-    // physical plinth that spans them.
-    for (const unit of units) {
-      const { cuts } = computeUnitCutsAndHardware(
-        unit.cabinet.input,
-        unit.cabinet.state,
-        settings?.customMaterials ?? [],
-        { skipPlinth: true },
-      );
-      // Prefix each cut name with the unit name so the user can tell which
-      // unit each piece belongs to.
-      for (const c of cuts) {
-        out.push({ ...c, name: `${unit.name}: ${c.name}` });
-      }
-    }
-    // Kitchen-level plinth: one group per run of adjacent units with the same
-    // plinth attributes; pieces split at 240 cm boundaries. Wall cabinets
-    // (mount='wall') have no plinth and are excluded so they don't break runs.
-    const groups = groupKitchenUnitsForPlinth(units.filter(u => (u.cabinet.input.mount ?? 'base') !== 'wall'));
-    for (const group of groups) {
-      const plinthCuts = buildKitchenPlinthCuts(group, settings?.customMaterials ?? []);
-      // Label with the joined unit names so the saw operator can see which
-      // run the plinth piece belongs to. Use just "צוקל" prefix for clarity.
-      const label = `צוקל (${group.units.map(u => u.name).join(' + ')})`;
-      for (const c of plinthCuts) {
-        out.push({ ...c, name: `${label}: ${c.name}` });
-      }
-    }
-    return out;
-  }, [units, settings]);
+  const allCuts = useMemo<CutItem[]>(() => buildAggregateCuts(units, settings), [units, settings]);
 
   return (
     <div className={styles.aggregateTab}>
@@ -918,6 +935,17 @@ function CutsView({ units, settings }: { units: KitchenUnit[]; settings?: AppSet
         ...(settings?.frontMaterialPriceOverrides ? { frontMaterialPriceOverrides: settings.frontMaterialPriceOverrides } : {}),
         ...(settings?.customMaterials ? { bodyCustomMaterials: settings.customMaterials, frontCustomMaterials: settings.customMaterials } : {}),
       }} />
+    </div>
+  );
+}
+
+// ── LayoutAggView ─────────────────────────────────────────────────────────────
+// Whole-kitchen פריסה: the aggregated cut list nested onto plates.
+function LayoutAggView({ units, settings }: { units: KitchenUnit[]; settings?: AppSettingsSlice | undefined }) {
+  const allCuts = useMemo<CutItem[]>(() => buildAggregateCuts(units, settings), [units, settings]);
+  return (
+    <div className={styles.aggregateTab}>
+      <LayoutView cuts={allCuts} {...(settings?.customMaterials ? { customMaterials: settings.customMaterials } : {})} />
     </div>
   );
 }
